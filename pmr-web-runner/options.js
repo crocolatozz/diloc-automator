@@ -277,6 +277,9 @@ function renderAll() {
   const table = document.createElement('table');
   table.className = 'excel-table';
 
+  const thead = document.createElement('thead');
+  const tbody = document.createElement('tbody');
+
   const trIndex = document.createElement('tr');
   trIndex.className = 'row-index';
   trIndex.innerHTML = `<th class="sticky-col">No. Sel</th>`;
@@ -399,13 +402,16 @@ function renderAll() {
     trPreview.appendChild(tdPrev);
   });
 
-  table.appendChild(trIndex);
-  table.appendChild(trEquip);
-  table.appendChild(trTag);
-  table.appendChild(trUnit);
-  table.appendChild(trOrig);
-  table.appendChild(trCheck);
-  table.appendChild(trPreview);
+  thead.appendChild(trIndex);
+  tbody.appendChild(trEquip);
+  tbody.appendChild(trTag);
+  tbody.appendChild(trUnit);
+  tbody.appendChild(trOrig);
+  tbody.appendChild(trCheck);
+  tbody.appendChild(trPreview);
+
+  table.appendChild(thead);
+  table.appendChild(tbody);
 
   const prevScrollLeft = tableContainer.querySelector('.table-wrapper')?.scrollLeft || 0;
   const wrapper = document.createElement('div');
@@ -416,6 +422,9 @@ function renderAll() {
   tableContainer.appendChild(wrapper);
   applyTableColumnFilter();
   wrapper.scrollLeft = prevScrollLeft;
+  if (searchInput && searchInput.value.trim()) {
+    applySearchHighlight(false);
+  }
 }
 
 async function toggleCellSelection(idx, rerender, explicitState) {
@@ -560,15 +569,15 @@ rerollPreviewBtn.addEventListener('click', () => {
   notifySaved("Simulasi preview diperbarui", "dice");
 });
 
-searchInput.addEventListener('input', () => {
+function applySearchHighlight(shouldScroll = true) {
   const query = searchInput.value.trim().toLowerCase();
   const wrapper = tableContainer.querySelector('.table-wrapper');
   if (!wrapper) return;
 
-  wrapper.querySelectorAll('.col-highlight').forEach(el => el.classList.remove('col-highlight'));
+  wrapper.querySelectorAll('.col-search-match').forEach(el => el.classList.remove('col-search-match'));
   if (!query) return;
 
-  const cells = groupSequenceIntoCells(loadedSequence);
+  const cells = lastCells && lastCells.length > 0 ? lastCells : groupSequenceIntoCells(loadedSequence);
   const matchedIndices = [];
   cells.forEach((cell, idx) => {
     const meta = headerMeta[idx];
@@ -582,21 +591,39 @@ searchInput.addEventListener('input', () => {
     }
   });
 
-  if (matchedIndices.length > 0) {
-    matchedIndices.forEach(idx => {
-      wrapper.querySelectorAll(`[data-col-idx="${idx}"]`).forEach(el => el.classList.add('col-highlight'));
-    });
-    const firstVisibleIdx = matchedIndices.find(idx => {
-      const cellEl = wrapper.querySelector(`[data-col-idx="${idx}"]`);
-      return cellEl && !cellEl.classList.contains('col-filtered-out');
-    });
-    if (typeof firstVisibleIdx === 'number') {
-      const firstColCells = wrapper.querySelectorAll(`[data-col-idx="${firstVisibleIdx}"]`);
-      if (firstColCells[0]) {
-        firstColCells[0].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      }
+  if (matchedIndices.length === 0) return;
+
+  matchedIndices.forEach(idx => {
+    wrapper.querySelectorAll(`[data-col-idx="${idx}"]`).forEach(el => el.classList.add('col-search-match'));
+  });
+
+  if (!shouldScroll) return;
+
+  const firstVisibleIdx = matchedIndices.find(idx => {
+    const cellEl = wrapper.querySelector(`[data-col-idx="${idx}"]`);
+    return cellEl && !cellEl.classList.contains('col-filtered-out');
+  });
+
+  if (typeof firstVisibleIdx === 'number') {
+    const targetCell =
+      wrapper.querySelector(`thead th[data-col-idx="${firstVisibleIdx}"]`) ||
+      wrapper.querySelector(`[data-col-idx="${firstVisibleIdx}"]`);
+    if (targetCell) {
+      const stickyCol = wrapper.querySelector('.sticky-col');
+      const stickyWidth = stickyCol ? stickyCol.offsetWidth : 155;
+      const usableWidth = Math.max(0, wrapper.clientWidth - stickyWidth);
+      const centerPadding = Math.max(0, (usableWidth - targetCell.offsetWidth) / 2);
+      const maxScrollLeft = Math.max(0, wrapper.scrollWidth - wrapper.clientWidth);
+      const rawLeft = targetCell.offsetLeft - stickyWidth - centerPadding;
+      const nextLeft = Math.max(0, Math.min(maxScrollLeft, rawLeft));
+
+      wrapper.scrollTo({ left: nextLeft, behavior: 'smooth' });
     }
   }
+}
+
+searchInput.addEventListener('input', () => {
+  applySearchHighlight(true);
 });
 
 // Auto-sync real-time jika file .pmr atau mode diubah dari popup

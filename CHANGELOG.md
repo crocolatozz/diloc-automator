@@ -2,6 +2,15 @@
 
 Semua perubahan penting pada proyek **PMR Web Runner** dicatat dalam file ini.
 
+## [1.5.4] - 2026-11-18
+
+### Changed
+- Pengembalian tata letak `pmr-web-runner/popup.html` ke mode full-bleed edge-to-edge tanpa `.popup-shell` maupun double-frame di bagian pinggir.
+- Pembaruan penanda hasil pencarian di `pmr-web-runner/options.html` dan `pmr-web-runner/options.js` menjadi highlight satu kolom penuh secara vertikal (`.col-search-match`) dengan garis tepi tipis `1.5px` di sisi kiri-kanan, atas (`thead`), dan bawah (`tbody` terakhir) serta latar belakang tint lembut adaptif Light & Dark Mode.
+
+### Fixed
+- Perbaikan auto-scroll horizontal otomatis saat mengetik di kotak pencarian `pmr-web-runner/options.js` menggunakan kalkulasi `offsetLeft` terhadap lebar kolom sticky kiri dengan `scrollTo({ left, behavior: 'smooth' })`.
+
 ## [1.5.3] - 2026-11-18
 
 ### Changed

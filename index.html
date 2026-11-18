@@ -685,9 +685,11 @@
       flex: 1;
       width: 100%;
       height: 100%;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       min-height: 0;
+      overflow: hidden;
       background-color: var(--bg-canvas);
     }
 
@@ -708,11 +710,24 @@
       color: var(--text-primary);
     }
 
+    .options-frame-wrap {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      overflow: hidden;
+    }
+
     .options-iframe {
       flex: 1;
       width: 100%;
+      min-width: 0;
       height: 100%;
+      min-height: 520px;
       border: 0;
+      display: block;
       background-color: #ffffff;
     }
 
@@ -969,7 +984,7 @@
               Kembali ke Popup + Target Web
             </button>
           </div>
-          <div style="position:relative; flex:1; min-height:0; display:flex;">
+          <div class="options-frame-wrap">
             <iframe
               id="options-frame"
               class="options-iframe"
@@ -1501,7 +1516,7 @@
                 return state.manifest ? cloneVal(state.manifest) : {
                   manifest_version: 3,
                   name: folder,
-                  version: '1.5.3'
+                  version: '1.5.4'
                 };
               },
               openOptionsPage: function (callback) {
@@ -1670,6 +1685,8 @@
           rowsHtml += '<tr>' + tds + '</tr>';
         }
 
+        const shortOpLabel = String(operatorKey || '').replace(/^operator/i, 'OP ').toUpperCase();
+
         return (
           '<!doctype html>' +
           '<html lang="id">' +
@@ -1697,7 +1714,7 @@
           '<body>' +
             '<div class="grid-wrap">' +
               '<table>' +
-                '<thead><tr><th class="sticky-corner">' + escapeHtml(operatorKey.toUpperCase()) + '</th>' + headerCells + '</tr></thead>' +
+                '<thead><tr><th class="sticky-corner">' + escapeHtml(shortOpLabel) + '</th>' + headerCells + '</tr></thead>' +
                 '<tbody>' + rowsHtml + '</tbody>' +
               '</table>' +
             '</div>' +

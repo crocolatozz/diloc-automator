@@ -39,6 +39,7 @@
       --preview-changed-bg: #dcfce7;
       --preview-changed-text: #15803d;
       --highlight-bg: rgba(14, 165, 233, 0.12);
+      --highlight-header-bg: #0369a1;
       --highlight-outline: #0284c7;
       --badge-bg: #e2e8f0;
       --badge-text: #334155;
@@ -121,7 +122,8 @@
       --selected-header-bg: #166534;
       --preview-changed-bg: #14532d;
       --preview-changed-text: #86efac;
-      --highlight-bg: rgba(56, 189, 248, 0.14);
+      --highlight-bg: rgba(56, 189, 248, 0.15);
+      --highlight-header-bg: #0c4a6e;
       --highlight-outline: #38bdf8;
       --badge-bg: #1e293b;
       --badge-text: #cbd5e1;
@@ -701,6 +703,7 @@
     }
 
     .table-wrapper {
+      position: relative;
       width: 100%;
       overflow-x: auto;
       contain: paint;
@@ -849,10 +852,27 @@
       color: var(--text-locked) !important;
     }
 
-    td.col-highlight {
-      outline: none;
-      box-shadow: inset 0 0 0 1.5px var(--highlight-outline);
+    table.excel-table thead th.col-search-match {
+      background-color: var(--highlight-header-bg) !important;
+      color: #ffffff !important;
+      box-shadow:
+        inset 1.5px 0 0 var(--highlight-outline),
+        inset -1.5px 0 0 var(--highlight-outline),
+        inset 0 1.5px 0 var(--highlight-outline);
+    }
+
+    table.excel-table tbody td.col-search-match {
       background-color: var(--highlight-bg) !important;
+      box-shadow:
+        inset 1.5px 0 0 var(--highlight-outline),
+        inset -1.5px 0 0 var(--highlight-outline);
+    }
+
+    table.excel-table tbody tr:last-child td.col-search-match {
+      box-shadow:
+        inset 1.5px 0 0 var(--highlight-outline),
+        inset -1.5px 0 0 var(--highlight-outline),
+        inset 0 -1.5px 0 var(--highlight-outline);
     }
 
     .lock-pill {
@@ -1044,7 +1064,7 @@
     <div id="tableContainer"></div>
 
     <footer class="page-footer">
-      <span>PMR Web Runner v1.5.3</span>
+      <span>PMR Web Runner v1.5.4</span>
       <span>© 2026 — Developed by FIKRI</span>
     </footer>
   </div>
