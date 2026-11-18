@@ -1,5 +1,5 @@
 ====================================================
-PMR WEB RUNNER v1.5.2 — BROWSER EXTENSION
+PMR WEB RUNNER v1.5.3 — BROWSER EXTENSION
 ====================================================
 
 Cara Install / Update (Load Unpacked):
@@ -10,10 +10,9 @@ Cara Install / Update (Load Unpacked):
 3. Aktifkan toggle "Developer mode" (Mode pengembang) di pojok kanan atas.
 4. Klik tombol "Load unpacked" (Muat yang belum dibuka kemasannya) dan pilih folder hasil ekstrak (atau klik ikon Reload jika menimpa folder lama).
 
-Pembaruan v1.5.2 (Bug Fix / Patch Update):
-- Penggantian seluruh native alert() di popup.js dan options.js dengan banner notifikasi/toast inline adaptif Light & Dark Mode dengan reset timer otomatis tanpa menutup paksa popup Chrome.
-- Penambahan ring fokus keyboard (:focus-visible) kontras tinggi pada seluruh elemen interaktif di popup.html dan options.html.
-- Perbaikan tata letak responsif toolbar stats/filter pada options.html (900px–1150px) serta penyelarasan header satu baris di popup.html (340px–380px).
-- Verifikasi theme-init.js sinkron penuh berbasis localStorage sebelum render untuk anti-FOUC.
+Pembaruan v1.5.3 (UI Polish Patch):
+- Penghalusan transisi Light/Dark Mode di options.html dengan menghapus transition pada sel tabel (td/th) serta menambahkan contain: paint pada pembungkus tabel agar tetap mulus pada 167 kolom.
+- Penipisan gaya highlight hasil pencarian pada sel tabel di options.html menjadi garis tepi inset 1.5px presisi dengan tint lembut adaptif Light & Dark Mode.
+- Pembaruan kontainer popup.html dengan rounded edge (border-radius: 12px), border tipis rapi, dan padding frame luar yang proporsional tanpa memicu scrollbar.
 
 © 2026 — Developed by FIKRI

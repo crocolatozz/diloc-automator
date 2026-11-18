@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PMR Web Runner",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Menjalankan file macro keyboard (.pmr / .json) ke form web logsheet dengan randomize ±1 & preset header Operator 1, 2, 3.",
   "icons": {
     "16": "icon16.png",

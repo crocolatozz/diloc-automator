@@ -2,6 +2,13 @@
 
 Semua perubahan penting pada proyek **PMR Web Runner** dicatat dalam file ini.
 
+## [1.5.3] - 2026-11-18
+
+### Changed
+- Penghalusan transisi Light/Dark Mode di `pmr-web-runner/options.html` dengan menghapus properti `transition` pada sel tabel individual (`td`, `th`), menerapkan transisi `0.25s ease` hanya pada elemen struktural utama, serta menambahkan `contain: paint` pada `.table-wrapper`.
+- Penipisan highlight hasil pencarian tabel pada `pmr-web-runner/options.html` dari outline tebal menjadi `box-shadow: inset 0 0 0 1.5px` dengan warna aksen adaptif Light & Dark Mode dan latar belakang tint lembut.
+- Pembungkusan konten utama `pmr-web-runner/popup.html` ke dalam kontainer `.popup-shell` ber-`border-radius: 12px`, border tipis, dan padding frame luar yang proporsional tanpa memicu scrollbar.
+
 ## [1.5.2] - 2026-11-18
 
 ### Fixed

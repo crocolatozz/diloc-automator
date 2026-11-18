@@ -806,6 +806,19 @@
           <button id="inject-dummy-edge" type="button" class="btn btn-sm btn-amber">Dummy Edge-Case 100% &amp; 0 + Selisih</button>
         </div>
 
+        <div class="dummy-group" role="group" aria-label="Quick-Test UI Ekstensi dan Grid">
+          <span class="dummy-label">Quick-Test:</span>
+          <select id="quick-hud-mode" class="select-sm" aria-label="Mode Preview Toast dan Progress HUD">
+            <option value="warn">Toast Amber</option>
+            <option value="hud-running">HUD: Berjalan</option>
+            <option value="hud-done">HUD: Selesai</option>
+            <option value="hud-abort">HUD: Abort (ESC)</option>
+          </select>
+          <button id="quick-test-toast-hud" type="button" class="btn btn-sm btn-amber">Test Toast &amp; HUD</button>
+          <button id="quick-test-banners" type="button" class="btn btn-sm">Test Banner Error &amp; Non-Target</button>
+          <button id="quick-focus-cell-1" type="button" class="btn btn-sm">Fokus Sel [1,1]</button>
+        </div>
+
         <button id="reload-btn" type="button" class="btn btn-primary btn-sm">Muat Ulang</button>
 
         <div class="segmented" role="tablist" aria-label="Mode Tampilan Ekstensi">
@@ -1023,6 +1036,10 @@
       const elInjectDummy167 = document.getElementById('inject-dummy-167');
       const elInjectDummy51 = document.getElementById('inject-dummy-51');
       const elInjectDummyEdge = document.getElementById('inject-dummy-edge');
+      const elQuickHudMode = document.getElementById('quick-hud-mode');
+      const elQuickTestToastHud = document.getElementById('quick-test-toast-hud');
+      const elQuickTestBanners = document.getElementById('quick-test-banners');
+      const elQuickFocusCell1 = document.getElementById('quick-focus-cell-1');
 
       const elPopupFrame = document.getElementById('popup-frame');
       const elOptionsFrame = document.getElementById('options-frame');
@@ -1484,7 +1501,7 @@
                 return state.manifest ? cloneVal(state.manifest) : {
                   manifest_version: 3,
                   name: folder,
-                  version: '1.5.2'
+                  version: '1.5.3'
                 };
               },
               openOptionsPage: function (callback) {
@@ -1941,6 +1958,98 @@
 
       elInjectDummyEdge.addEventListener('click', function () {
         injectDummyPreset('edge');
+      });
+
+      elQuickTestToastHud.addEventListener('click', function () {
+        setActiveView('popup');
+        const mode = elQuickHudMode ? elQuickHudMode.value : 'warn';
+        try {
+          const targetWin = elTargetFrame.contentWindow;
+          const targetDoc = elTargetFrame.contentDocument;
+          if (!targetWin || !targetDoc || typeof targetWin.showToast !== 'function') {
+            addLog('warn', 'quick-test.hud', 'Target DILOC belum siap menerima pesan content.js.');
+            return;
+          }
+
+          if (mode === 'hud-running') {
+            targetWin.showToast('play', 'Mengetik (24/167) — Tekan ESC / klik ini untuk Stop', '#0284c7', true);
+          } else if (mode === 'hud-done') {
+            targetWin.showToast('success', 'Pengisian logsheet selesai!', '#16a34a', false);
+          } else if (mode === 'hud-abort') {
+            if (typeof targetWin.stopMacroExecution === 'function') {
+              targetWin.stopMacroExecution('Macro dihentikan (ESC)!');
+            } else {
+              targetWin.showToast('stop', 'Macro dihentikan (ESC)!', '#dc2626', false);
+            }
+          } else {
+            targetWin.showToast('warn', 'Klik dulu kolom/sel input pertama di logsheet sebelum menekan Play!', '#d97706', false);
+          }
+
+          flashTargetHighlight();
+          const toastCount = targetDoc.querySelectorAll('#pmr-runner-toast').length;
+          addLog('tabs', 'quick-test.hud', 'Preview ' + mode + ' dipicu di #target-frame (jumlah elemen #pmr-runner-toast: ' + toastCount + ')');
+        } catch (err) {
+          addLog('error', 'quick-test.hud', 'Gagal memicu preview HUD: ' + err.message);
+        }
+      });
+
+      elQuickTestBanners.addEventListener('click', function () {
+        try {
+          const popupWin = elPopupFrame.contentWindow;
+          if (popupWin && typeof popupWin.showPopupInlineAlert === 'function') {
+            popupWin.showPopupInlineAlert('Pindah dulu ke tab web logsheet (bukan halaman chrome:// atau extension), klik sel input pertama, lalu tekan Play!', 'warn');
+          }
+
+          const optionsWin = elOptionsFrame.contentWindow;
+          const optionsDoc = elOptionsFrame.contentDocument;
+          let simulatedFileUpload = false;
+          if (optionsWin && optionsDoc) {
+            const fileInputEl = optionsDoc.getElementById('macroFileOptions');
+            if (fileInputEl && typeof DataTransfer === 'function') {
+              const dt = new DataTransfer();
+              dt.items.add(new File(['{corrupt_pmr_json'], 'corrupt_test.pmr', { type: 'application/json' }));
+              fileInputEl.files = dt.files;
+              fileInputEl.dispatchEvent(new Event('change', { bubbles: true }));
+              simulatedFileUpload = true;
+            } else if (typeof optionsWin.showOptionsAlert === 'function') {
+              optionsWin.showOptionsAlert('Format file .pmr / .json tidak valid atau rusak. Pastikan file berisi keystroke yang sesuai.', 'error');
+              if (typeof optionsWin.notifySaved === 'function') {
+                optionsWin.notifySaved('Format file .pmr / .json tidak valid!', 'xCircle', 'error');
+              }
+            }
+          }
+
+          addLog(
+            'warn',
+            'quick-test.banner',
+            'Simulasi banner non-target (chrome://) di Popup & error upload .pmr rusak di Options (' + (simulatedFileUpload ? 'FileReader change' : 'direct banner') + ')'
+          );
+        } catch (err) {
+          addLog('error', 'quick-test.banner', 'Gagal mensimulasikan banner error: ' + err.message);
+        }
+      });
+
+      elQuickFocusCell1.addEventListener('click', function () {
+        setActiveView('popup');
+        try {
+          const targetDoc = elTargetFrame.contentDocument;
+          if (!targetDoc) return;
+          const gridWrap = targetDoc.querySelector('.grid-wrap');
+          if (gridWrap) {
+            gridWrap.scrollLeft = 0;
+            gridWrap.scrollTop = 0;
+          }
+          const firstInput = targetDoc.querySelector('.diloc-cell-input[data-row="1"][data-col="1"]') || targetDoc.querySelector('.diloc-cell-input');
+          if (!firstInput) return;
+          firstInput.focus();
+          if (typeof firstInput.select === 'function') {
+            firstInput.select();
+          }
+          flashTargetHighlight();
+          addLog('tabs', 'target.focus', 'Fokus kursor dipindahkan ke sel [1,1] pada grid DILOC (' + state.targetOperator + ')');
+        } catch (err) {
+          addLog('error', 'target.focus', 'Gagal memindahkan fokus sel [1,1]: ' + err.message);
+        }
       });
 
       elTargetOperatorSelect.addEventListener('change', function () {

@@ -38,7 +38,7 @@
       --selected-header-bg: #15803d;
       --preview-changed-bg: #dcfce7;
       --preview-changed-text: #15803d;
-      --highlight-bg: #e0f2fe;
+      --highlight-bg: rgba(14, 165, 233, 0.12);
       --highlight-outline: #0284c7;
       --badge-bg: #e2e8f0;
       --badge-text: #334155;
@@ -121,7 +121,7 @@
       --selected-header-bg: #166534;
       --preview-changed-bg: #14532d;
       --preview-changed-text: #86efac;
-      --highlight-bg: #0c2d48;
+      --highlight-bg: rgba(56, 189, 248, 0.14);
       --highlight-outline: #38bdf8;
       --badge-bg: #1e293b;
       --badge-text: #cbd5e1;
@@ -180,7 +180,7 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg-body);
       color: var(--text-body);
-      transition: background-color 0.28s ease, color 0.28s ease;
+      transition: background-color 0.25s ease, color 0.25s ease;
     }
 
     button:focus-visible,
@@ -217,7 +217,7 @@
       align-items: center;
       gap: 12px;
       border-bottom: 3px solid #16a34a;
-      transition: background-color 0.28s ease, color 0.28s ease;
+      transition: background-color 0.25s ease, color 0.25s ease;
     }
 
     .topbar-title {
@@ -348,7 +348,7 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      transition: background-color 0.28s ease, border-color 0.28s ease, color 0.28s ease;
+      transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
     }
 
     .btn-load-top {
@@ -389,7 +389,7 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
-      transition: background-color 0.28s ease, border-color 0.28s ease;
+      transition: background-color 0.25s ease, border-color 0.25s ease;
     }
 
     .panel-row {
@@ -403,7 +403,7 @@
     .panel-row-divider {
       border-top: 1px solid var(--border-soft);
       padding-top: 10px;
-      transition: border-color 0.28s ease;
+      transition: border-color 0.25s ease;
     }
 
     .mode-switcher {
@@ -432,7 +432,7 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      transition: background-color 0.28s ease, color 0.28s ease, border-color 0.28s ease;
+      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
     }
 
     .mode-btn:hover {
@@ -484,7 +484,7 @@
       align-items: center;
       gap: 6px;
       text-decoration: none;
-      transition: background-color 0.28s ease, color 0.28s ease, border-color 0.28s ease;
+      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
     }
 
     .btn:hover:not(:disabled) {
@@ -551,7 +551,7 @@
       font-size: 12.5px;
       font-weight: 600;
       line-height: 1.45;
-      transition: background-color 0.28s ease, color 0.28s ease, border-color 0.28s ease;
+      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
     }
 
     .options-alert-banner.is-error {
@@ -592,7 +592,7 @@
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      transition: background-color 0.28s ease, color 0.28s ease;
+      transition: background-color 0.25s ease, color 0.25s ease;
     }
 
     .badge.green {
@@ -629,7 +629,7 @@
       border: 1px solid var(--border-color);
       gap: 2px;
       flex-shrink: 0;
-      transition: background-color 0.28s ease, border-color 0.28s ease;
+      transition: background-color 0.25s ease, border-color 0.25s ease;
     }
 
     .filter-btn {
@@ -679,7 +679,7 @@
       width: 100%;
       background: var(--input-bg);
       color: var(--input-text);
-      transition: background-color 0.28s ease, color 0.28s ease, border-color 0.28s ease;
+      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
     }
 
     .search-box::placeholder {
@@ -703,11 +703,12 @@
     .table-wrapper {
       width: 100%;
       overflow-x: auto;
+      contain: paint;
       background: var(--bg-surface);
       border: 1px solid var(--border-color);
       border-radius: 8px;
       box-shadow: var(--shadow-table);
-      transition: background-color 0.28s ease, border-color 0.28s ease;
+      transition: background-color 0.25s ease, border-color 0.25s ease;
     }
 
     table.excel-table {
@@ -726,7 +727,6 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      transition: background-color 0.28s ease, color 0.28s ease, border-color 0.28s ease;
     }
 
     table.excel-table .col-filtered-out {
@@ -850,8 +850,8 @@
     }
 
     td.col-highlight {
-      outline: 2.5px solid var(--highlight-outline);
-      outline-offset: -2px;
+      outline: none;
+      box-shadow: inset 0 0 0 1.5px var(--highlight-outline);
       background-color: var(--highlight-bg) !important;
     }
 
@@ -873,7 +873,7 @@
       border: 1px dashed var(--border-color);
       border-radius: 10px;
       color: var(--text-muted);
-      transition: background-color 0.28s ease, color 0.28s ease, border-color 0.28s ease;
+      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
     }
 
     .empty-state h3 {
@@ -887,7 +887,7 @@
       color: var(--text-muted);
       background: var(--bg-surface-muted);
       border-top: 1px solid var(--border-color);
-      transition: background-color 0.28s ease, color 0.28s ease, border-color 0.28s ease;
+      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
     }
 
     .inline-pill {
@@ -934,7 +934,7 @@
       align-items: center;
       font-size: 11px;
       color: var(--text-subtle);
-      transition: border-color 0.28s ease, color 0.28s ease;
+      transition: border-color 0.25s ease, color 0.25s ease;
     }
   </style>
 </head>
@@ -1044,7 +1044,7 @@
     <div id="tableContainer"></div>
 
     <footer class="page-footer">
-      <span>PMR Web Runner v1.5.2</span>
+      <span>PMR Web Runner v1.5.3</span>
       <span>© 2026 — Developed by FIKRI</span>
     </footer>
   </div>
