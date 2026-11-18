@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>PMR Web Runner</title>
+  <script src="theme-init.js"></script>
+  <style>
+    :root {
+      --bg-body: #f8fafc;
+      --bg-card: #ffffff;
+      --bg-hover: #f1f5f9;
+      --bg-upload-hover: #f0fdf4;
+      --border-color: #cbd5e1;
+      --border-soft: #e2e8f0;
+      --border-upload: #94a3b8;
+      --text-title: #0f172a;
+      --text-body: #1e293b;
+      --text-secondary: #334155;
+      --text-muted: #64748b;
+      --text-footer: #94a3b8;
+      --text-status-ok: #15803d;
+      --text-status-err: #dc2626;
+      --link-color: #0284c7;
+      --preset-pill-bg: #e0f2fe;
+      --preset-pill-text: #0369a1;
+      --preset-pill-border: #bae6fd;
+      --warn-pill-bg: #fef3c7;
+      --warn-pill-text: #b45309;
+      --warn-pill-border: #fcd34d;
+      --alert-warn-bg: #fffbeb;
+      --alert-warn-border: #f59e0b;
+      --alert-warn-text: #92400e;
+      --alert-err-bg: #fef2f2;
+      --alert-err-border: #ef4444;
+      --alert-err-text: #991b1b;
+      --rand-badge-bg: #dcfce7;
+      --rand-badge-text: #15803d;
+      --btn-disabled-bg: #cbd5e1;
+      --btn-disabled-text: #64748b;
+      --pill-track-bg: #fef3c7;
+      --pill-track-border: #f59e0b;
+      --pill-thumb-bg: #ffffff;
+      --pill-thumb-shadow: 0 1px 4px rgba(217, 119, 6, 0.35);
+      --pill-sun-color: #d97706;
+      --pill-moon-color: #94a3b8;
+      --focus-ring: #0284c7;
+      --focus-ring-offset: #f8fafc;
+    }
+
+    :root[data-theme="dark"] {
+      --bg-body: #0b1120;
+      --bg-card: #111827;
+      --bg-hover: #1e293b;
+      --bg-upload-hover: rgba(22, 163, 74, 0.14);
+      --border-color: #273449;
+      --border-soft: #1f2b3e;
+      --border-upload: #475569;
+      --text-title: #f1f5f9;
+      --text-body: #e2e8f0;
+      --text-secondary: #cbd5e1;
+      --text-muted: #94a3b8;
+      --text-footer: #64748b;
+      --text-status-ok: #4ade80;
+      --text-status-err: #f87171;
+      --link-color: #38bdf8;
+      --preset-pill-bg: rgba(2, 132, 199, 0.22);
+      --preset-pill-text: #7dd3fc;
+      --preset-pill-border: rgba(56, 189, 248, 0.38);
+      --warn-pill-bg: rgba(217, 119, 6, 0.22);
+      --warn-pill-text: #fcd34d;
+      --warn-pill-border: rgba(245, 158, 11, 0.45);
+      --alert-warn-bg: rgba(217, 119, 6, 0.18);
+      --alert-warn-border: #d97706;
+      --alert-warn-text: #fde68a;
+      --alert-err-bg: rgba(220, 38, 38, 0.2);
+      --alert-err-border: #ef4444;
+      --alert-err-text: #fecaca;
+      --rand-badge-bg: rgba(22, 163, 74, 0.22);
+      --rand-badge-text: #86efac;
+      --btn-disabled-bg: #1e293b;
+      --btn-disabled-text: #64748b;
+      --pill-track-bg: #1e1b4b;
+      --pill-track-border: #6366f1;
+      --pill-thumb-bg: #4f46e5;
+      --pill-thumb-shadow: 0 1px 6px rgba(99, 102, 241, 0.55);
+      --pill-sun-color: #64748b;
+      --pill-moon-color: #e0e7ff;
+      --focus-ring: #38bdf8;
+      --focus-ring-offset: #0b1120;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 340px;
+      min-width: 320px;
+      max-width: 380px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 14px 16px;
+      text-align: center;
+      margin: 0 auto;
+      background: var(--bg-body);
+      color: var(--text-body);
+      transition: background-color 0.28s ease, color 0.28s ease;
+    }
+
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    label:focus-visible {
+      outline: 2.5px solid var(--focus-ring);
+      outline-offset: 2px;
+    }
+
+    .popup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: nowrap;
+      gap: 10px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-soft);
+      transition: border-color 0.28s ease;
+    }
+
+    .popup-header h4 {
+      margin: 0;
+      font-size: 15px;
+      color: var(--text-title);
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
+      flex: 1;
+      transition: color 0.28s ease;
+    }
+
+    /* Interactive Sliding Pill Toggle */
+    .theme-pill-switch {
+      position: relative;
+      width: 52px;
+      height: 26px;
+      padding: 0 5px;
+      border-radius: 999px;
+      border: 1px solid var(--pill-track-border);
+      background: var(--pill-track-bg);
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background-color 0.28s ease, border-color 0.28s ease, transform 0.12s ease;
+    }
+
+    .theme-pill-switch:hover {
+      filter: brightness(1.04);
+    }
+
+    .theme-pill-switch:active {
+      transform: scale(0.96);
+    }
+
+    .theme-pill-thumb {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--pill-thumb-bg);
+      box-shadow: var(--pill-thumb-shadow);
+      transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.28s ease, width 0.14s ease;
+      z-index: 1;
+    }
+
+    .theme-pill-switch:active .theme-pill-thumb {
+      width: 22px;
+    }
+
+    :root[data-theme="dark"] .theme-pill-thumb {
+      transform: translateX(26px);
+    }
+
+    :root[data-theme="dark"] .theme-pill-switch:active .theme-pill-thumb {
+      transform: translateX(24px);
+    }
+
+    .theme-pill-icon {
+      position: relative;
+      z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.28s ease, opacity 0.28s ease, transform 0.28s ease;
+    }
+
+    .theme-pill-sun {
+      color: var(--pill-sun-color);
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .theme-pill-moon {
+      color: var(--pill-moon-color);
+      opacity: 0.65;
+      transform: scale(0.88);
+    }
+
+    :root[data-theme="dark"] .theme-pill-sun {
+      opacity: 0.55;
+      transform: scale(0.88);
+    }
+
+    :root[data-theme="dark"] .theme-pill-moon {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .svg-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      vertical-align: middle;
+    }
+
+    .icon-emerald { color: #16a34a; }
+    .icon-sky { color: var(--link-color); }
+    .icon-amber { color: #d97706; }
+    .icon-rose { color: #e11d48; }
+    .icon-slate { color: var(--text-muted); }
+
+    :root[data-theme="dark"] .icon-emerald { color: #4ade80; }
+    :root[data-theme="dark"] .icon-amber { color: #fbbf24; }
+    :root[data-theme="dark"] .icon-rose { color: #fb7185; }
+
+    .custom-file-upload {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 9px 12px;
+      cursor: pointer;
+      background: var(--bg-card);
+      border: 1.5px dashed var(--border-upload);
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--text-secondary);
+      transition: background-color 0.28s ease, border-color 0.28s ease, color 0.28s ease;
+    }
+
+    .custom-file-upload:hover {
+      border-color: #16a34a;
+      background: var(--bg-upload-hover);
+    }
+
+    .custom-file-upload.disabled {
+      opacity: 0.55;
+      pointer-events: none;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .editor-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      margin-top: 8px;
+      padding: 2px 4px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--link-color);
+      text-decoration: none;
+      transition: color 0.28s ease;
+    }
+
+    .editor-link:hover {
+      text-decoration: underline;
+    }
+
+    .status {
+      margin: 8px 0 4px 0;
+      font-size: 11px;
+      color: var(--text-muted);
+      word-break: break-word;
+      min-height: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: color 0.28s ease;
+    }
+
+    .status.is-ok {
+      color: var(--text-status-ok);
+    }
+
+    .status.is-error {
+      color: var(--text-status-err);
+    }
+
+    .preset-badge-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      margin: 2px 0 10px 0;
+    }
+
+    .preset-badge-wrap[hidden] {
+      display: none;
+    }
+
+    .preset-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 10.5px;
+      font-weight: 700;
+      background: var(--preset-pill-bg);
+      color: var(--preset-pill-text);
+      border: 1px solid var(--preset-pill-border);
+      transition: background-color 0.28s ease, color 0.28s ease, border-color 0.28s ease;
+    }
+
+    .preset-warn-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-size: 10px;
+      font-weight: 700;
+      background: var(--warn-pill-bg);
+      color: var(--warn-pill-text);
+      border: 1px solid var(--warn-pill-border);
+      transition: background-color 0.28s ease, color 0.28s ease, border-color 0.28s ease;
+    }
+
+    .rand-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-soft);
+      border-radius: 8px;
+      padding: 9px 10px;
+      margin-bottom: 10px;
+      text-align: left;
+      transition: background-color 0.28s ease, border-color 0.28s ease;
+    }
+
+    .rand-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: color 0.28s ease;
+    }
+
+    .rand-title-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .rand-badge {
+      font-size: 10px;
+      background: var(--rand-badge-bg);
+      color: var(--rand-badge-text);
+      padding: 1px 6px;
+      border-radius: 99px;
+      font-weight: 700;
+      transition: background-color 0.28s ease, color 0.28s ease;
+    }
+
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .radio-item {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 4px 5px;
+      border-radius: 5px;
+      transition: background-color 0.2s ease, color 0.28s ease;
+    }
+
+    .radio-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .radio-item input[type="radio"] {
+      accent-color: #16a34a;
+      margin: 0;
+      cursor: pointer;
+    }
+
+    .inline-alert {
+      display: flex;
+      align-items: flex-start;
+      gap: 7px;
+      text-align: left;
+      padding: 8px 10px;
+      margin-bottom: 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.4;
+      background: var(--alert-warn-bg);
+      border: 1px solid var(--alert-warn-border);
+      color: var(--alert-warn-text);
+      transition: background-color 0.28s ease, border-color 0.28s ease, color 0.28s ease;
+    }
+
+    .inline-alert.is-error {
+      background: var(--alert-err-bg);
+      border-color: var(--alert-err-border);
+      color: var(--alert-err-text);
+    }
+
+    .inline-alert[hidden] {
+      display: none;
+    }
+
+    .inline-alert .svg-icon {
+      margin-top: 1px;
+    }
+
+    #toggleBtn {
+      width: 100%;
+      padding: 11px 12px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      color: #ffffff;
+      background: #16a34a;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    #toggleBtn:disabled {
+      background: var(--btn-disabled-bg);
+      color: var(--btn-disabled-text);
+      cursor: not-allowed;
+    }
+
+    #toggleBtn.running {
+      background: #dc2626;
+      animation: pulseRun 1.2s infinite;
+    }
+
+    #toggleBtn:hover:not(:disabled) {
+      filter: brightness(0.95);
+    }
+
+    @keyframes pulseRun {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.82; }
+    }
+
+    .btn-setting {
+      width: 100%;
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-title);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background-color 0.28s ease, border-color 0.28s ease, color 0.28s ease;
+    }
+
+    .btn-setting:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-upload);
+    }
+
+    .hint {
+      margin-top: 8px;
+      font-size: 10px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      transition: color 0.28s ease;
+    }
+
+    .footer-credit {
+      margin-top: 9px;
+      padding-top: 7px;
+      border-top: 1px solid var(--border-soft);
+      font-size: 10px;
+      color: var(--text-footer);
+      letter-spacing: 0.2px;
+      transition: border-color 0.28s ease, color 0.28s ease;
+    }
+  </style>
+</head>
+<body>
+  <header class="popup-header">
+    <h4>PMR Web Runner</h4>
+    <button
+      id="themeToggleBtn"
+      type="button"
+      class="theme-pill-switch"
+      role="switch"
+      aria-checked="false"
+      aria-label="Light Mode aktif — Klik untuk Dark Mode"
+      title="Light Mode aktif — Klik untuk Dark Mode"
+    >
+      <span class="theme-pill-thumb" aria-hidden="true"></span>
+      <span data-icon="sun" data-icon-class="theme-pill-icon theme-pill-sun" data-icon-size="13"></span>
+      <span data-icon="moon" data-icon-class="theme-pill-icon theme-pill-moon" data-icon-size="13"></span>
+    </button>
+  </header>
+
+  <label for="macroFile" id="fileLabel" class="custom-file-upload" tabindex="0">
+    <span data-icon="folder" data-icon-class="icon-emerald" data-icon-size="16"></span>
+    <span>Load File .PMR / .JSON</span>
+  </label>
+  <input type="file" id="macroFile" accept=".pmr,.json" />
+
+  <a href="https://crocolatozz.github.io/pmr-editor/" target="_blank" rel="noopener noreferrer" class="editor-link">
+    <span data-icon="edit" data-icon-class="icon-sky" data-icon-size="14"></span>
+    <span>Buka PMR Editor</span>
+    <span data-icon="externalLink" data-icon-class="icon-sky" data-icon-size="12"></span>
+  </a>
+
+  <div id="fileStatus" class="status">Belum ada file dimuat</div>
+  <div id="presetBadgeWrap" class="preset-badge-wrap" hidden></div>
+
+  <div class="rand-card">
+    <div class="rand-title">
+      <span class="rand-title-left">
+        <span data-icon="dice" data-icon-class="icon-amber" data-icon-size="15"></span>
+        <span>Randomize Digit Terakhir</span>
+      </span>
+      <span class="rand-badge">±1</span>
+    </div>
+    <div class="radio-group">
+      <label class="radio-item">
+        <input type="radio" name="randMode" value="off" checked>
+        <span>Off (Nilai Asli)</span>
+      </label>
+      <label class="radio-item">
+        <input type="radio" name="randMode" value="all">
+        <span>Randomize All (Acak Berselang)</span>
+      </label>
+      <label class="radio-item">
+        <input type="radio" name="randMode" value="selected">
+        <span id="selectedModeLabel">Selected Cells (0 sel)</span>
+      </label>
+    </div>
+  </div>
+
+  <div id="popupAlert" class="inline-alert" role="alert" hidden></div>
+
+  <button id="toggleBtn" disabled>
+    <span data-icon="play" data-icon-size="15"></span>
+    <span>Play</span>
+  </button>
+
+  <button id="openSettingsBtn" class="btn-setting">
+    <span data-icon="settings" data-icon-class="icon-slate" data-icon-size="15"></span>
+    <span>Setting Sel &amp; Preset Operator</span>
+  </button>
+
+  <div id="hintText" class="hint">Klik sel input pertama di logsheet web lalu tekan Play (popup otomatis menutup).</div>
+
+  <div class="footer-credit">© 2026 — Developed by FIKRI</div>
+
+  <script src="icons.js"></script>
+  <script src="randomizer.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

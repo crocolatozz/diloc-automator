@@ -1,30 +1,39 @@
-# Chrome Extension Studio Template (MV3 Workbench)
+# PMR Web Runner (Manifest V3 Extension)
 
-Universal live-preview simulator untuk merancang dan men-debug Chrome/Edge Extension (**Manifest V3**) secara visual di Google AI Studio menggunakan **100% Vanilla HTML, CSS, dan JavaScript** tanpa bundler.
+Ekstensi Google Chrome / Microsoft Edge (**Manifest V3**) berbasis **100% Vanilla HTML5, CSS3, dan ES6+ JavaScript** untuk menjalankan file macro keyboard (`.pmr` / `.json`) ke form web logsheet dengan fitur randomize digit terakhir (`±1`), proteksi batas kontekstual (`0` & `100%`), preset header logsheet (**Operator 1, 2, 3**), serta pengaturan sel interaktif dengan **Smooth Dark Mode**.
 
-## Struktur Arsitektur Dua Lapis
+## Struktur Repository
 
     /
-    ├── index.html          # Universal Live Preview Simulator & Mock Chrome API
-    ├── package.json        # Minimal server config untuk preview AI Studio & GitHub import
-    ├── AI_RULES.md         # Standar koding, CSP Manifest V3, dan aturan hemat token AI
-    ├── CHANGELOG.md        # Catatan riwayat perubahan template
-    ├── README.md           # Dokumentasi utama repository
-    ├── sample-ext/         # Contoh ekstensi bawaan untuk tes simulator
-    └── <nama-ekstensi>/    # Folder inti ekstensi target (siap Load Unpacked ke Chrome)
+    ├── index.html          # Universal Live Preview Workbench & Mock Chrome API Simulator
+    ├── server.js           # Static Express server (port 3000) untuk preview lokal/AI Studio
+    ├── package.json        # Konfigurasi server preview lokal
+    ├── AI_RULES.md         # Standar koding, CSP Manifest V3, dan aturan hemat token
+    ├── CHANGELOG.md        # Catatan riwayat perubahan versi
+    ├── README.md           # Dokumentasi utama proyek
+    └── pmr-web-runner/     # Folder inti ekstensi Manifest V3 (siap Load Unpacked)
+        ├── manifest.json
+        ├── popup.html / popup.js
+        ├── options.html / options.js
+        ├── content.js
+        ├── randomizer.js
+        ├── icons.js
+        ├── theme-init.js
+        ├── operator1.json / operator2.json / operator3.json
+        ├── icon16.png / icon48.png / icon128.png
+        └── README.txt
 
-## Alur Kerja Multi-Project (1 Repo, Beda Branch)
+## Live Preview di Workbench
 
-1. **Jaga Branch `main` Tetap Bersih:** Gunakan `main` khusus sebagai master template kosong.
-2. **Buat Branch Baru per Project:** Saat mulai ekstensi baru, buat branch baru dari `main` (misal: `pmr-web-runner`), lalu hubungkan ke workspace baru di AI Studio.
-3. **Isolasi File Ekstensi:** Simpan seluruh file ekstensi (`manifest.json`, `popup.html`, `options.html`, aset ikon, dan script) di dalam satu subfolder khusus `/<nama-ekstensi>/`.
-4. **Live Preview:** Ketik nama subfolder ekstensi pada input toolbar di `index.html` untuk menguji tampilan popup, halaman options, `chrome.storage.local`, dan simulasi pesan tab secara langsung.
+1. Jalankan server preview (`npm run dev`), lalu buka `http://localhost:3000`.
+2. Simulator `index.html` otomatis mengarah ke folder `pmr-web-runner` dan menyuntikkan mock `chrome.storage.local`, `chrome.runtime`, dan `chrome.tabs`.
+3. Gunakan tab **Popup + Target Web** dan **Halaman Options (Full)** untuk menguji UI popup, dark mode, filter tabel, preset operator, serta komunikasi pesan tab.
 
 ## Cara Pasang ke Browser (Load Unpacked)
 
-1. Unduh file ZIP project dari AI Studio lalu ekstrak.
+1. Unduh atau ekstrak repository ini.
 2. Buka `chrome://extensions` atau `edge://extensions` dan aktifkan **Developer mode**.
-3. Klik **Load unpacked** dan pilih **hanya subfolder `/<nama-ekstensi>/`** (jangan pilih folder root `/`).
+3. Klik **Load unpacked** dan pilih **hanya subfolder `/pmr-web-runner/`** (jangan pilih folder root `/`).
 
 ---
 

@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Chrome Extension MV3 Studio</title>
-  <meta name="description" content="Universal live-preview workbench and Chrome API simulator for developing and debugging Manifest V3 Chrome extensions." />
-  <meta property="og:title" content="Chrome Extension MV3 Studio" />
-  <meta property="og:description" content="Universal live-preview workbench and Chrome API simulator for developing and debugging Manifest V3 Chrome extensions." />
+  <title>PMR Web Runner — Dev Workbench</title>
+  <meta name="description" content="Live-preview workbench, DILOC logsheet simulator, and Chrome MV3 API simulator for PMR Web Runner." />
+  <meta property="og:title" content="PMR Web Runner — Dev Workbench" />
+  <meta property="og:description" content="Live-preview workbench, DILOC logsheet simulator, and Chrome MV3 API simulator for PMR Web Runner." />
   <meta property="og:type" content="website" />
   <style>
     :root {
@@ -77,8 +77,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 20px;
-      padding: 12px 20px;
+      gap: 14px;
+      padding: 10px 18px;
       background-color: var(--bg-surface);
       border-bottom: 1px solid var(--border-subtle);
       flex-shrink: 0;
@@ -87,18 +87,34 @@
 
     .brand-group {
       display: flex;
-      align-items: baseline;
-      gap: 12px;
+      align-items: center;
+      gap: 10px;
       min-width: 0;
       flex-shrink: 0;
+      flex-wrap: wrap;
     }
 
     .brand-title {
       margin: 0;
-      font-size: 16px;
+      font-size: 15.5px;
       font-weight: 700;
       letter-spacing: -0.01em;
       color: var(--text-primary);
+      white-space: nowrap;
+    }
+
+    .folder-lock-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 26px;
+      padding: 0 10px;
+      border-radius: 99px;
+      background-color: var(--bg-inset);
+      border: 1px solid var(--border-strong);
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: #93c5fd;
       white-space: nowrap;
     }
 
@@ -108,7 +124,7 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 260px;
+      max-width: 240px;
       font-variant-numeric: tabular-nums;
     }
 
@@ -119,45 +135,29 @@
     .toolbar-controls {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       flex-wrap: wrap;
       flex: 1;
       justify-content: flex-end;
     }
 
-    .folder-form {
-      display: flex;
+    .dummy-group {
+      display: inline-flex;
       align-items: center;
-      gap: 8px;
-    }
-
-    .field-label {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      white-space: nowrap;
-    }
-
-    .input-text {
-      height: 36px;
-      padding: 0 12px;
+      gap: 6px;
+      padding: 3px 6px;
       border-radius: var(--radius-md);
-      border: 1px solid var(--border-strong);
       background-color: var(--bg-inset);
-      color: var(--text-primary);
-      font-family: var(--font-mono);
-      font-size: 13px;
-      width: 170px;
-      transition: border-color 150ms var(--ease-out);
+      border: 1px solid var(--border-subtle);
+      flex-wrap: wrap;
     }
 
-    .input-text:hover {
-      border-color: rgba(255, 255, 255, 0.24);
-    }
-
-    .input-text:focus {
-      border-color: var(--accent);
-      outline: none;
+    .dummy-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding: 0 4px;
+      white-space: nowrap;
     }
 
     .btn {
@@ -165,13 +165,13 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
-      height: 36px;
-      padding: 0 14px;
+      height: 34px;
+      padding: 0 12px;
       border-radius: var(--radius-md);
       border: 1px solid var(--border-strong);
       background-color: var(--bg-elevated);
       color: var(--text-primary);
-      font-size: 13px;
+      font-size: 12.5px;
       font-weight: 500;
       cursor: pointer;
       white-space: nowrap;
@@ -199,6 +199,17 @@
       border-color: var(--accent-hover);
     }
 
+    .btn-amber {
+      background-color: var(--warning-soft);
+      border-color: rgba(245, 158, 11, 0.35);
+      color: #fcd34d;
+    }
+
+    .btn-amber:hover {
+      background-color: rgba(245, 158, 11, 0.24);
+      border-color: rgba(245, 158, 11, 0.6);
+    }
+
     .btn-danger {
       background-color: transparent;
       border-color: rgba(239, 68, 68, 0.35);
@@ -212,10 +223,21 @@
     }
 
     .btn-sm {
-      height: 30px;
-      padding: 0 10px;
-      font-size: 12px;
+      height: 28px;
+      padding: 0 9px;
+      font-size: 11.5px;
       border-radius: var(--radius-sm);
+    }
+
+    .select-sm {
+      height: 28px;
+      padding: 0 8px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong);
+      background-color: var(--bg-inset);
+      color: var(--text-primary);
+      font-size: 12px;
+      cursor: pointer;
     }
 
     /* Segmented Tab Switcher */
@@ -231,13 +253,13 @@
     }
 
     .seg-btn {
-      height: 30px;
-      padding: 0 12px;
+      height: 28px;
+      padding: 0 11px;
       border: none;
       border-radius: var(--radius-sm);
       background: transparent;
       color: var(--text-secondary);
-      font-size: 13px;
+      font-size: 12.5px;
       font-weight: 500;
       cursor: pointer;
       white-space: nowrap;
@@ -288,16 +310,16 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 20px;
+      padding: 18px;
       overflow-y: auto;
     }
 
     .stage-header {
-      width: 320px;
+      width: 340px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
     }
 
     .stage-title {
@@ -308,13 +330,13 @@
 
     .stage-dimensions {
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--text-muted);
       font-variant-numeric: tabular-nums;
     }
 
     .chrome-popup-window {
-      width: 320px;
+      width: 340px;
       min-height: 460px;
       border-radius: 12px;
       border: 1px solid var(--border-strong);
@@ -357,18 +379,18 @@
     }
 
     .popup-iframe {
-      width: 320px;
+      width: 340px;
       min-height: 460px;
-      height: 480px;
+      height: 485px;
       border: 0;
       display: block;
       background-color: #ffffff;
     }
 
     .stage-caption {
-      width: 320px;
-      margin-top: 14px;
-      font-size: 12px;
+      width: 340px;
+      margin-top: 12px;
+      font-size: 11.5px;
       color: var(--text-muted);
       line-height: 1.5;
     }
@@ -379,7 +401,7 @@
       font-size: 11px;
     }
 
-    /* Right Pane: Target Web + Console */
+    /* Right Pane: Target Web DILOC Grid + Console */
     .target-workbench {
       display: flex;
       flex-direction: column;
@@ -392,7 +414,7 @@
     .target-section {
       display: flex;
       flex-direction: column;
-      padding: 20px 24px;
+      padding: 16px 20px;
       border-bottom: 1px solid var(--border-subtle);
       background-color: var(--bg-surface);
       flex-shrink: 0;
@@ -407,8 +429,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 14px;
+      gap: 12px;
+      margin-bottom: 10px;
       flex-wrap: wrap;
     }
 
@@ -417,121 +439,59 @@
       align-items: baseline;
       gap: 10px;
       min-width: 0;
+      flex-wrap: wrap;
     }
 
     .section-heading {
       margin: 0;
-      font-size: 15px;
+      font-size: 14.5px;
       font-weight: 600;
       color: var(--text-primary);
     }
 
     .section-sub {
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
     }
 
-    .target-form {
-      display: grid;
-      grid-template-columns: minmax(140px, 1.4fr) minmax(120px, 1fr) minmax(110px, 0.9fr) auto;
-      gap: 10px;
-      margin-bottom: 14px;
+    .target-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
     }
 
-    .target-input {
-      width: 100%;
-      height: 36px;
-      padding: 0 12px;
-      border-radius: var(--radius-md);
+    .target-frame-wrap {
+      position: relative;
       border: 1px solid var(--border-strong);
-      background-color: var(--bg-inset);
-      color: var(--text-primary);
-      font-size: 13px;
-    }
-
-    .target-input:focus {
-      border-color: var(--accent);
-      outline: none;
-    }
-
-    .table-wrap {
-      border: 1px solid var(--border-subtle);
       border-radius: var(--radius-md);
-      background-color: var(--bg-inset);
-      overflow: auto;
-      max-height: 210px;
+      background-color: #f8fafc;
+      overflow: hidden;
+      height: 252px;
     }
 
-    table.target-table {
+    .target-iframe {
       width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-      font-size: 13px;
+      height: 100%;
+      border: 0;
+      display: block;
+      background-color: #f8fafc;
     }
 
-    .target-table th {
-      position: sticky;
-      top: 0;
-      background-color: var(--bg-elevated);
+    .target-hint {
+      margin-top: 8px;
+      font-size: 11.5px;
       color: var(--text-secondary);
-      font-weight: 600;
-      font-size: 12px;
-      padding: 9px 12px;
-      border-bottom: 1px solid var(--border-subtle);
-      white-space: nowrap;
     }
 
-    .target-table td {
-      padding: 8px 12px;
-      border-bottom: 1px solid var(--border-subtle);
-      color: var(--text-primary);
-      vertical-align: middle;
-    }
-
-    .target-table tbody tr:last-child td {
-      border-bottom: none;
-    }
-
-    .target-table tbody tr:hover {
-      background-color: rgba(255, 255, 255, 0.03);
-    }
-
-    .target-table tbody tr.row-flash {
-      background-color: rgba(59, 130, 246, 0.16);
-    }
-
-    .col-num {
-      width: 48px;
-      font-family: var(--font-mono);
-      font-variant-numeric: tabular-nums;
-      color: var(--text-muted);
-    }
-
-    .col-actions {
-      width: 72px;
-      text-align: right;
-    }
-
-    .status-text {
-      font-size: 12px;
-      font-weight: 500;
-    }
-
-    .status-ok { color: #34d399; }
-    .status-warn { color: #fbbf24; }
-    .status-info { color: #60a5fa; }
-
-    /* Console & Storage Inspector Section */
+    /* Console & State Inspector Section */
     .console-section {
       flex: 1;
       min-height: 180px;
       display: flex;
       flex-direction: column;
-      padding: 16px 24px 20px;
+      padding: 14px 20px 18px;
       overflow: hidden;
     }
 
@@ -540,7 +500,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       flex-shrink: 0;
       flex-wrap: wrap;
     }
@@ -555,7 +515,7 @@
       background: transparent;
       border: none;
       padding: 4px 0;
-      font-size: 14px;
+      font-size: 13.5px;
       font-weight: 600;
       color: var(--text-muted);
       cursor: pointer;
@@ -575,7 +535,7 @@
 
     .console-meta {
       font-family: var(--font-mono);
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--text-muted);
       font-variant-numeric: tabular-nums;
     }
@@ -597,17 +557,17 @@
     }
 
     .log-empty {
-      padding: 32px 20px;
+      padding: 28px 20px;
       text-align: center;
       color: var(--text-muted);
-      font-size: 13px;
+      font-size: 12.5px;
     }
 
     .log-entry {
-      padding: 10px 14px;
+      padding: 9px 14px;
       border-bottom: 1px solid var(--border-subtle);
       display: grid;
-      grid-template-columns: 78px 86px minmax(0, 1fr);
+      grid-template-columns: 74px 104px minmax(0, 1fr);
       gap: 12px;
       align-items: start;
       font-size: 12px;
@@ -647,12 +607,12 @@
 
     .log-payload {
       margin: 0;
-      padding: 8px 10px;
+      padding: 7px 10px;
       border-radius: var(--radius-sm);
       background-color: rgba(255, 255, 255, 0.03);
       border: 1px solid var(--border-subtle);
       font-family: var(--font-mono);
-      font-size: 11.5px;
+      font-size: 11px;
       line-height: 1.45;
       color: #cbd5e1;
       overflow-x: auto;
@@ -660,14 +620,44 @@
       word-break: break-word;
     }
 
-    /* Storage Inspector Table */
+    /* State Summary & Storage Inspector */
+    .state-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+      gap: 10px;
+      padding: 10px 14px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .state-card {
+      background-color: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 9px 11px;
+    }
+
+    .state-card-label {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--text-muted);
+      margin-bottom: 3px;
+    }
+
+    .state-card-value {
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #93c5fd;
+      word-break: break-word;
+    }
+
     .storage-inspector-list {
-      padding: 12px 14px;
+      padding: 8px 14px;
     }
 
     .storage-row {
       display: grid;
-      grid-template-columns: minmax(140px, 220px) minmax(0, 1fr);
+      grid-template-columns: minmax(140px, 210px) minmax(0, 1fr);
       gap: 12px;
       padding: 8px 0;
       border-bottom: 1px solid var(--border-subtle);
@@ -781,10 +771,6 @@
         border-bottom: 1px solid var(--border-subtle);
       }
 
-      .target-form {
-        grid-template-columns: 1fr;
-      }
-
       .console-body {
         min-height: 260px;
         max-height: 380px;
@@ -807,24 +793,20 @@
     <!-- Header Toolbar -->
     <header class="toolbar">
       <div class="brand-group">
-        <h1 class="brand-title">Chrome Ext Studio</h1>
+        <h1 class="brand-title">PMR Web Runner — Dev Workbench</h1>
+        <span class="folder-lock-pill" title="Target folder ekstensi dikunci ke pmr-web-runner">pmr-web-runner</span>
         <span id="manifest-meta" class="manifest-meta">Memuat manifest...</span>
       </div>
 
       <div class="toolbar-controls">
-        <form id="folder-form" class="folder-form">
-          <label for="folder-input" class="field-label">Folder Ekstensi</label>
-          <input
-            id="folder-input"
-            class="input-text"
-            type="text"
-            value="sample-ext"
-            placeholder="sample-ext"
-            spellcheck="false"
-            autocomplete="off"
-          />
-          <button id="reload-btn" type="submit" class="btn btn-primary">Muat Ulang</button>
-        </form>
+        <div class="dummy-group" role="group" aria-label="Inject Dummy PMR ke Storage">
+          <span class="dummy-label">Inject Dummy .pmr:</span>
+          <button id="inject-dummy-167" type="button" class="btn btn-sm">Dummy 167 Sel</button>
+          <button id="inject-dummy-51" type="button" class="btn btn-sm">Dummy 51 Sel</button>
+          <button id="inject-dummy-edge" type="button" class="btn btn-sm btn-amber">Dummy Edge-Case 100% &amp; 0 + Selisih</button>
+        </div>
+
+        <button id="reload-btn" type="button" class="btn btn-primary btn-sm">Muat Ulang</button>
 
         <div class="segmented" role="tablist" aria-label="Mode Tampilan Ekstensi">
           <button
@@ -847,7 +829,7 @@
           </button>
         </div>
 
-        <button id="reset-storage-btn" type="button" class="btn btn-danger">
+        <button id="reset-storage-btn" type="button" class="btn btn-danger btn-sm">
           Reset Mock Storage
         </button>
       </div>
@@ -856,19 +838,19 @@
     <!-- Main Workbench -->
     <main class="workspace">
       <!-- View 1: Popup + Target Web -->
-      <section id="view-popup" class="view-panel is-active" aria-label="Popup dan Simulasi Halaman Web Target">
+      <section id="view-popup" class="view-panel is-active" aria-label="Popup dan Simulasi Logsheet DILOC">
         <div class="split-layout">
           <!-- Left: Chrome Popup Frame -->
           <aside class="popup-stage">
             <div class="stage-header">
               <span class="stage-title">Popup Ekstensi</span>
-              <span class="stage-dimensions">320 × 460+ px</span>
+              <span class="stage-dimensions">340 × 460+ px</span>
             </div>
 
             <div class="chrome-popup-window">
               <div class="chrome-window-bar">
-                <span id="popup-win-title" class="chrome-window-title">Extension Popup</span>
-                <span id="popup-win-path" class="chrome-window-path">popup.html</span>
+                <span id="popup-win-title" class="chrome-window-title">PMR Web Runner</span>
+                <span id="popup-win-path" class="chrome-window-path">./pmr-web-runner/popup.html</span>
               </div>
               <iframe
                 id="popup-frame"
@@ -885,63 +867,43 @@
             </div>
 
             <p class="stage-caption">
-              API <code>chrome.storage.local</code>, <code>chrome.runtime</code>, dan <code>chrome.tabs</code> disuntikkan otomatis sebelum skrip halaman popup dijalankan.
+              API <code>chrome.storage.local</code>, <code>chrome.runtime</code>, dan <code>chrome.tabs</code> disuntikkan otomatis serta tersinkron 2 arah ke halaman Options &amp; Grid DILOC.
             </p>
           </aside>
 
-          <!-- Right: Target Web Simulation + Real-time Console -->
+          <!-- Right: Target Web DILOC Grid Simulation + Real-time Console -->
           <section class="target-workbench">
             <div id="target-section" class="target-section">
               <div class="section-top">
                 <div class="section-heading-group">
-                  <h2 class="section-heading">Simulasi Halaman Web Target</h2>
-                  <span class="section-sub">https://localhost/target-web</span>
+                  <h2 class="section-heading">Target Web Page — Grid Logsheet DILOC</h2>
+                  <span id="target-grid-meta" class="section-sub">4 baris × 167 kolom</span>
                 </div>
-                <div style="display:flex; gap:8px; align-items:center;">
-                  <button id="target-reset-btn" type="button" class="btn btn-sm">Reset Tabel</button>
+                <div class="target-controls">
+                  <label for="target-operator-select" class="console-meta">Operator:</label>
+                  <select id="target-operator-select" class="select-sm" aria-label="Pilih Operator Grid DILOC">
+                    <option value="operator1">Operator 1 (167 kolom)</option>
+                    <option value="operator2">Operator 2 (51 kolom)</option>
+                    <option value="operator3">Operator 3 (45 kolom)</option>
+                  </select>
+                  <button id="target-clear-btn" type="button" class="btn btn-sm">Clear Tabel</button>
                 </div>
               </div>
 
-              <form id="target-form" class="target-form">
-                <input
-                  id="target-name"
-                  class="target-input"
-                  type="text"
-                  placeholder="Nama item / field target"
-                  required
-                />
-                <input
-                  id="target-category"
-                  class="target-input"
-                  type="text"
-                  placeholder="Kategori (mis. Riset)"
-                  required
-                />
-                <select id="target-status" class="target-input" aria-label="Status item">
-                  <option value="Aktif">Aktif</option>
-                  <option value="Draft">Draft</option>
-                  <option value="Terisi">Terisi</option>
-                </select>
-                <button type="submit" class="btn btn-primary">Tambah Baris</button>
-              </form>
+              <div class="target-frame-wrap">
+                <iframe
+                  id="target-frame"
+                  class="target-iframe"
+                  title="Simulasi Grid Logsheet DILOC dengan content.js"
+                ></iframe>
+              </div>
 
-              <div class="table-wrap">
-                <table class="target-table">
-                  <thead>
-                    <tr>
-                      <th class="col-num">#</th>
-                      <th>Nama Item / Input</th>
-                      <th>Kategori</th>
-                      <th>Status</th>
-                      <th class="col-actions">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody id="target-tbody"></tbody>
-                </table>
+              <div class="target-hint">
+                Klik salah satu sel input di baris Shift/Jam lalu tekan <b>Play</b> di popup (atau langsung tekan <b>Play</b> tanpa fokus sel untuk menguji Floating Toast amber non-blocking; tekan <b>ESC</b> di area grid untuk Stop).
               </div>
             </div>
 
-            <!-- Real-time Console & Storage Inspector -->
+            <!-- Real-time Console & State/Storage Inspector -->
             <div class="console-section">
               <div class="console-header">
                 <div class="console-tabs">
@@ -950,14 +912,14 @@
                     type="button"
                     class="console-tab-btn is-active"
                   >
-                    Console Log (chrome.tabs.sendMessage)
+                    Console Log (chrome.tabs / storage)
                   </button>
                   <button
                     id="subtab-storage"
                     type="button"
                     class="console-tab-btn"
                   >
-                    Mock Storage Inspector
+                    State &amp; Storage Inspector
                   </button>
                 </div>
 
@@ -969,12 +931,13 @@
 
               <div id="console-log-panel" class="console-body">
                 <div id="log-empty" class="log-empty">
-                  Belum ada pesan dari ekstensi. Jalankan <code>chrome.tabs.sendMessage</code> atau ubah <code>chrome.storage.local</code> dari popup/options untuk melihat log real-time di sini.
+                  Belum ada event. Inject dummy <code>.pmr</code>, ubah mode/tema di popup, atau tekan <b>Play</b> untuk melihat log real-time di sini.
                 </div>
                 <div id="log-list"></div>
               </div>
 
               <div id="storage-inspector-panel" class="console-body" style="display:none;">
+                <div id="state-summary-grid" class="state-summary-grid"></div>
                 <div id="storage-inspector-content" class="storage-inspector-list"></div>
               </div>
             </div>
@@ -987,7 +950,7 @@
         <div class="options-stage">
           <div class="options-bar">
             <span>
-              Pratinjau Penuh: <code id="options-path-label">./sample-ext/options.html</code>
+              Pratinjau Penuh: <code id="options-path-label">./pmr-web-runner/options.html</code>
             </span>
             <button id="back-to-popup-btn" type="button" class="btn btn-sm">
               Kembali ke Popup + Target Web
@@ -1016,6 +979,13 @@
     (function () {
       'use strict';
 
+      const FIXED_FOLDER = 'pmr-web-runner';
+      const OPERATOR_COLUMN_COUNTS = {
+        operator1: 167,
+        operator2: 51,
+        operator3: 45
+      };
+
       const MOCK_TAB = {
         id: 1,
         index: 0,
@@ -1023,33 +993,26 @@
         active: true,
         highlighted: true,
         status: 'complete',
-        title: 'Target Web Simulator',
-        url: 'https://localhost/target-web'
+        title: 'DILOC Logsheet Simulator',
+        url: 'https://localhost/diloc-logsheet'
       };
 
-      const INITIAL_TARGET_ROWS = [
-        { id: 1, name: 'Formulir Pendaftaran Mitra', category: 'Onboarding', status: 'Aktif' },
-        { id: 2, name: 'Data Katalog Produk Q4', category: 'Inventaris', status: 'Draft' },
-        { id: 3, name: 'Konfigurasi Webhook API', category: 'Integrasi', status: 'Aktif' }
-      ];
-
       const state = {
-        folder: 'sample-ext',
+        folder: FIXED_FOLDER,
         activeView: 'popup',
         activeInspectorTab: 'console',
+        targetOperator: 'operator1',
+        targetLoadSeq: 0,
+        presetCache: {},
         manifest: null,
-        targetRows: INITIAL_TARGET_ROWS.map((row) => ({ ...row })),
-        nextRowId: 4,
         logs: [],
-        // Active listener registrations tied to specific iframe Window references
         storageListeners: new Set(),
         runtimeMessageListeners: new Set()
       };
 
       // DOM elements
-      const elFolderForm = document.getElementById('folder-form');
-      const elFolderInput = document.getElementById('folder-input');
       const elManifestMeta = document.getElementById('manifest-meta');
+      const elReloadBtn = document.getElementById('reload-btn');
       const elTabPopup = document.getElementById('tab-popup');
       const elTabOptions = document.getElementById('tab-options');
       const elViewPopup = document.getElementById('view-popup');
@@ -1057,8 +1020,13 @@
       const elResetStorageBtn = document.getElementById('reset-storage-btn');
       const elBackToPopupBtn = document.getElementById('back-to-popup-btn');
 
+      const elInjectDummy167 = document.getElementById('inject-dummy-167');
+      const elInjectDummy51 = document.getElementById('inject-dummy-51');
+      const elInjectDummyEdge = document.getElementById('inject-dummy-edge');
+
       const elPopupFrame = document.getElementById('popup-frame');
       const elOptionsFrame = document.getElementById('options-frame');
+      const elTargetFrame = document.getElementById('target-frame');
       const elPopupWinTitle = document.getElementById('popup-win-title');
       const elPopupWinPath = document.getElementById('popup-win-path');
       const elOptionsPathLabel = document.getElementById('options-path-label');
@@ -1070,31 +1038,22 @@
       const elOptionsRetryBtn = document.getElementById('options-retry-btn');
 
       const elTargetSection = document.getElementById('target-section');
-      const elTargetForm = document.getElementById('target-form');
-      const elTargetName = document.getElementById('target-name');
-      const elTargetCategory = document.getElementById('target-category');
-      const elTargetStatus = document.getElementById('target-status');
-      const elTargetTbody = document.getElementById('target-tbody');
-      const elTargetResetBtn = document.getElementById('target-reset-btn');
+      const elTargetGridMeta = document.getElementById('target-grid-meta');
+      const elTargetOperatorSelect = document.getElementById('target-operator-select');
+      const elTargetClearBtn = document.getElementById('target-clear-btn');
 
       const elSubtabConsole = document.getElementById('subtab-console');
       const elSubtabStorage = document.getElementById('subtab-storage');
       const elConsoleLogPanel = document.getElementById('console-log-panel');
       const elStorageInspectorPanel = document.getElementById('storage-inspector-panel');
+      const elStateSummaryGrid = document.getElementById('state-summary-grid');
       const elStorageInspectorContent = document.getElementById('storage-inspector-content');
       const elConsoleCount = document.getElementById('console-count');
       const elClearConsoleBtn = document.getElementById('clear-console-btn');
       const elLogEmpty = document.getElementById('log-empty');
       const elLogList = document.getElementById('log-list');
 
-      // Helpers
-      function sanitizeFolder(raw) {
-        return String(raw || '')
-          .trim()
-          .replace(/\\/g, '/')
-          .replace(/^\/+|\/+$/g, '') || 'sample-ext';
-      }
-
+      // Storage helpers
       function getStorageKeyPrefix(folder) {
         return 'chrome_ext_sim::' + folder + '::local';
       }
@@ -1181,48 +1140,60 @@
         }).join('');
       }
 
+      function renderStateSummary(data) {
+        const themeVal = data.optionsTheme || 'light';
+        const presetVal = data.activePreset || '(belum dipilih)';
+        const byPreset = (data.selectedCellsByPreset && typeof data.selectedCellsByPreset === 'object')
+          ? data.selectedCellsByPreset
+          : {};
+        const op1Count = Array.isArray(byPreset.operator1) ? byPreset.operator1.length : 0;
+        const op2Count = Array.isArray(byPreset.operator2) ? byPreset.operator2.length : 0;
+        const op3Count = Array.isArray(byPreset.operator3) ? byPreset.operator3.length : 0;
+        const customCount = Array.isArray(byPreset.custom) ? byPreset.custom.length : 0;
+        const macroName = data.savedMacro && data.savedMacro.fileName ? data.savedMacro.fileName : '(kosong)';
+
+        elStateSummaryGrid.innerHTML =
+          '<div class="state-card">' +
+            '<div class="state-card-label">optionsTheme</div>' +
+            '<div class="state-card-value">' + escapeHtml(themeVal) + '</div>' +
+          '</div>' +
+          '<div class="state-card">' +
+            '<div class="state-card-label">activePreset</div>' +
+            '<div class="state-card-value">' + escapeHtml(presetVal) + '</div>' +
+          '</div>' +
+          '<div class="state-card">' +
+            '<div class="state-card-label">selectedCellsByPreset</div>' +
+            '<div class="state-card-value">Op1: ' + op1Count + ' · Op2: ' + op2Count + ' · Op3: ' + op3Count + ' · Custom: ' + customCount + '</div>' +
+          '</div>' +
+          '<div class="state-card">' +
+            '<div class="state-card-label">savedMacro &amp; randomMode</div>' +
+            '<div class="state-card-value">' + escapeHtml(macroName) + ' (' + escapeHtml(data.randomMode || 'off') + ')</div>' +
+          '</div>';
+      }
+
       function renderStorageInspector() {
         const data = readStorageMap(state.folder);
+        renderStateSummary(data);
+
         const keys = Object.keys(data);
         if (keys.length === 0) {
           elStorageInspectorContent.innerHTML =
-            '<div class="log-empty">Mock storage untuk folder <code>' +
+            '<div class="log-empty">Mock storage untuk <code>' +
             escapeHtml(state.folder) +
-            '</code> masih kosong.</div>';
+            '</code> masih kosong. Klik tombol <b>Inject Dummy .pmr</b> di toolbar untuk mengisi data uji cepat.</div>';
           return;
         }
         elStorageInspectorContent.innerHTML = keys.map((k) => {
+          const displayVal = k === 'savedMacro' && data[k] && Array.isArray(data[k].sequence)
+            ? { fileName: data[k].fileName, sequenceLength: data[k].sequence.length }
+            : k === 'headerMeta' && Array.isArray(data[k])
+              ? '[Array(' + data[k].length + ') metadata preset]'
+              : data[k];
           return (
             '<div class="storage-row">' +
               '<div class="storage-key">' + escapeHtml(k) + '</div>' +
-              '<div class="storage-val">' + escapeHtml(safeJsonStringify(data[k])) + '</div>' +
+              '<div class="storage-val">' + escapeHtml(safeJsonStringify(displayVal)) + '</div>' +
             '</div>'
-          );
-        }).join('');
-      }
-
-      // Target Web Table Rendering & Message Interaction
-      function renderTargetTable(flashRowId) {
-        if (state.targetRows.length === 0) {
-          elTargetTbody.innerHTML =
-            '<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:20px;">Tabel target kosong. Tambahkan baris melalui formulir atau kirim pesan autofill dari ekstensi.</td></tr>';
-          return;
-        }
-        elTargetTbody.innerHTML = state.targetRows.map((row, idx) => {
-          const statusClass =
-            row.status === 'Aktif' ? 'status-ok' :
-            row.status === 'Draft' ? 'status-warn' : 'status-info';
-          const rowClass = flashRowId === row.id ? ' class="row-flash"' : '';
-          return (
-            '<tr' + rowClass + '>' +
-              '<td class="col-num">' + String(idx + 1) + '</td>' +
-              '<td>' + escapeHtml(row.name) + '</td>' +
-              '<td>' + escapeHtml(row.category) + '</td>' +
-              '<td><span class="status-text ' + statusClass + '">' + escapeHtml(row.status) + '</span></td>' +
-              '<td class="col-actions">' +
-                '<button type="button" class="btn btn-sm" data-delete-row="' + row.id + '">Hapus</button>' +
-              '</td>' +
-            '</tr>'
           );
         }).join('');
       }
@@ -1234,67 +1205,11 @@
         }, 700);
       }
 
-      function handleTargetWebMessage(message, senderContext) {
-        flashTargetHighlight();
-
-        if (message && typeof message === 'object') {
-          const action = message.action || message.type;
-
-          if (action === 'AUTOFILL_SAMPLE' || action === 'AUTOFILL_FORM') {
-            const payload = message.data || message.payload || {};
-            const nameVal = String(payload.nama || payload.name || 'Entri Otomatis Ekstensi');
-            const categoryVal = String(payload.kategori || payload.category || 'Autofill');
-            const statusVal = String(payload.status || 'Terisi');
-
-            elTargetName.value = nameVal;
-            elTargetCategory.value = categoryVal;
-            if (['Aktif', 'Draft', 'Terisi'].includes(statusVal)) {
-              elTargetStatus.value = statusVal;
-            }
-
-            const newId = state.nextRowId++;
-            state.targetRows.push({
-              id: newId,
-              name: nameVal,
-              category: categoryVal,
-              status: statusVal
-            });
-            renderTargetTable(newId);
-
-            return {
-              ok: true,
-              handledBy: 'target-web',
-              action: action,
-              insertedRowId: newId,
-              totalRows: state.targetRows.length
-            };
-          }
-
-          if (action === 'GET_PAGE_DATA') {
-            return {
-              ok: true,
-              url: MOCK_TAB.url,
-              title: MOCK_TAB.title,
-              rows: state.targetRows.slice()
-            };
-          }
-        }
-
-        return {
-          ok: true,
-          receivedFrom: senderContext,
-          targetUrl: MOCK_TAB.url,
-          totalRows: state.targetRows.length,
-          echo: message
-        };
-      }
-
-      // Cross-iframe Chrome Storage Event Broadcaster
+      // Cross-iframe Chrome Storage & Runtime Message Broadcasters
       function broadcastStorageChange(folder, changes, areaName) {
         if (!changes || Object.keys(changes).length === 0) return;
 
         for (const entry of Array.from(state.storageListeners)) {
-          // Prune detached iframe listeners automatically
           try {
             if (!entry.win || entry.win.closed || !entry.win.document) {
               state.storageListeners.delete(entry);
@@ -1307,6 +1222,28 @@
             state.storageListeners.delete(entry);
           }
         }
+      }
+
+      function dispatchTargetRuntimeMessage(folder, message, sender) {
+        let responseSent = false;
+        let lastResponse;
+        for (const entry of Array.from(state.runtimeMessageListeners)) {
+          try {
+            if (!entry.win || entry.win.closed || !entry.win.document) {
+              state.runtimeMessageListeners.delete(entry);
+              continue;
+            }
+            if (entry.folder === folder && entry.contextType === 'target') {
+              entry.fn(message, sender, function sendResponse(res) {
+                responseSent = true;
+                lastResponse = res;
+              });
+            }
+          } catch (err) {
+            state.runtimeMessageListeners.delete(entry);
+          }
+        }
+        return { responseSent, lastResponse };
       }
 
       function broadcastRuntimeMessage(folder, message, sender) {
@@ -1331,7 +1268,6 @@
         return { responseSent, lastResponse };
       }
 
-      // Prune listeners tied to an iframe window right before reload
       function pruneWindowListeners(targetWin) {
         if (!targetWin) return;
         for (const entry of Array.from(state.storageListeners)) {
@@ -1342,7 +1278,15 @@
         }
       }
 
-      // Switch View Mode
+      function pruneTargetListeners() {
+        for (const entry of Array.from(state.storageListeners)) {
+          if (entry.contextType === 'target') state.storageListeners.delete(entry);
+        }
+        for (const entry of Array.from(state.runtimeMessageListeners)) {
+          if (entry.contextType === 'target') state.runtimeMessageListeners.delete(entry);
+        }
+      }
+
       function setActiveView(viewName) {
         state.activeView = viewName === 'options' ? 'options' : 'popup';
         const isPopup = state.activeView === 'popup';
@@ -1370,7 +1314,7 @@
         }
       }
 
-      // Chrome API Shim Factory exposed to injected iframe scripts
+      // Chrome API Shim Factory
       window.__CHROME_WORKBENCH__ = {
         createChromeApi: function (folder, contextType, iframeWin) {
           const extId = 'mock-ext-' + folder.replace(/[^a-zA-Z0-9_-]/g, '-');
@@ -1452,7 +1396,7 @@
                   }
                 }
                 writeStorageMap(folder, store);
-                addLog('storage', 'storage.set', 'Menyimpan data dari ' + contextType, items);
+                addLog('storage', 'storage.set', 'Update storage dari ' + contextType, Object.keys(items || {}));
                 broadcastStorageChange(folder, changes, 'local');
               }, callback);
             },
@@ -1491,7 +1435,7 @@
           const storageOnChanged = {
             addListener: function (fn) {
               if (typeof fn !== 'function') return;
-              state.storageListeners.add({ win: iframeWin, folder: folder, fn: fn });
+              state.storageListeners.add({ win: iframeWin, folder: folder, contextType: contextType, fn: fn });
             },
             removeListener: function (fn) {
               for (const entry of Array.from(state.storageListeners)) {
@@ -1511,7 +1455,7 @@
           const runtimeOnMessage = {
             addListener: function (fn) {
               if (typeof fn !== 'function') return;
-              state.runtimeMessageListeners.add({ win: iframeWin, folder: folder, fn: fn });
+              state.runtimeMessageListeners.add({ win: iframeWin, folder: folder, contextType: contextType, fn: fn });
             },
             removeListener: function (fn) {
               for (const entry of Array.from(state.runtimeMessageListeners)) {
@@ -1540,7 +1484,7 @@
                 return state.manifest ? cloneVal(state.manifest) : {
                   manifest_version: 3,
                   name: folder,
-                  version: '1.0.0'
+                  version: '1.5.2'
                 };
               },
               openOptionsPage: function (callback) {
@@ -1583,13 +1527,19 @@
                   options = undefined;
                 }
                 return wrapAsync(() => {
+                  flashTargetHighlight();
+                  const summaryPayload = message && message.action === 'START_MACRO' && Array.isArray(message.sequence)
+                    ? { action: 'START_MACRO', sequenceLength: message.sequence.length }
+                    : message;
                   addLog(
                     'message',
                     'tabs.sendMessage',
-                    'Mengirim pesan ke Tab #' + tabId + ' dari ' + contextType,
-                    message
+                    'Mengirim ' + ((message && message.action) || 'pesan') + ' ke DILOC Target Tab #' + tabId + ' dari ' + contextType,
+                    summaryPayload
                   );
-                  return handleTargetWebMessage(message, contextType);
+                  const sender = { id: extId, origin: contextType, tab: { ...MOCK_TAB } };
+                  const res = dispatchTargetRuntimeMessage(folder, message, sender);
+                  return res.responseSent ? res.lastResponse : { ok: true, forwarded: true };
                 }, responseCallback);
               },
 
@@ -1630,6 +1580,135 @@
           return false;
         }
       };
+
+      // Fetch operator metadata dynamically with numbered fallback
+      async function fetchOperatorColumns(operatorKey) {
+        if (state.presetCache[operatorKey]) {
+          return state.presetCache[operatorKey];
+        }
+        const expectedCount = OPERATOR_COLUMN_COUNTS[operatorKey] || 45;
+        try {
+          const res = await fetch('./' + FIXED_FOLDER + '/' + operatorKey + '.json?_ts=' + Date.now(), { cache: 'no-store' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const raw = await res.json();
+          if (Array.isArray(raw) && raw.length > 0) {
+            state.presetCache[operatorKey] = raw.map((item, idx) => ({
+              index: idx,
+              equipment: String(item.equipment || '-'),
+              tag: String(item.tag || 'Col #' + (idx + 1)),
+              unit: String(item.unit || '-'),
+              type: String(item.type || 'number').toLowerCase()
+            }));
+            return state.presetCache[operatorKey];
+          }
+        } catch (err) {
+          addLog('warn', 'preset', 'Fallback kolom bernomor untuk ' + operatorKey + ' (' + err.message + ')');
+        }
+
+        const fallback = [];
+        for (let i = 0; i < expectedCount; i++) {
+          fallback.push({
+            index: i,
+            equipment: 'Logsheet ' + operatorKey.toUpperCase(),
+            tag: 'Col #' + (i + 1),
+            unit: '-',
+            type: 'number'
+          });
+        }
+        state.presetCache[operatorKey] = fallback;
+        return fallback;
+      }
+
+      // Build DILOC 4-row x N-col HTML with content.js injected
+      function buildDilocTargetHtml(operatorKey, columns) {
+        const baseHref = new URL('./' + FIXED_FOLDER + '/', window.location.href).href;
+        const shimCode =
+          '(function(){' +
+            'window.__PMR_SIMULATOR_TOP__ = true;' +
+            'if(window.parent && window.parent.__CHROME_WORKBENCH__){' +
+              'window.chrome = window.parent.__CHROME_WORKBENCH__.createChromeApi(' + JSON.stringify(FIXED_FOLDER) + ', "target", window);' +
+            '}' +
+          '})();';
+
+        const headerCells = columns.map((col, idx) => {
+          const unitBadge = col.unit && col.unit !== '-' ? ' <span class="u">' + escapeHtml(col.unit) + '</span>' : '';
+          return (
+            '<th title="' + escapeHtml(col.equipment + ' — ' + col.tag + ' (' + col.unit + ')') + '">' +
+              '<div class="col-num">#' + (idx + 1) + '</div>' +
+              '<div class="col-tag">' + escapeHtml(col.tag) + '</div>' +
+              '<div class="col-eq">' + escapeHtml(col.equipment) + unitBadge + '</div>' +
+            '</th>'
+          );
+        }).join('');
+
+        let rowsHtml = '';
+        for (let r = 1; r <= 4; r++) {
+          let tds = '<td class="row-label">Jam 0' + r + '</td>';
+          for (let c = 0; c < columns.length; c++) {
+            tds +=
+              '<td>' +
+                '<input type="text" class="diloc-cell-input" data-row="' + r + '" data-col="' + (c + 1) + '" autocomplete="off" aria-label="Jam 0' + r + ' ' + escapeHtml(columns[c].tag) + '" />' +
+              '</td>';
+          }
+          rowsHtml += '<tr>' + tds + '</tr>';
+        }
+
+        return (
+          '<!doctype html>' +
+          '<html lang="id">' +
+          '<head>' +
+            '<meta charset="UTF-8">' +
+            '<base href="' + baseHref.replace(/"/g, '&quot;') + '">' +
+            '<script>' + shimCode + '<\/script>' +
+            '<style>' +
+              '*{box-sizing:border-box;}' +
+              'body{margin:0;padding:8px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f8fafc;color:#0f172a;font-size:11.5px;}' +
+              '.grid-wrap{width:100%;overflow:auto;max-height:234px;border:1px solid #cbd5e1;border-radius:6px;background:#ffffff;}' +
+              'table{border-collapse:collapse;width:max-content;}' +
+              'th,td{border:1px solid #cbd5e1;padding:4px 6px;vertical-align:middle;}' +
+              'thead th{position:sticky;top:0;z-index:2;background:#f1f5f9;text-align:left;min-width:96px;max-width:130px;}' +
+              'thead th.sticky-corner{left:0;z-index:4;background:#0f172a;color:#ffffff;min-width:68px;max-width:68px;text-align:center;}' +
+              'td.row-label{position:sticky;left:0;z-index:1;background:#f8fafc;font-weight:700;color:#334155;text-align:center;min-width:68px;border-right:2px solid #94a3b8;white-space:nowrap;}' +
+              '.col-num{font-family:ui-monospace,monospace;font-size:10px;color:#64748b;}' +
+              '.col-tag{font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+              '.col-eq{font-size:10px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+              '.u{background:#e2e8f0;color:#1e293b;padding:0 4px;border-radius:3px;font-weight:600;}' +
+              '.diloc-cell-input{width:88px;height:28px;padding:0 6px;border:1px solid #cbd5e1;border-radius:4px;font-family:ui-monospace,monospace;font-size:12px;color:#0f172a;background:#ffffff;}' +
+              '.diloc-cell-input:focus{outline:2px solid #2563eb;border-color:#2563eb;background:#eff6ff;}' +
+            '</style>' +
+          '</head>' +
+          '<body>' +
+            '<div class="grid-wrap">' +
+              '<table>' +
+                '<thead><tr><th class="sticky-corner">' + escapeHtml(operatorKey.toUpperCase()) + '</th>' + headerCells + '</tr></thead>' +
+                '<tbody>' + rowsHtml + '</tbody>' +
+              '</table>' +
+            '</div>' +
+            '<script src="icons.js"><\/script>' +
+            '<script src="content.js"><\/script>' +
+          '</body>' +
+          '</html>'
+        );
+      }
+
+      async function loadTargetDilocGrid(operatorKey) {
+        const seq = ++state.targetLoadSeq;
+        state.targetOperator = operatorKey;
+        elTargetOperatorSelect.value = operatorKey;
+        const columns = await fetchOperatorColumns(operatorKey);
+        if (seq !== state.targetLoadSeq) return;
+
+        elTargetGridMeta.textContent = '4 baris × ' + columns.length + ' kolom (' + operatorKey + ')';
+
+        pruneTargetListeners();
+        try {
+          if (elTargetFrame.contentWindow) {
+            pruneWindowListeners(elTargetFrame.contentWindow);
+          }
+        } catch (err) {}
+
+        elTargetFrame.srcdoc = buildDilocTargetHtml(operatorKey, columns);
+      }
 
       // Inject base URL + Chrome API shim BEFORE extension page scripts execute
       function buildInjectedHtml(rawHtml, folder, contextType) {
@@ -1707,9 +1786,7 @@
           if (iframeEl.contentWindow) {
             pruneWindowListeners(iframeEl.contentWindow);
           }
-        } catch (err) {
-          // ignore
-        }
+        } catch (err) {}
 
         try {
           const res = await fetch(targetUrl + '?_ts=' + Date.now(), { cache: 'no-store' });
@@ -1728,28 +1805,158 @@
         }
       }
 
-      async function loadExtension(rawFolder) {
-        const folder = sanitizeFolder(rawFolder);
-        state.folder = folder;
-        elFolderInput.value = folder;
+      async function loadExtension() {
+        const folder = FIXED_FOLDER;
         elPopupWinPath.textContent = './' + folder + '/popup.html';
         elOptionsPathLabel.textContent = './' + folder + '/options.html';
 
         await loadManifest(folder);
         renderStorageInspector();
 
-        // Load both popup and options iframes so cross-iframe storage.onChanged works in real time
         await Promise.all([
+          loadTargetDilocGrid(state.targetOperator),
           loadExtensionFileIntoIframe(elPopupFrame, elPopupError, elPopupErrorText, folder, 'popup.html', 'popup'),
           loadExtensionFileIntoIframe(elOptionsFrame, elOptionsError, elOptionsErrorText, folder, 'options.html', 'options')
         ]);
       }
 
+      // Dummy .pmr sequence builder & 1-click injector
+      function buildSequenceFromCellValues(values) {
+        const seq = [];
+        for (let i = 0; i < values.length; i++) {
+          const val = String(values[i]);
+          for (let c = 0; c < val.length; c++) {
+            seq.push({ key: val[c], delay: 25 });
+          }
+          if (i < values.length - 1) {
+            seq.push({ key: 'Key.tab', delay: 25 });
+          }
+        }
+        return seq;
+      }
+
+      async function injectDummyPreset(modeType) {
+        const store = readStorageMap(FIXED_FOLDER);
+        const existingByPreset = (store.selectedCellsByPreset && typeof store.selectedCellsByPreset === 'object')
+          ? { ...store.selectedCellsByPreset }
+          : {};
+
+        let presetKey = 'operator1';
+        let fileName = 'dummy_operator1_167.pmr';
+        let cellCount = 167;
+
+        if (modeType === '51') {
+          presetKey = 'operator2';
+          fileName = 'dummy_operator2_51.pmr';
+          cellCount = 51;
+        } else if (modeType === 'edge') {
+          presetKey = 'operator3';
+          fileName = 'dummy_edge_case_100pct_0_mismatch_48sel.pmr';
+          cellCount = 48; // Sengaja selisih terhadap Operator 3 (45 param)
+        }
+
+        const columns = await fetchOperatorColumns(presetKey);
+        const values = [];
+
+        if (modeType === 'edge') {
+          const edgeMap = {
+            0: '100',      // % unit di op3 -> wajib turun ke 99
+            1: 'A',        // teks
+            2: '0',        // pure zero terkunci
+            3: '1',        // non-negative batas bawah
+            4: '0.01',     // desimal kecil positif
+            5: '100.0',    // % unit -> wajib turun ke 99.9
+            6: '0.0',      // pure zero desimal terkunci
+            7: '-5',       // suhu °C negatif diizinkan
+            8: '100.00',   // % unit -> wajib turun ke 99.99
+            13: '-12',     // Diff. Vacuum
+            14: '-45',     // Vacuum
+            19: '99.9',    // % mendekati 100
+            20: '100',     // % tepat 100
+            21: '0.0'      // °C nol
+          };
+          for (let i = 0; i < cellCount; i++) {
+            if (Object.prototype.hasOwnProperty.call(edgeMap, i)) {
+              values.push(edgeMap[i]);
+            } else {
+              const col = columns[i];
+              values.push(col && col.type === 'text' ? 'ON' : String((25 + (i % 60)) + '.5'));
+            }
+          }
+        } else {
+          for (let i = 0; i < cellCount; i++) {
+            const col = columns[i];
+            if (col && col.type === 'text') {
+              values.push(i % 2 === 0 ? 'A' : 'ON');
+            } else if (col && col.unit === '%') {
+              values.push(i % 9 === 0 ? '100' : String(45 + (i % 50)) + '.0');
+            } else if (i % 13 === 0) {
+              values.push('0');
+            } else {
+              values.push(String(12 + (i % 75)) + '.' + String(i % 10));
+            }
+          }
+        }
+
+        const sequence = buildSequenceFromCellValues(values);
+        const headerMeta = columns.slice();
+        const restoredSelected = Array.isArray(existingByPreset[presetKey])
+          ? existingByPreset[presetKey].filter((idx) => idx >= 0 && idx < cellCount)
+          : [];
+
+        const nextItems = {
+          savedMacro: { fileName: fileName, sequence: sequence },
+          headerMeta: headerMeta,
+          activePreset: presetKey,
+          selectedCellsByPreset: existingByPreset,
+          selectedCellIndices: restoredSelected,
+          macroRunning: false
+        };
+
+        const changes = {};
+        for (const k of Object.keys(nextItems)) {
+          changes[k] = { oldValue: store[k], newValue: nextItems[k] };
+          store[k] = nextItems[k];
+        }
+
+        writeStorageMap(FIXED_FOLDER, store);
+        broadcastStorageChange(FIXED_FOLDER, changes, 'local');
+        await loadTargetDilocGrid(presetKey);
+        addLog('storage', 'dummy.inject', 'Menyuntikkan ' + fileName + ' (' + cellCount + ' sel, preset: ' + presetKey + ')');
+      }
+
       // Event Listeners
-      elFolderForm.addEventListener('submit', function (e) {
-        e.preventDefault();
-        addLog('tabs', 'workbench', 'Memuat ulang ekstensi dari folder ./' + sanitizeFolder(elFolderInput.value));
-        loadExtension(elFolderInput.value);
+      elReloadBtn.addEventListener('click', function () {
+        addLog('tabs', 'workbench', 'Memuat ulang workbench pmr-web-runner');
+        loadExtension();
+      });
+
+      elInjectDummy167.addEventListener('click', function () {
+        injectDummyPreset('167');
+      });
+
+      elInjectDummy51.addEventListener('click', function () {
+        injectDummyPreset('51');
+      });
+
+      elInjectDummyEdge.addEventListener('click', function () {
+        injectDummyPreset('edge');
+      });
+
+      elTargetOperatorSelect.addEventListener('change', function () {
+        loadTargetDilocGrid(elTargetOperatorSelect.value);
+      });
+
+      elTargetClearBtn.addEventListener('click', function () {
+        try {
+          const doc = elTargetFrame.contentDocument;
+          if (!doc) return;
+          const inputs = doc.querySelectorAll('.diloc-cell-input');
+          inputs.forEach((inp) => {
+            inp.value = '';
+          });
+          addLog('tabs', 'target.clear', 'Membersihkan ' + inputs.length + ' input sel di grid DILOC (' + state.targetOperator + ')');
+        } catch (err) {}
       });
 
       elTabPopup.addEventListener('click', function () {
@@ -1765,52 +1972,20 @@
       });
 
       elResetStorageBtn.addEventListener('click', function () {
-        const storageKey = getStorageKeyPrefix(state.folder);
+        const storageKey = getStorageKeyPrefix(FIXED_FOLDER);
         window.localStorage.removeItem(storageKey);
+        window.localStorage.removeItem('pmr_options_theme');
         renderStorageInspector();
-        addLog('storage', 'reset', 'Mock storage untuk "' + state.folder + '" dihapus dan pratinjau dimuat ulang.');
-        loadExtension(state.folder);
+        addLog('storage', 'reset', 'Mock storage & tema untuk "' + FIXED_FOLDER + '" dihapus dan pratinjau dimuat ulang.');
+        loadExtension();
       });
 
       elPopupRetryBtn.addEventListener('click', function () {
-        loadExtensionFileIntoIframe(elPopupFrame, elPopupError, elPopupErrorText, state.folder, 'popup.html', 'popup');
+        loadExtensionFileIntoIframe(elPopupFrame, elPopupError, elPopupErrorText, FIXED_FOLDER, 'popup.html', 'popup');
       });
 
       elOptionsRetryBtn.addEventListener('click', function () {
-        loadExtensionFileIntoIframe(elOptionsFrame, elOptionsError, elOptionsErrorText, state.folder, 'options.html', 'options');
-      });
-
-      elTargetForm.addEventListener('submit', function (e) {
-        e.preventDefault();
-        const nameVal = elTargetName.value.trim();
-        const catVal = elTargetCategory.value.trim();
-        const statusVal = elTargetStatus.value;
-        if (!nameVal || !catVal) return;
-
-        const newId = state.nextRowId++;
-        state.targetRows.push({
-          id: newId,
-          name: nameVal,
-          category: catVal,
-          status: statusVal
-        });
-        elTargetName.value = '';
-        elTargetCategory.value = '';
-        renderTargetTable(newId);
-      });
-
-      elTargetTbody.addEventListener('click', function (e) {
-        const btn = e.target.closest('button[data-delete-row]');
-        if (!btn) return;
-        const rowId = Number(btn.getAttribute('data-delete-row'));
-        state.targetRows = state.targetRows.filter((row) => row.id !== rowId);
-        renderTargetTable();
-      });
-
-      elTargetResetBtn.addEventListener('click', function () {
-        state.targetRows = INITIAL_TARGET_ROWS.map((row) => ({ ...row }));
-        state.nextRowId = 4;
-        renderTargetTable();
+        loadExtensionFileIntoIframe(elOptionsFrame, elOptionsError, elOptionsErrorText, FIXED_FOLDER, 'options.html', 'options');
       });
 
       elSubtabConsole.addEventListener('click', function () {
@@ -1827,9 +2002,9 @@
       });
 
       // Boot Workbench
-      renderTargetTable();
       renderLogs();
-      loadExtension(elFolderInput.value);
+      renderStorageInspector();
+      loadExtension();
     })();
   </script>
 </body>

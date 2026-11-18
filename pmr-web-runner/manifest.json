@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "PMR Web Runner",
+  "version": "1.5.2",
+  "description": "Menjalankan file macro keyboard (.pmr / .json) ke form web logsheet dengan randomize ±1 & preset header Operator 1, 2, 3.",
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "PMR Web Runner",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "all_frames": true,
+      "js": [
+        "icons.js",
+        "content.js"
+      ]
+    }
+  ]
+}
