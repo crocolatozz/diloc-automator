@@ -198,21 +198,48 @@ function isRowFullyLocked(tr) {
   return inputs.every(el => inspectCellLock(el).locked);
 }
 
+function getCleanNodeTextWithoutSelects(node) {
+  if (!node) return '';
+  if (node.querySelector) {
+    const explicitTime = node.querySelector('.row-time-text');
+    if (explicitTime) {
+      return String(explicitTime.textContent || '').trim();
+    }
+  }
+  if (node.childNodes && node.childNodes.length > 0) {
+    const parts = [];
+    for (const child of Array.from(node.childNodes)) {
+      if (child.nodeType === 3) {
+        parts.push(child.textContent || '');
+      } else if (
+        child.nodeType === 1 &&
+        child.tagName !== 'SELECT' &&
+        child.tagName !== 'INPUT' &&
+        child.tagName !== 'TEXTAREA'
+      ) {
+        parts.push(getCleanNodeTextWithoutSelects(child));
+      }
+    }
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+  }
+  return String(node.textContent || '').trim();
+}
+
 function getRowTimeLabel(tr) {
   if (!tr) return '';
   const timeCell = tr.querySelector('td.sticky-col.col-waktu, td.col-waktu, td.row-label, td.sticky-col');
   if (timeCell) {
-    return String(timeCell.textContent || '').trim();
+    return getCleanNodeTextWithoutSelects(timeCell);
   }
   const tds = Array.from(tr.children).filter(el => el.tagName === 'TD');
   for (let i = 0; i < Math.min(5, tds.length); i++) {
-    const txt = String(tds[i].textContent || '').trim();
+    const txt = getCleanNodeTextWithoutSelects(tds[i]);
     if (/^(\d{1,2}:\d{2}|jam\s*\d+)/i.test(txt)) {
       return txt;
     }
   }
   const firstTd = tds[0] || tr.querySelector('td');
-  return firstTd ? String(firstTd.textContent || '').trim() : '';
+  return firstTd ? getCleanNodeTextWithoutSelects(firstTd) : '';
 }
 
 function getNextDataRow(tr) {
@@ -226,9 +253,32 @@ function getNextDataRow(tr) {
   return null;
 }
 
+function getControlDisplayValue(el) {
+  if (!el) return '';
+  if (el.tagName === 'SELECT') {
+    const rawVal = String(el.value ?? '').trim();
+    const options = el.options ? Array.from(el.options) : [];
+    let selectedOpt = (typeof el.selectedIndex === 'number' && el.selectedIndex >= 0 && options[el.selectedIndex])
+      ? options[el.selectedIndex]
+      : null;
+    if (!selectedOpt && rawVal !== '') {
+      selectedOpt = options.find(opt => String(opt.value ?? '').trim() === rawVal) || null;
+    }
+    if (!selectedOpt) {
+      return rawVal;
+    }
+    const optVal = String(selectedOpt.value ?? '').trim();
+    const optText = String(selectedOpt.textContent ?? '').trim();
+    if (optVal === '' && (optText === '' || optText === '-' || /^(--|pilih\b)/i.test(optText))) {
+      return '';
+    }
+    return optText || optVal;
+  }
+  return String(el.value ?? '').trim();
+}
+
 function isControlEmpty(el) {
-  if (!el) return false;
-  return String(el.value ?? '').trim() === '';
+  return getControlDisplayValue(el) === '';
 }
 
 function findFirstOpenEmptyRow(rows) {
@@ -392,14 +442,16 @@ function validatePageBeforeExecution(request, rowsPayload) {
 }
 
 function preScanTargetCells(rowsPayload, startLoc) {
-  if (!startLoc) return { filledCount: 0, startRowTime: '', startColNumber: 1 };
+  if (!startLoc) return { filledCount: 0, filledSamples: [], startRowTime: '', startColNumber: 1 };
 
   if (!startLoc.row && startLoc.singleElement) {
     const el = startLoc.singleElement;
     const lock = inspectCellLock(el);
-    const hasVal = !lock.locked && !el.disabled && !el.readOnly && String(el.value ?? '').trim() !== '';
+    const val = (!lock.locked && !el.disabled && !el.readOnly) ? getControlDisplayValue(el) : '';
+    const hasVal = val !== '';
     return {
       filledCount: hasVal ? 1 : 0,
+      filledSamples: hasVal ? [{ paramNumber: 1, value: val }] : [],
       startRowTime: '',
       startColNumber: 1
     };
@@ -410,9 +462,11 @@ function preScanTargetCells(rowsPayload, startLoc) {
   const startRowTime = getRowTimeLabel(startLoc.row);
   let currentRow = startLoc.row;
   let filledCount = 0;
+  const filledSamples = [];
 
   for (let r = 0; r < totalRows; r++) {
     if (!currentRow) break;
+    // Zona parameter terkunci di td indeks 5+ (abaikan kolom 0..4 termasuk dropdown status baris)
     const rowInputs = getRowDataCellInputs(currentRow);
     const rowValues = rowsPayload[r] || [];
     const startAbsCol = (r === 0) ? (startLoc.colIdx || 0) : 0;
@@ -425,6 +479,8 @@ function preScanTargetCells(rowsPayload, startLoc) {
     let hitHardBrake = false;
 
     for (let absColIdx = startAbsCol; absColIdx < rowInputs.length; absColIdx++) {
+      // Pertahankan nomor parameter asli (#1..#N) sebelum melewati elemen disabled/readOnly
+      const paramNumber = absColIdx + 1;
       const targetInput = rowInputs[absColIdx];
       const lock = inspectCellLock(targetInput);
 
@@ -433,7 +489,7 @@ function preScanTargetCells(rowsPayload, startLoc) {
         break;
       }
 
-      // Wajib abaikan elemen disabled / readOnly (mis. #25 Op. 3 di jam biasa)
+      // Lewati elemen disabled / readOnly (mis. #25 Op. 3) tanpa menggeser paramNumber (#26 tetap #26)
       if (targetInput.disabled || targetInput.readOnly || isInactiveSkippableControl(targetInput, lock)) {
         continue;
       }
@@ -443,8 +499,12 @@ function preScanTargetCells(rowsPayload, startLoc) {
         valCursor += 1;
       }
 
-      if (String(targetInput.value ?? '').trim() !== '') {
+      const displayVal = getControlDisplayValue(targetInput);
+      if (displayVal !== '') {
         filledCount += 1;
+        if (filledSamples.length < 3) {
+          filledSamples.push({ paramNumber, value: displayVal });
+        }
       }
     }
 
@@ -454,14 +514,26 @@ function preScanTargetCells(rowsPayload, startLoc) {
     }
   }
 
-  return { filledCount, startRowTime, startColNumber };
+  return { filledCount, filledSamples, startRowTime, startColNumber };
+}
+
+function formatPreScanSummaryDetail(filledCount, filledSamples) {
+  const samples = Array.isArray(filledSamples) ? filledSamples.slice(0, 3) : [];
+  if (samples.length === 0) return '';
+  const sampleParts = samples.map(item => {
+    const raw = String(item.value ?? '').trim();
+    const compact = raw.length > 18 ? `${raw.slice(0, 17)}…` : raw;
+    return `#${item.paramNumber}: ${compact}`;
+  });
+  const suffix = filledCount > 3 ? ', ...' : '';
+  return ` (${sampleParts.join(', ')}${suffix})`;
 }
 
 function createInlineSvgMarkup(pathsMarkup, size = 14) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pathsMarkup}</svg>`;
 }
 
-function confirmOverwriteShadowModal(filledCount, startRowTime) {
+function confirmOverwriteShadowModal(filledCount, filledSamples = []) {
   return new Promise((resolve) => {
     const existingHost = document.getElementById('pmr-confirm-modal-host');
     if (existingHost) existingHost.remove();
@@ -473,7 +545,7 @@ function confirmOverwriteShadowModal(filledCount, startRowTime) {
     host.style.zIndex = '2147483647';
 
     const shadow = host.attachShadow({ mode: 'open' });
-    const rowDesc = startRowTime ? `mulai ${startRowTime}` : 'pada baris target';
+    const detailPart = formatPreScanSummaryDetail(filledCount, filledSamples);
 
     const warnSvg = createInlineSvgMarkup(
       '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
@@ -598,7 +670,7 @@ function confirmOverwriteShadowModal(filledCount, startRowTime) {
             <span class="icon-badge">${warnSvg}</span>
             <h3 id="pmr-modal-title" class="title">Konfirmasi Timpa Sel Terisi</h3>
           </div>
-          <p class="message">Ditemukan <strong>${filledCount} sel</strong> sudah terisi ${escapeTextForHtml(rowDesc)}. Tetap timpa angka lama?</p>
+          <p class="message">Ditemukan <strong>${filledCount} sel</strong> sudah terisi${escapeTextForHtml(detailPart)}. Tetap timpa angka lama?</p>
           <div class="actions">
             <button type="button" id="pmr-btn-cancel" class="btn-cancel">
               ${xSvg}
@@ -767,7 +839,7 @@ async function handleStartMacro(request) {
 
   const preScan = preScanTargetCells(rowsPayload, startLoc);
   if (preScan.filledCount >= 1) {
-    const confirmed = await confirmOverwriteShadowModal(preScan.filledCount, preScan.startRowTime);
+    const confirmed = await confirmOverwriteShadowModal(preScan.filledCount, preScan.filledSamples);
     if (!confirmed) {
       syncRunningState(false);
       return;

@@ -60,7 +60,7 @@ function applyTheme(theme, persist = false) {
   try {
     window.localStorage.setItem('pmr_options_theme', resolved);
   } catch (e) {}
-  if (persist) {
+  if (persist && !isSyncingFromStorage) {
     chrome.storage.local.set({ optionsTheme: resolved });
   }
 }

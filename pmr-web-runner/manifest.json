@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PMR Web Runner",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "Otomatisasi pengisian logsheet DILOC multi-baris dari file .pmr / .json dengan fitur randomize (±1 s/d ±3) dan kontrol kecepatan.",
   "icons": {
     "16": "icon16.png",
@@ -24,7 +24,8 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "tabs"
   ],
   "content_scripts": [
     {

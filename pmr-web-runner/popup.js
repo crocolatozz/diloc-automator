@@ -16,7 +16,7 @@ let currentTheme = "light";
 let popupAlertTimer = null;
 let activeTabContext = null;
 let lastTabRefreshAt = 0;
-let autoSyncBadgeText = "";
+let refreshSeq = 0;
 let isSyncingFromStorage = false;
 
 const PRESET_NAMES = {
@@ -32,8 +32,9 @@ const PRESET_SHORT_LABELS = {
 };
 
 const fileLabel = document.getElementById('fileLabel');
-const fileStatus = document.getElementById('fileStatus');
-const presetBadgeWrap = document.getElementById('presetBadgeWrap');
+const statusCard = document.getElementById('statusCard');
+const statusCardMain = document.getElementById('statusCardMain');
+const statusCardWarn = document.getElementById('statusCardWarn');
 const popupAlert = document.getElementById('popupAlert');
 const toggleBtn = document.getElementById('toggleBtn');
 const openSettingsBtn = document.getElementById('openSettingsBtn');
@@ -143,19 +144,23 @@ function applyTheme(theme, persist = false) {
   }
 }
 
-function setStatusContent(iconHtml, text, statusTone) {
-  fileStatus.innerHTML = '';
+function setStatusCardMain(iconHtml, text, tone) {
+  if (!statusCardMain) return;
+  statusCardMain.innerHTML = '';
   if (iconHtml) {
-    fileStatus.insertAdjacentHTML('beforeend', iconHtml);
+    statusCardMain.insertAdjacentHTML('beforeend', iconHtml);
   }
   const span = document.createElement('span');
+  span.className = 'status-card-text';
   span.textContent = text;
-  fileStatus.appendChild(span);
-  fileStatus.classList.remove('is-ok', 'is-error');
-  if (statusTone === 'ok') {
-    fileStatus.classList.add('is-ok');
-  } else if (statusTone === 'error') {
-    fileStatus.classList.add('is-error');
+  statusCardMain.appendChild(span);
+  statusCardMain.classList.remove('is-preset', 'is-custom', 'is-error');
+  if (tone === 'preset') {
+    statusCardMain.classList.add('is-preset');
+  } else if (tone === 'custom') {
+    statusCardMain.classList.add('is-custom');
+  } else if (tone === 'error') {
+    statusCardMain.classList.add('is-error');
   }
 }
 
@@ -219,39 +224,30 @@ function computeValidationIssue(totalCells) {
   return null;
 }
 
-function renderPresetBadge(totalCells, validationIssue = null) {
-  const hasPreset = Boolean(activePreset && PRESET_NAMES[activePreset] && fileSourceType !== 'custom');
-  const hasAutoSync = Boolean(autoSyncBadgeText);
-  if (!hasPreset && !hasAutoSync && !validationIssue) {
-    presetBadgeWrap.hidden = true;
-    presetBadgeWrap.innerHTML = '';
+function renderStatusCard(totalCells, validationIssue = null) {
+  if (!statusCardMain || !statusCardWarn) return;
+
+  if (!loadedSequence || loadedSequence.length === 0) {
+    setStatusCardMain(renderIcon('file', { className: 'icon-slate', size: 14 }), 'Belum ada file dimuat', '');
+    statusCardWarn.hidden = true;
+    statusCardWarn.innerHTML = '';
     return;
   }
 
-  presetBadgeWrap.innerHTML = '';
-
-  if (hasPreset) {
-    const presetSpan = document.createElement('span');
-    presetSpan.className = 'preset-pill';
-    presetSpan.innerHTML = `${renderIcon('userCheck', { size: 13 })}<span></span>`;
-    presetSpan.querySelector('span').textContent = PRESET_NAMES[activePreset];
-    presetBadgeWrap.appendChild(presetSpan);
-  }
-
-  if (hasAutoSync) {
-    const syncSpan = document.createElement('span');
-    syncSpan.className = 'autosync-pill';
-    syncSpan.innerHTML = `${renderIcon('refreshCw', { size: 12 })}<span></span>`;
-    syncSpan.querySelector('span').textContent = autoSyncBadgeText;
-    presetBadgeWrap.appendChild(syncSpan);
+  if (fileSourceType === 'custom') {
+    setStatusCardMain(renderIcon('file', { className: 'icon-sky', size: 15 }), `${loadedFileName} (${totalCells} sel)`, 'custom');
+  } else {
+    const isNamedPreset = Boolean(activePreset && PRESET_SHORT_LABELS[activePreset]);
+    const mainText = isNamedPreset
+      ? `Preset: ${PRESET_SHORT_LABELS[activePreset]} (${totalCells} sel)`
+      : `${loadedFileName} (${totalCells} sel)`;
+    setStatusCardMain(renderIcon('checkCircle', { className: 'icon-emerald', size: 15 }), mainText, 'preset');
   }
 
   if (validationIssue) {
-    const warnEl = document.createElement('span');
-    warnEl.className = 'preset-warn-pill';
-    warnEl.title = validationIssue.tooltip || validationIssue.message;
-    warnEl.innerHTML = `${renderIcon(validationIssue.icon || 'warn', { size: 14 })}<span></span>`;
-    warnEl.querySelector('span').textContent = validationIssue.message;
+    statusCardWarn.innerHTML = `${renderIcon(validationIssue.icon || 'warn', { size: 13 })}<span></span>`;
+    statusCardWarn.title = validationIssue.tooltip || validationIssue.message;
+    statusCardWarn.querySelector('span').textContent = validationIssue.message;
 
     if (validationIssue.quickSwitchPreset && PRESET_SHORT_LABELS[validationIssue.quickSwitchPreset]) {
       const targetOp = validationIssue.quickSwitchPreset;
@@ -259,19 +255,21 @@ function renderPresetBadge(totalCells, validationIssue = null) {
       quickBtn.type = 'button';
       quickBtn.id = 'quickSwitchPresetBtn';
       quickBtn.className = 'quick-switch-btn';
-      quickBtn.textContent = `Pakai Preset ${PRESET_SHORT_LABELS[targetOp]}`;
+      quickBtn.innerHTML = `${renderIcon('refreshCw', { size: 11 })}<span></span>`;
+      quickBtn.querySelector('span').textContent = `Pakai Preset ${PRESET_SHORT_LABELS[targetOp]}`;
       quickBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        await switchToBuiltInPreset(targetOp, false);
+        await switchToBuiltInPreset(targetOp);
       });
-      warnEl.appendChild(quickBtn);
+      statusCardWarn.appendChild(quickBtn);
     }
 
-    presetBadgeWrap.appendChild(warnEl);
+    statusCardWarn.hidden = false;
+  } else {
+    statusCardWarn.hidden = true;
+    statusCardWarn.innerHTML = '';
   }
-
-  presetBadgeWrap.hidden = false;
 }
 
 function updateSelectedCountLabel(totalCells) {
@@ -334,8 +332,7 @@ function updateUIState() {
     toggleBtn.classList.remove('running');
     toggleBtn.innerHTML = `${renderIcon('play', { size: 15 })}<span>Play</span>`;
     fileLabel.classList.remove('disabled');
-    setStatusContent('', 'Belum ada file dimuat', '');
-    renderPresetBadge(0, null);
+    renderStatusCard(0, null);
     return;
   }
 
@@ -354,13 +351,12 @@ function updateUIState() {
     toggleBtn.classList.remove('running');
     toggleBtn.innerHTML = `${renderIcon('play', { size: 15 })}<span>Play</span>`;
     fileLabel.classList.remove('disabled');
-    setStatusContent(renderIcon('checkCircle', { className: 'icon-emerald', size: 15 }), `${loadedFileName} (${cells.length} sel)`, 'ok');
   }
 
-  renderPresetBadge(cells.length, validationIssue);
+  renderStatusCard(cells.length, validationIssue);
 }
 
-async function switchToBuiltInPreset(targetPreset, isAuto = false) {
+async function switchToBuiltInPreset(targetPreset) {
   if (!targetPreset || !PRESET_SHORT_LABELS[targetPreset]) return false;
 
   try {
@@ -384,7 +380,6 @@ async function switchToBuiltInPreset(targetPreset, isAuto = false) {
       storagePayload.savedMacro = cachedMacro;
     }
 
-    autoSyncBadgeText = isAuto ? `Auto-sync: ${PRESET_SHORT_LABELS[targetPreset]}` : '';
     await chrome.storage.local.set(storagePayload);
     updateUIState();
     return true;
@@ -395,22 +390,21 @@ async function switchToBuiltInPreset(targetPreset, isAuto = false) {
 }
 
 async function syncPresetWithActiveTab() {
-  const effectiveWebOperator = getEffectiveWebOperator();
-  if (!effectiveWebOperator || !PRESET_SHORT_LABELS[effectiveWebOperator]) {
-    autoSyncBadgeText = '';
-    return;
+  // Jangan auto-switch jika macro sedang berjalan atau mode file custom aktif
+  if (isMacroRunning || fileSourceType === 'custom') {
+    return false;
   }
 
-  // Jangan timpa file custom secara otomatis
-  if (fileSourceType === 'custom') {
-    autoSyncBadgeText = '';
-    return;
+  const effectiveWebOperator = getEffectiveWebOperator();
+  if (!effectiveWebOperator || !PRESET_SHORT_LABELS[effectiveWebOperator]) {
+    return false;
   }
 
   const isPresetMode = Boolean(activePreset && PRESET_SHORT_LABELS[activePreset]) || !loadedSequence;
   if (isPresetMode && activePreset !== effectiveWebOperator) {
-    await switchToBuiltInPreset(effectiveWebOperator, true);
+    return await switchToBuiltInPreset(effectiveWebOperator);
   }
+  return false;
 }
 
 function queryActiveTabStatus(tab) {
@@ -452,19 +446,53 @@ function queryActiveTabStatus(tab) {
   });
 }
 
+function sleepMs(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function queryActiveTabStatusWithRetry(tab, seq) {
+  let status = await queryActiveTabStatus(tab);
+  if (seq !== refreshSeq) return null;
+
+  const isDilocCandidate = Boolean(
+    (status && status.webOperator) ||
+    /\/elogsheet\//i.test(tab.url || '') ||
+    (status && status.isRunning === null)
+  );
+
+  // Retry ringan 250ms (maks 2x) jika rute Vue SPA DILOC belum selesai merender <tbody>
+  if (isDilocCandidate && (!status || status.tableColCount === 0)) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await sleepMs(250);
+      if (seq !== refreshSeq) return null;
+      status = await queryActiveTabStatus(tab);
+      if (seq !== refreshSeq) return null;
+      if (status && status.tableColCount > 0) {
+        break;
+      }
+    }
+  }
+
+  return status;
+}
+
 async function refreshActiveTabContext(shouldUpdateUi = true) {
+  const seq = ++refreshSeq;
   lastTabRefreshAt = Date.now();
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (seq !== refreshSeq) return null;
+
     if (!tab?.id || isRestrictedBrowserUrl(tab.url)) {
       activeTabContext = null;
-      autoSyncBadgeText = '';
       if (isMacroRunning) isMacroRunning = false;
       if (shouldUpdateUi) updateUIState();
       return null;
     }
 
-    const status = await queryActiveTabStatus(tab);
+    const status = await queryActiveTabStatusWithRetry(tab, seq);
+    if (seq !== refreshSeq) return null;
+
     activeTabContext = status;
     if (status && typeof status.isRunning === 'boolean') {
       isMacroRunning = status.isRunning;
@@ -473,10 +501,11 @@ async function refreshActiveTabContext(shouldUpdateUi = true) {
     }
 
     await syncPresetWithActiveTab();
+    if (seq !== refreshSeq) return null;
     if (shouldUpdateUi) updateUIState();
     return { tab, status };
   } catch (err) {
-    if (shouldUpdateUi) updateUIState();
+    if (seq === refreshSeq && shouldUpdateUi) updateUIState();
     return null;
   }
 }
@@ -498,7 +527,6 @@ function handleDroppedFile(file) {
       headerMeta = result.headerMeta || [];
       selectedCellsByPreset = result.selectedCellsByPreset || {};
       selectedCellIndices = result.selectedCellIndices || [];
-      autoSyncBadgeText = '';
       isMacroRunning = false;
 
       hidePopupInlineAlert();
@@ -507,10 +535,12 @@ function handleDroppedFile(file) {
       loadedSequence = null;
       loadedFileName = "";
       isMacroRunning = false;
-      autoSyncBadgeText = '';
-      setStatusContent(renderIcon('xCircle', { className: 'icon-rose', size: 15 }), 'Format .pmr / .json tidak valid!', 'error');
+      setStatusCardMain(renderIcon('xCircle', { className: 'icon-rose', size: 15 }), 'Format .pmr / .json tidak valid!', 'error');
+      if (statusCardWarn) {
+        statusCardWarn.hidden = true;
+        statusCardWarn.innerHTML = '';
+      }
       showPopupInlineAlert('File .pmr / .json rusak atau tidak berisi keystroke yang valid.', 'error');
-      renderPresetBadge(0, null);
       toggleBtn.disabled = true;
     }
   };
@@ -613,6 +643,21 @@ document.addEventListener('pointerenter', () => {
     refreshActiveTabContext(true);
   }
 }, { passive: true });
+
+if (chrome.tabs && chrome.tabs.onActivated && typeof chrome.tabs.onActivated.addListener === 'function') {
+  chrome.tabs.onActivated.addListener(() => {
+    refreshActiveTabContext(true);
+  });
+}
+
+if (chrome.tabs && chrome.tabs.onUpdated && typeof chrome.tabs.onUpdated.addListener === 'function') {
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (!tab || !tab.active) return;
+    if (changeInfo && (changeInfo.url || changeInfo.status === 'complete')) {
+      refreshActiveTabContext(true);
+    }
+  });
+}
 
 // Sinkronisasi real-time 2 arah dengan flag anti-loop isSyncingFromStorage
 chrome.storage.onChanged.addListener((changes, areaName) => {

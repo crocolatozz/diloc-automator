@@ -1,5 +1,5 @@
 ====================================================
-PMR WEB RUNNER v1.9.0 — BROWSER EXTENSION
+PMR WEB RUNNER v1.9.1 — BROWSER EXTENSION
 ====================================================
 
 Cara Install / Update (Load Unpacked):
@@ -10,10 +10,9 @@ Cara Install / Update (Load Unpacked):
 3. Aktifkan toggle "Developer mode" (Mode pengembang) di pojok kanan atas.
 4. Klik tombol "Load unpacked" (Muat yang belum dibuka kemasannya) dan pilih folder hasil ekstrak (atau klik ikon Reload jika menimpa folder lama).
 
-Pembaruan v1.9.0 (Minor Update):
-- Sinkronisasi real-time skema penyimpanan terpadu antara Popup, Options, dan Mini Window Import (chrome.storage.onChanged + flag pengaman isSyncingFromStorage).
-- Upload file via Mini Window (import.html + import.js, patuh CSP MV3) saat kotak upload diklik, serta Drag & Drop langsung di kotak upload Popup.
-- Auto-Switch preset bawaan sesuai tab DILOC aktif (badge hijau "Auto-sync: Op. Lap X") dan tombol Quick-Switch 1-klik di dalam badge merah saat memakai file custom.
-- Mesin hybrid input + select (Op. 1: 167 sel, Op. 2: 51 sel, Op. 3: 44 sel), pengabaian kolom display <span> & sel disabled/readonly (seperti #25 Op. 3 di luar 06:00/14:00/22:00), serta dukungan file custom 43 sel aktif.
+Pembaruan v1.9.1 (Bug Fix):
+- Penambahan izin "tabs" pada manifest.json dan listener chrome.tabs.onActivated / onUpdated agar perpindahan tab/rute Vue SPA langsung menyegarkan preset & status tombol Play (dilengkapi retry ringan 250ms).
+- Redesign status popup menjadi 1 Status Card terpadu (mode preset vs custom + peringatan mismatch inline dengan tombol Pakai Preset Op. Lap X) tanpa badge Auto-sync menumpuk, serta pemindahan link Buka PMR Editor ke bagian bawah.
+- Perbaikan pre-scan sel terisi di content.js: mengunci zona scan di kolom parameter (mengabaikan kolom 0..4 termasuk dropdown status baris), menjaga nomor parameter asli saat melewati sel disabled/readOnly (seperti #25 Op. 3), mengambil teks opsi terpilih pada <select>, dan menampilkan maksimal 3 sampel sel (#nomor: nilai).
 
 © 2026 — Developed by FIKRI

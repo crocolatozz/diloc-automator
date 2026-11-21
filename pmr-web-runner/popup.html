@@ -27,12 +27,6 @@
       --text-status-ok: #15803d;
       --text-status-err: #dc2626;
       --link-color: #0284c7;
-      --preset-pill-bg: rgba(14, 165, 233, 0.12);
-      --preset-pill-text: #0369a1;
-      --preset-pill-border: rgba(14, 165, 233, 0.45);
-      --autosync-pill-bg: rgba(16, 185, 129, 0.14);
-      --autosync-pill-text: #047857;
-      --autosync-pill-border: rgba(16, 185, 129, 0.45);
       --warn-pill-bg: rgba(239, 68, 68, 0.12);
       --warn-pill-text: #dc2626;
       --warn-pill-border: rgba(239, 68, 68, 0.45);
@@ -88,12 +82,6 @@
       --text-status-ok: #4ade80;
       --text-status-err: #f87171;
       --link-color: #38bdf8;
-      --preset-pill-bg: rgba(14, 165, 233, 0.16);
-      --preset-pill-text: #38bdf8;
-      --preset-pill-border: rgba(56, 189, 248, 0.5);
-      --autosync-pill-bg: rgba(16, 185, 129, 0.16);
-      --autosync-pill-text: #34d399;
-      --autosync-pill-border: rgba(52, 211, 153, 0.5);
       --warn-pill-bg: rgba(239, 68, 68, 0.16);
       --warn-pill-text: #fca5a5;
       --warn-pill-border: rgba(248, 113, 113, 0.55);
@@ -155,7 +143,8 @@
     button:focus-visible,
     a:focus-visible,
     input:focus-visible,
-    label:focus-visible {
+    label:focus-visible,
+    [role="button"]:focus-visible {
       outline: 2.5px solid var(--focus-ring);
       outline-offset: 2px;
     }
@@ -334,100 +323,77 @@
       align-items: center;
       justify-content: center;
       gap: 5px;
-      margin-top: 7px;
-      padding: 2px 4px;
-      border-radius: 4px;
+      margin-top: 8px;
+      padding: 3px 6px;
+      border-radius: 5px;
       font-size: 11px;
       font-weight: 600;
       color: var(--link-color);
       text-decoration: none;
-      transition: color 0.25s ease;
+      transition: color 0.25s ease, background-color 0.2s ease;
     }
 
     .editor-link:hover {
       text-decoration: underline;
     }
 
-    .status {
-      margin: 7px 0 4px 0;
+    .status-card {
+      margin: 8px 0 9px 0;
+      border-radius: 8px;
+      border: 1px solid var(--border-soft);
+      background: var(--bg-card);
+      overflow: hidden;
+      transition: background-color 0.25s ease, border-color 0.25s ease;
+    }
+
+    .status-card-main {
+      padding: 7px 10px;
       font-size: 11px;
-      color: var(--text-muted);
-      word-break: break-word;
-      min-height: 16px;
       font-weight: 600;
+      color: var(--text-muted);
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 5px;
+      gap: 6px;
+      word-break: break-word;
+      text-align: center;
+      min-height: 30px;
       transition: color 0.25s ease;
     }
 
-    .status.is-ok {
+    .status-card-main.is-preset {
       color: var(--text-status-ok);
     }
 
-    .status.is-error {
+    .status-card-main.is-custom {
+      color: var(--text-title);
+    }
+
+    .status-card-main.is-error {
       color: var(--text-status-err);
     }
 
-    .preset-badge-wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 4px;
-      margin: 2px 0 9px 0;
-    }
-
-    .preset-badge-wrap[hidden] {
-      display: none;
-    }
-
-    .preset-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 2px 8px;
-      border-radius: 99px;
-      font-size: 10.5px;
-      font-weight: 700;
-      background: var(--preset-pill-bg);
-      color: var(--preset-pill-text);
-      border: 1px solid var(--preset-pill-border);
-      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
-    }
-
-    .autosync-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 2px 8px;
-      border-radius: 99px;
+    .status-card-warn {
+      padding: 6px 9px;
+      border-top: 1px solid var(--warn-pill-border);
+      background: var(--warn-pill-bg);
+      color: var(--warn-pill-text);
       font-size: 10px;
       font-weight: 700;
-      background: var(--autosync-pill-bg);
-      color: var(--autosync-pill-text);
-      border: 1px solid var(--autosync-pill-border);
-      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
-    }
-
-    .preset-warn-pill {
-      display: inline-flex;
+      display: flex;
       align-items: center;
       justify-content: center;
       flex-wrap: wrap;
       gap: 5px;
-      padding: 3px 8px;
-      border-radius: 10px;
-      font-size: 10px;
-      font-weight: 700;
-      background: var(--warn-pill-bg);
-      color: var(--warn-pill-text);
-      border: 1px solid var(--warn-pill-border);
+      text-align: center;
       transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
     }
 
-    .preset-warn-pill .svg-icon {
+    .status-card-warn[hidden] {
+      display: none;
+    }
+
+    .status-card-warn .svg-icon {
       flex-shrink: 0;
     }
 
@@ -781,14 +747,10 @@
     <span>Load File .PMR / .JSON</span>
   </div>
 
-  <a href="https://crocolatozz.github.io/pmr-editor/" target="_blank" rel="noopener noreferrer" class="editor-link">
-    <span data-icon="edit" data-icon-class="icon-sky" data-icon-size="14"></span>
-    <span>Buka PMR Editor</span>
-    <span data-icon="externalLink" data-icon-class="icon-sky" data-icon-size="12"></span>
-  </a>
-
-  <div id="fileStatus" class="status">Belum ada file dimuat</div>
-  <div id="presetBadgeWrap" class="preset-badge-wrap" hidden></div>
+  <div id="statusCard" class="status-card">
+    <div id="statusCardMain" class="status-card-main">Belum ada file dimuat</div>
+    <div id="statusCardWarn" class="status-card-warn" hidden></div>
+  </div>
 
   <div class="ctrl-card">
     <div class="ctrl-header">
@@ -855,6 +817,12 @@
     <span data-icon="settings" data-icon-class="icon-sky" data-icon-size="14"></span>
     <span>Setting Sel &amp; Preset Operator</span>
   </button>
+
+  <a href="https://crocolatozz.github.io/pmr-editor/" target="_blank" rel="noopener noreferrer" class="editor-link">
+    <span data-icon="edit" data-icon-class="icon-sky" data-icon-size="14"></span>
+    <span>Buka PMR Editor</span>
+    <span data-icon="externalLink" data-icon-class="icon-sky" data-icon-size="12"></span>
+  </a>
 
   <div class="footer-credit">© 2026 — Developed by FIKRI</div>
 

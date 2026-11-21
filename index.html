@@ -1138,7 +1138,9 @@
         manifest: null,
         logs: [],
         storageListeners: new Set(),
-        runtimeMessageListeners: new Set()
+        runtimeMessageListeners: new Set(),
+        tabActivatedListeners: new Set(),
+        tabUpdatedListeners: new Set()
       };
 
       // DOM elements
@@ -1404,6 +1406,22 @@
         return { responseSent, lastResponse };
       }
 
+      function broadcastTabUpdated(folder, changeInfo, tabObj) {
+        for (const entry of Array.from(state.tabUpdatedListeners)) {
+          try {
+            if (!entry.win || entry.win.closed || !entry.win.document) {
+              state.tabUpdatedListeners.delete(entry);
+              continue;
+            }
+            if (entry.folder === folder) {
+              entry.fn(tabObj.id, changeInfo, tabObj);
+            }
+          } catch (err) {
+            state.tabUpdatedListeners.delete(entry);
+          }
+        }
+      }
+
       function pruneWindowListeners(targetWin) {
         if (!targetWin) return;
         for (const entry of Array.from(state.storageListeners)) {
@@ -1411,6 +1429,12 @@
         }
         for (const entry of Array.from(state.runtimeMessageListeners)) {
           if (entry.win === targetWin) state.runtimeMessageListeners.delete(entry);
+        }
+        for (const entry of Array.from(state.tabActivatedListeners)) {
+          if (entry.win === targetWin) state.tabActivatedListeners.delete(entry);
+        }
+        for (const entry of Array.from(state.tabUpdatedListeners)) {
+          if (entry.win === targetWin) state.tabUpdatedListeners.delete(entry);
         }
       }
 
@@ -1620,7 +1644,7 @@
                 return state.manifest ? cloneVal(state.manifest) : {
                   manifest_version: 3,
                   name: folder,
-                  version: '1.9.0'
+                  version: '1.9.1'
                 };
               },
               openOptionsPage: function (callback) {
@@ -1709,6 +1733,30 @@
                     url: url
                   };
                 }, callback);
+              },
+
+              onActivated: {
+                addListener: function (fn) {
+                  if (typeof fn !== 'function') return;
+                  state.tabActivatedListeners.add({ win: iframeWin, folder: folder, contextType: contextType, fn: fn });
+                },
+                removeListener: function (fn) {
+                  for (const entry of Array.from(state.tabActivatedListeners)) {
+                    if (entry.win === iframeWin && entry.fn === fn) state.tabActivatedListeners.delete(entry);
+                  }
+                }
+              },
+
+              onUpdated: {
+                addListener: function (fn) {
+                  if (typeof fn !== 'function') return;
+                  state.tabUpdatedListeners.add({ win: iframeWin, folder: folder, contextType: contextType, fn: fn });
+                },
+                removeListener: function (fn) {
+                  for (const entry of Array.from(state.tabUpdatedListeners)) {
+                    if (entry.win === iframeWin && entry.fn === fn) state.tabUpdatedListeners.delete(entry);
+                  }
+                }
               }
             }
           };
@@ -1819,7 +1867,17 @@
           const rowLabelClass = isFutureRow
             ? 'row-label sticky-col col-waktu'
             : 'row-label sticky-col col-waktu active-shift-time';
-          let tds = '<td class="' + rowLabelClass + '">' + escapeHtml(timeText) + '</td>';
+          const statusSelectAttrs = isFutureRow ? ' disabled title="Jam belum tiba"' : '';
+          let tds =
+            '<td class="' + rowLabelClass + '">' +
+              '<div class="row-time-text">' + escapeHtml(timeText) + '</div>' +
+              '<select class="row-status-select"' + statusSelectAttrs + ' aria-label="Status ' + escapeHtml(timeText) + '">' +
+                '<option value="normal" selected>Normal</option>' +
+                '<option value="no_mixing">Tidak Ada Mixing</option>' +
+                '<option value="trouble">Plant Trouble</option>' +
+                '<option value="standby">Standby</option>' +
+              '</select>' +
+            '</td>';
 
           for (let c = 0; c < columns.length; c++) {
             const oneBased = c + 1;
@@ -1905,8 +1963,11 @@
               'table{border-collapse:collapse;width:max-content;}' +
               'th,td{border:1px solid #cbd5e1;padding:4px 6px;vertical-align:middle;}' +
               'thead th{position:sticky;top:0;z-index:2;background:#f1f5f9;text-align:left;min-width:96px;max-width:130px;}' +
-              'thead th.sticky-corner{left:0;z-index:4;background:#0f172a;color:#ffffff;min-width:68px;max-width:68px;text-align:center;}' +
-              'td.row-label{position:sticky;left:0;z-index:1;background:#f8fafc;font-weight:700;color:#334155;text-align:center;min-width:68px;border-right:2px solid #94a3b8;white-space:nowrap;}' +
+              'thead th.sticky-corner{left:0;z-index:4;background:#0f172a;color:#ffffff;min-width:110px;max-width:110px;text-align:center;}' +
+              'td.row-label{position:sticky;left:0;z-index:1;background:#f8fafc;font-weight:700;color:#334155;text-align:center;min-width:110px;border-right:2px solid #94a3b8;white-space:nowrap;}' +
+              '.row-time-text{font-size:11px;font-weight:700;line-height:1.2;margin-bottom:2px;}' +
+              '.row-status-select{width:96px;height:20px;font-size:10px;border:1px solid #cbd5e1;border-radius:4px;background:#ffffff;color:#334155;padding:0 3px;}' +
+              '.row-status-select:disabled{background:#e2e8f0;color:#64748b;}' +
               'td.active-shift-time{background:#ecfdf5;color:#15803d;box-shadow:inset 3px 0 0 #16a34a;}' +
               'td.cell-locked{background:#f1f5f9;}' +
               '.col-num{font-family:ui-monospace,monospace;font-size:10px;color:#64748b;}' +
@@ -2230,6 +2291,8 @@
 
       elTargetFrame.addEventListener('load', function () {
         try {
+          const mockTab = getCurrentMockTab();
+          broadcastTabUpdated(FIXED_FOLDER, { status: 'complete', url: mockTab.url }, mockTab);
           if (elPopupFrame && elPopupFrame.contentWindow) {
             elPopupFrame.contentWindow.dispatchEvent(new Event('focus'));
           }

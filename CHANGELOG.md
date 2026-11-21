@@ -2,6 +2,17 @@
 
 Semua perubahan penting pada proyek **PMR Web Runner** dicatat dalam file ini.
 
+## [1.9.1] - 2026-11-20
+
+### Fixed
+- **Akurasi Nomor & Nilai Pre-Scan (`content.js`):** Mengunci pemindaian pada zona parameter (`td` indeks 5 ke kanan; mengabaikan kolom `0..4` termasuk dropdown status baris), mempertahankan nomor parameter asli (`paramNumber = absColIdx + 1`) saat melewati sel `disabled`/`readOnly` (sehingga `#26` ke atas di Op. 3 tidak bergeser menjadi `#25`), mengambil hanya teks opsi terpilih pada `<select>` (bukan seluruh daftar `<option>`), serta meringkas modal konfirmasi menjadi maksimal 3 sampel (`#nomor: nilai`).
+- **Anti-Delay Inisialisasi, Auto-Refresh Tab & Retry Vue SPA (`manifest.json`, `popup.js`):** Menambahkan izin `"tabs"`, menjalankan deteksi tab aktif & *Auto-Switch Preset* (kecuali saat `macroRunning === true`) sebelum validasi tombol `Play`, memasang listener `chrome.tabs.onActivated` dan `chrome.tabs.onUpdated`, serta menambahkan 2x retry ringan (`250ms`) saat `<tbody>` rute Vue SPA baru belum selesai ter-render.
+- **Sinkronisasi Dua Arah Popup–Options (`popup.js`, `options.js`):** Memperketat guard `isSyncingFromStorage` serta memastikan setiap event `chrome.storage.onChanged` langsung memperbarui UI, validasi tombol `Play`, dan state tabel tanpa loop atau mengganggu fokus pencarian.
+
+### Changed
+- **Status Card Terpadu & Reposisi `Buka PMR Editor` (`popup.html`, `popup.js`):** Menghapus badge `Auto-sync` dan tumpukan pil lama menjadi 1 Status Card ringkas (menampilkan `Preset: Op. Lap X (N sel)` saat mode preset, atau `namafile (N sel)` saat mode custom, serta baris peringatan mismatch merah lembut dengan tombol inline `Pakai Preset Op. Lap X` saat mismatch), dan memindahkan link `Buka PMR Editor ↗` ke bawah tombol `Setting Sel & Preset Operator`.
+- **Simulasi Dropdown Status Kolom 0 (`index.html`):** Menambahkan dropdown status baris (`Normal`, `Tidak Ada Mixing`, `Plant Trouble`, `Standby`) pada kolom `0` grid DILOC sandbox serta dukungan mock `chrome.tabs.onActivated` / `onUpdated` dan pembaruan versi `1.9.1` pada `manifest.json`, `options.html`, `README.txt`, dan `CHANGELOG.md`.
+
 ## [1.9.0] - 2026-11-20
 
 ### Added
