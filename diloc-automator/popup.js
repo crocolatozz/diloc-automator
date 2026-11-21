@@ -22,12 +22,16 @@ let activeTabContext = null;
 let lastTabRefreshAt = 0;
 let refreshSeq = 0;
 let isSyncingFromStorage = false;
+let storedMacroRunning = false;
 
 const fileLabel = document.getElementById('fileLabel');
 const statusCard = document.getElementById('statusCard');
 const statusLineFile = document.getElementById('statusLineFile');
 const statusLineOp = document.getElementById('statusLineOp');
+const clearFileBtnWrap = document.getElementById('clearFileBtnWrap');
+const clearFileBtn = document.getElementById('clearFileBtn');
 const popupAlert = document.getElementById('popupAlert');
+const playBtnWrap = document.getElementById('playBtnWrap');
 const toggleBtn = document.getElementById('toggleBtn');
 const openSettingsBtn = document.getElementById('openSettingsBtn');
 const selectedModeBtn = document.getElementById('selectedModeBtn');
@@ -38,6 +42,10 @@ const rowDecBtn = document.getElementById('rowDecBtn');
 const rowIncBtn = document.getElementById('rowIncBtn');
 const rowCountInput = document.getElementById('rowCountInput');
 const themeToggleBtn = document.getElementById('themeToggleBtn');
+const clearConfirmModal = document.getElementById('clearConfirmModal');
+const clearConfirmFileName = document.getElementById('clearConfirmFileName');
+const confirmClearCancelBtn = document.getElementById('confirmClearCancelBtn');
+const confirmClearOkBtn = document.getElementById('confirmClearOkBtn');
 
 function getPresetStorageKey(presetKey) {
   return presetKey && PRESET_SHORT_LABELS[presetKey] ? presetKey : 'operator1';
@@ -205,6 +213,37 @@ function renderStatusCard(totalCells, fileOp, webOp) {
       : `Buka tab logsheet ${PRESET_SHORT_LABELS[fileOp]} untuk mengaktifkan Play`);
 }
 
+function updateClearFileButtonState(hasLoadedFile) {
+  if (!clearFileBtnWrap || !clearFileBtn) return;
+  const visible = Boolean(hasLoadedFile) && !isMacroRunning;
+  clearFileBtnWrap.hidden = !visible;
+  clearFileBtn.disabled = !visible;
+}
+
+function updatePlayButtonTooltip(hasFile, fileOp, webOp) {
+  if (!playBtnWrap) return;
+  if (isMacroRunning) {
+    setElementTooltip(playBtnWrap, '');
+    return;
+  }
+  if (!hasFile) {
+    setElementTooltip(playBtnWrap, 'Muat file .pmr / .json terlebih dahulu');
+    return;
+  }
+  if (!activeTabContext || !webOp) {
+    setElementTooltip(playBtnWrap, 'Buka halaman logsheet DILOC terlebih dahulu');
+    return;
+  }
+  if (fileOp && webOp !== fileOp) {
+    setElementTooltip(
+      playBtnWrap,
+      `File ${PRESET_SHORT_LABELS[fileOp] || fileOp} tidak sesuai dengan tab ${PRESET_SHORT_LABELS[webOp] || webOp}`
+    );
+    return;
+  }
+  setElementTooltip(playBtnWrap, '');
+}
+
 function updateSelectedCountLabel(totalCells) {
   const validList = Array.isArray(selectedCellIndices)
     ? (typeof totalCells === 'number'
@@ -264,6 +303,8 @@ function updateUIState() {
   if (!loadedSequence || loadedSequence.length === 0) {
     syncRandomModePills();
     renderStatusCard(0, '', webOp);
+    updateClearFileButtonState(false);
+    updatePlayButtonTooltip(false, '', webOp);
     if (isMacroRunning) {
       toggleBtn.disabled = false;
       toggleBtn.classList.add('running');
@@ -284,6 +325,8 @@ function updateUIState() {
 
   syncRandomModePills(cells.length);
   renderStatusCard(cells.length, fileOp, webOp);
+  updateClearFileButtonState(Boolean(fileOp && PRESET_SHORT_LABELS[fileOp]));
+  updatePlayButtonTooltip(true, fileOp, webOp);
 
   if (isMacroRunning) {
     toggleBtn.disabled = false;
@@ -383,6 +426,21 @@ async function queryActiveTabStatusWithRetry(tab, seq) {
   return status;
 }
 
+async function reconcileMacroRunningWithTab(tabIsRunning) {
+  const resolved = tabIsRunning === true;
+  if (isMacroRunning !== resolved) {
+    isMacroRunning = resolved;
+  }
+  if (!resolved && storedMacroRunning) {
+    storedMacroRunning = false;
+    try {
+      await chrome.storage.local.set({ macroRunning: false });
+    } catch (e) {}
+  } else if (resolved) {
+    storedMacroRunning = true;
+  }
+}
+
 async function refreshActiveTabContext(shouldUpdateUi = true) {
   const seq = ++refreshSeq;
   lastTabRefreshAt = Date.now();
@@ -392,7 +450,7 @@ async function refreshActiveTabContext(shouldUpdateUi = true) {
 
     if (!tab?.id || isRestrictedBrowserUrl(tab.url)) {
       activeTabContext = null;
-      if (isMacroRunning) isMacroRunning = false;
+      await reconcileMacroRunningWithTab(false);
       if (shouldUpdateUi) updateUIState();
       return null;
     }
@@ -401,11 +459,8 @@ async function refreshActiveTabContext(shouldUpdateUi = true) {
     if (seq !== refreshSeq) return null;
 
     activeTabContext = status;
-    if (status && typeof status.isRunning === 'boolean') {
-      isMacroRunning = status.isRunning;
-    } else {
-      isMacroRunning = false;
-    }
+    const activeTabIsRunning = Boolean(status && status.isRunning === true);
+    await reconcileMacroRunningWithTab(activeTabIsRunning);
 
     if (shouldUpdateUi) updateUIState();
     return { tab, status };
@@ -431,6 +486,12 @@ function handleDroppedFile(file) {
       headerMeta = result.headerMeta || [];
       selectedCellsByPreset = result.selectedCellsByPreset || {};
       selectedCellIndices = result.selectedCellIndices || [];
+      if (typeof result.randomMode === 'string') {
+        randomMode = result.randomMode;
+      }
+      if (result.randomRange !== undefined) {
+        randomRange = sanitizeRandomRange(result.randomRange, true);
+      }
       isMacroRunning = false;
 
       hidePopupInlineAlert();
@@ -513,6 +574,7 @@ async function sanitizeAndClearInvalidStoredMacro(data, stdCounts) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   hydrateDataIcons();
+  initCustomTooltips();
 
   try {
     const data = await chrome.storage.local.get([...UNIFIED_STORAGE_KEYS, 'fileSourceType']);
@@ -534,7 +596,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const hasValidMacro = await sanitizeAndClearInvalidStoredMacro(data, operatorStandardCounts);
 
-    isMacroRunning = Boolean(data.macroRunning);
+    storedMacroRunning = Boolean(data.macroRunning);
+    isMacroRunning = storedMacroRunning;
     randomMode = data.randomMode || "off";
     randomRange = sanitizeRandomRange(data.randomRange, true);
     cellRandomRanges = (data.cellRandomRanges && typeof data.cellRandomRanges === 'object')
@@ -633,6 +696,15 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       } else {
         loadedSequence = null;
         loadedFileName = "";
+        if (!changes.activePreset) {
+          activePreset = "";
+        }
+        if (!changes.headerMeta) {
+          headerMeta = [];
+        }
+        if (!changes.selectedCellIndices) {
+          selectedCellIndices = [];
+        }
       }
       dirty = true;
     }
@@ -688,7 +760,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       selectedCellIndices = resolveSelectedForPreset(selectedCellsByPreset, [], activePreset);
     }
     if (changes.macroRunning) {
-      isMacroRunning = Boolean(changes.macroRunning.newValue);
+      storedMacroRunning = Boolean(changes.macroRunning.newValue);
+      isMacroRunning = storedMacroRunning;
       dirty = true;
     }
 
@@ -704,6 +777,66 @@ if (themeToggleBtn) {
   themeToggleBtn.addEventListener('click', () => {
     const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
     applyTheme(nextTheme, true);
+  });
+}
+
+function openClearConfirmModal() {
+  if (!clearConfirmModal || isMacroRunning || !loadedSequence || loadedSequence.length === 0) return;
+  if (document.activeElement && typeof document.activeElement.blur === 'function') {
+    try {
+      document.activeElement.blur();
+    } catch (e) {}
+  }
+  if (clearConfirmFileName) {
+    clearConfirmFileName.textContent = loadedFileName || 'macro.pmr';
+  }
+  clearConfirmModal.hidden = false;
+}
+
+function closeClearConfirmModal() {
+  if (!clearConfirmModal) return;
+  clearConfirmModal.hidden = true;
+}
+
+async function performClearLoadedFile() {
+  closeClearConfirmModal();
+  loadedSequence = null;
+  loadedFileName = "";
+  activePreset = "";
+  headerMeta = [];
+  selectedCellIndices = [];
+  hidePopupInlineAlert();
+  try {
+    await chrome.storage.local.remove(['savedMacro', 'activePreset', 'headerMeta', 'fileSourceType']);
+    await chrome.storage.local.set({ selectedCellIndices: [] });
+  } catch (e) {}
+  updateUIState();
+}
+
+if (clearFileBtn) {
+  clearFileBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openClearConfirmModal();
+  });
+}
+
+if (confirmClearCancelBtn) {
+  confirmClearCancelBtn.addEventListener('click', () => {
+    closeClearConfirmModal();
+  });
+}
+
+if (confirmClearOkBtn) {
+  confirmClearOkBtn.addEventListener('click', () => {
+    performClearLoadedFile();
+  });
+}
+
+if (clearConfirmModal) {
+  clearConfirmModal.addEventListener('click', (e) => {
+    if (e.target === clearConfirmModal) {
+      closeClearConfirmModal();
+    }
   });
 }
 

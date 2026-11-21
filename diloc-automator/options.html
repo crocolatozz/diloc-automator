@@ -37,8 +37,9 @@
       --check-locked-bg: #f1f5f9;
       --selected-bg: #f0fdf4;
       --selected-header-bg: #15803d;
-      --preview-changed-bg: #dcfce7;
-      --preview-changed-text: #15803d;
+      --selected-meta-text: #1e293b;
+      --preview-changed-bg: #15803d;
+      --preview-changed-text: #fef08a;
       --highlight-bg: rgba(14, 165, 233, 0.12);
       --highlight-header-bg: #0369a1;
       --highlight-outline: #0284c7;
@@ -73,14 +74,14 @@
       --btn-rose-border: #fecdd3;
       --btn-rose-text: #be123c;
       --btn-rose-hover: #ffe4e6;
-      --btn-blue-bg: #eff6ff;
-      --btn-blue-border: #93c5fd;
-      --btn-blue-text: #1d4ed8;
-      --btn-blue-hover: #dbeafe;
-      --btn-editor-bg: #f0f9ff;
-      --btn-editor-border: #7dd3fc;
-      --btn-editor-text: #0369a1;
-      --btn-editor-hover: #e0f2fe;
+      --btn-amber-bg: rgba(245, 158, 11, 0.12);
+      --btn-amber-border: rgba(217, 119, 6, 0.45);
+      --btn-amber-text: #b45309;
+      --btn-amber-hover: rgba(245, 158, 11, 0.22);
+      --btn-editor-bg: rgba(16, 185, 129, 0.1);
+      --btn-editor-border: rgba(5, 150, 105, 0.48);
+      --btn-editor-text: #047857;
+      --btn-editor-hover: rgba(16, 185, 129, 0.19);
       --preset-hover-bg: #f0f9ff;
       --preset-icon: #0284c7;
       --lock-pill-bg: #e2e8f0;
@@ -132,8 +133,9 @@
       --check-locked-bg: #0f172a;
       --selected-bg: #0f2c22;
       --selected-header-bg: #166534;
-      --preview-changed-bg: #14532d;
-      --preview-changed-text: #86efac;
+      --selected-meta-text: #e2e8f0;
+      --preview-changed-bg: #166534;
+      --preview-changed-text: #fef08a;
       --highlight-bg: rgba(56, 189, 248, 0.15);
       --highlight-header-bg: #0c4a6e;
       --highlight-outline: #38bdf8;
@@ -168,14 +170,14 @@
       --btn-rose-border: rgba(251, 113, 133, 0.4);
       --btn-rose-text: #fda4af;
       --btn-rose-hover: rgba(225, 29, 72, 0.28);
-      --btn-blue-bg: rgba(37, 99, 235, 0.18);
-      --btn-blue-border: rgba(96, 165, 250, 0.45);
-      --btn-blue-text: #93c5fd;
-      --btn-blue-hover: rgba(37, 99, 235, 0.3);
-      --btn-editor-bg: rgba(2, 132, 199, 0.16);
-      --btn-editor-border: rgba(56, 189, 248, 0.4);
-      --btn-editor-text: #7dd3fc;
-      --btn-editor-hover: rgba(2, 132, 199, 0.28);
+      --btn-amber-bg: rgba(249, 115, 22, 0.14);
+      --btn-amber-border: rgba(251, 146, 60, 0.45);
+      --btn-amber-text: #fb923c;
+      --btn-amber-hover: rgba(249, 115, 22, 0.24);
+      --btn-editor-bg: rgba(16, 185, 129, 0.12);
+      --btn-editor-border: rgba(52, 211, 153, 0.48);
+      --btn-editor-text: #34d399;
+      --btn-editor-hover: rgba(16, 185, 129, 0.22);
       --preset-hover-bg: rgba(2, 132, 199, 0.18);
       --preset-icon: #38bdf8;
       --lock-pill-bg: #243247;
@@ -259,8 +261,9 @@
 
     .topbar-title h1 {
       margin: 0;
-      font-size: 17px;
+      font-size: 20px;
       font-weight: 700;
+      letter-spacing: -0.015em;
       color: var(--text-topbar);
     }
 
@@ -366,15 +369,57 @@
     .file-pill {
       background: var(--bg-pill);
       border: 1px solid var(--border-pill);
-      padding: 6px 12px;
+      padding: 5px 10px 5px 12px;
       border-radius: 6px;
       font-size: 12px;
       color: var(--text-pill);
       font-weight: 600;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 7px;
       transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+    }
+
+    .file-pill-content {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .clear-file-wrap[hidden] {
+      display: none;
+    }
+
+    .clear-file-btn {
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border-radius: 5px;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      background: rgba(239, 68, 68, 0.14);
+      color: #f87171;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.1s ease;
+    }
+
+    .clear-file-btn:hover:not(:disabled) {
+      background: #dc2626;
+      border-color: #ef4444;
+      color: #ffffff;
+    }
+
+    .clear-file-btn:active:not(:disabled) {
+      transform: scale(0.94);
+    }
+
+    .clear-file-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
     }
 
     .btn-load-top {
@@ -546,14 +591,14 @@
       background: var(--btn-rose-hover);
     }
 
-    .btn-blue {
-      background: var(--btn-blue-bg);
-      border-color: var(--btn-blue-border);
-      color: var(--btn-blue-text);
+    .btn-amber {
+      background: var(--btn-amber-bg);
+      border-color: var(--btn-amber-border);
+      color: var(--btn-amber-text);
     }
 
-    .btn-blue:hover:not(:disabled) {
-      background: var(--btn-blue-hover);
+    .btn-amber:hover:not(:disabled) {
+      background: var(--btn-amber-hover);
     }
 
     .btn-editor {
@@ -564,6 +609,116 @@
 
     .btn-editor:hover {
       background: var(--btn-editor-hover);
+    }
+
+    .btn-export {
+      background: rgba(14, 165, 233, 0.12);
+      border-color: rgba(14, 165, 233, 0.45);
+      color: #0369a1;
+    }
+
+    .btn-export:hover:not(:disabled) {
+      background: rgba(14, 165, 233, 0.22);
+      border-color: rgba(2, 132, 199, 0.7);
+    }
+
+    :root[data-theme="dark"] .btn-export {
+      background: rgba(14, 165, 233, 0.16);
+      border-color: rgba(56, 189, 248, 0.45);
+      color: #7dd3fc;
+    }
+
+    :root[data-theme="dark"] .btn-export:hover:not(:disabled) {
+      background: rgba(14, 165, 233, 0.28);
+      border-color: rgba(56, 189, 248, 0.75);
+    }
+
+    /* Custom CSS Floating Tooltip System */
+    .tooltip-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .custom-tooltip {
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 8px);
+      transform: translateX(-50%) translateY(3px);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      max-width: 240px;
+      width: max-content;
+      padding: 6px 9px;
+      border-radius: 7px;
+      background: #0f172a;
+      color: #f8fafc;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      box-shadow: 0 8px 20px rgba(2, 6, 23, 0.38);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.35;
+      text-align: left;
+      white-space: normal;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      z-index: 80;
+      transition: opacity 0.14s ease 0ms, transform 0.14s ease 0ms, visibility 0s linear 0.14s;
+    }
+
+    :root[data-theme="dark"] .custom-tooltip {
+      background: #1e293b;
+      color: #f8fafc;
+      border-color: rgba(148, 163, 184, 0.45);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.58);
+    }
+
+    .custom-tooltip .tooltip-info-icon {
+      color: #38bdf8;
+      flex-shrink: 0;
+    }
+
+    .tooltip-wrap[data-tooltip-pos="bottom"] > .custom-tooltip {
+      bottom: auto;
+      top: calc(100% + 8px);
+      transform: translateX(-50%) translateY(-3px);
+    }
+
+    .tooltip-wrap[data-tooltip-align="left"] > .custom-tooltip {
+      left: 0;
+      transform: translateX(0) translateY(3px);
+    }
+
+    .tooltip-wrap[data-tooltip-pos="bottom"][data-tooltip-align="left"] > .custom-tooltip {
+      transform: translateX(0) translateY(-3px);
+    }
+
+    .tooltip-wrap[data-tooltip-align="right"] > .custom-tooltip {
+      left: auto;
+      right: 0;
+      transform: translateX(0) translateY(3px);
+    }
+
+    .tooltip-wrap[data-tooltip-pos="bottom"][data-tooltip-align="right"] > .custom-tooltip {
+      transform: translateX(0) translateY(-3px);
+    }
+
+    .tooltip-wrap:hover > .custom-tooltip,
+    .tooltip-wrap:focus-within > .custom-tooltip {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+      transition: opacity 0.16s ease 250ms, transform 0.16s ease 250ms, visibility 0s linear 250ms;
+    }
+
+    .tooltip-wrap[data-tooltip-align="left"]:hover > .custom-tooltip,
+    .tooltip-wrap[data-tooltip-align="left"]:focus-within > .custom-tooltip,
+    .tooltip-wrap[data-tooltip-align="right"]:hover > .custom-tooltip,
+    .tooltip-wrap[data-tooltip-align="right"]:focus-within > .custom-tooltip {
+      transform: translateX(0) translateY(0);
     }
 
     .mismatch-banner,
@@ -776,52 +931,59 @@
       display: none;
     }
 
-    /* Kunci jenis font, ukuran, ketebalan, lebar 165px, dan tinggi 38px kolom pertama di seluruh 7 baris */
+    /* Kunci kolom pertama 165px x 38px solid gelap anti-bleed dengan format seragam 12px SemiBold */
     table.excel-table tr th.sticky-col {
       position: sticky;
       left: 0;
-      z-index: 3;
+      z-index: 5;
       width: 165px;
       min-width: 165px;
       max-width: 165px;
       height: 38px;
       box-sizing: border-box;
-      background: var(--sticky-bg);
+      background-color: #080c14;
+      color: #cbd5e1;
       text-align: left;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 12px;
-      font-weight: 700;
-      color: var(--text-primary);
-      border-right: 2px solid var(--sticky-border);
+      font-weight: 600;
+      border-right: 2px solid #334155;
     }
 
     tr.row-index th {
       background: var(--index-bg);
-      color: var(--index-text);
-      font-weight: 700;
+      color: #cbd5e1;
+      font-size: 11px;
+      font-weight: 600;
       cursor: pointer;
     }
 
     table.excel-table tr.row-index th.sticky-col {
-      background: var(--index-sticky-bg);
-      color: var(--index-text);
+      background-color: #080c14;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 600;
+      z-index: 5;
+      border-right: 2px solid #334155;
       cursor: default;
     }
 
     tr.row-index th.clickable-col:hover {
       background: #16a34a;
+      color: #ffffff;
     }
 
     tr.row-equip td:not(.sticky-col) {
       background: var(--equip-bg);
       color: var(--equip-text);
-      font-size: 11px;
+      font-size: 11.5px;
       font-weight: 600;
     }
 
     tr.row-tag td:not(.sticky-col) {
       background: var(--bg-surface);
       color: var(--text-primary);
+      font-size: 13px;
       font-weight: 700;
     }
 
@@ -834,8 +996,9 @@
     tr.row-orig td:not(.sticky-col) {
       background: var(--bg-surface);
       font-family: "SFMono-Regular", Consolas, monospace;
-      font-size: 13px;
+      font-size: 15px;
       font-weight: 700;
+      font-variant-numeric: tabular-nums;
       color: var(--text-primary);
     }
 
@@ -871,23 +1034,31 @@
 
     tr.row-preview td:not(.sticky-col) {
       font-family: "SFMono-Regular", Consolas, monospace;
-      font-size: 13px;
+      font-size: 15px;
       font-weight: 700;
+      font-variant-numeric: tabular-nums;
       background: var(--bg-surface);
       color: var(--text-subtle);
-    }
-
-    tr.row-preview td.preview-changed {
-      background: var(--preview-changed-bg);
-      color: var(--preview-changed-text);
     }
 
     td.col-selected, th.col-selected {
       background-color: var(--selected-bg) !important;
     }
 
+    tr.row-equip td.col-selected,
+    tr.row-unit td.col-selected {
+      color: var(--selected-meta-text) !important;
+    }
+
     tr.row-index th.col-selected {
       background-color: var(--selected-header-bg) !important;
+      color: #ffffff !important;
+    }
+
+    tr.row-preview td.preview-changed,
+    tr.row-preview td.preview-changed.col-selected {
+      background-color: var(--preview-changed-bg) !important;
+      color: var(--preview-changed-text) !important;
     }
 
     td.col-locked {
@@ -1027,6 +1198,113 @@
       color: var(--text-subtle);
       transition: border-color 0.25s ease, color 0.25s ease;
     }
+
+    /* Custom In-DOM Confirm Modal */
+    .confirm-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.72);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 200;
+    }
+
+    .confirm-modal-backdrop[hidden] {
+      display: none;
+    }
+
+    .confirm-modal-card {
+      width: 100%;
+      max-width: 390px;
+      background: #0f172a;
+      color: #f1f5f9;
+      border: 1px solid rgba(245, 158, 11, 0.5);
+      border-radius: 13px;
+      box-shadow: 0 24px 52px rgba(0, 0, 0, 0.65);
+      padding: 20px 22px 18px;
+      text-align: center;
+    }
+
+    .confirm-modal-icon {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 10px;
+      border-radius: 10px;
+      background: rgba(245, 158, 11, 0.16);
+      border: 1px solid rgba(251, 191, 36, 0.45);
+      color: #fbbf24;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .confirm-modal-title {
+      margin: 0 0 7px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    .confirm-modal-desc {
+      margin: 0;
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: #cbd5e1;
+      word-break: break-word;
+    }
+
+    .confirm-modal-file {
+      display: block;
+      margin-top: 6px;
+      font-weight: 700;
+      color: #fde68a;
+    }
+
+    .confirm-modal-actions {
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .confirm-modal-btn {
+      min-width: 118px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+
+    .confirm-btn-cancel {
+      background: rgba(148, 163, 184, 0.16);
+      color: #e2e8f0;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+    }
+
+    .confirm-btn-cancel:hover {
+      background: rgba(148, 163, 184, 0.28);
+    }
+
+    .confirm-btn-danger {
+      background: #dc2626;
+      color: #ffffff;
+      border: 1px solid #ef4444;
+    }
+
+    .confirm-btn-danger:hover {
+      background: #b91c1c;
+    }
   </style>
 </head>
 <body>
@@ -1043,7 +1321,14 @@
         <span>Load File .PMR / .JSON</span>
       </label>
       <input type="file" id="macroFileOptions" accept=".pmr,.json">
-      <div id="activeFilePill" class="file-pill">Memuat data...</div>
+      <div class="file-pill">
+        <span id="activeFilePill" class="file-pill-content">Memuat data...</span>
+        <div id="clearFileBtnWrap" class="tooltip-wrap clear-file-wrap" data-tooltip="Hapus file termuat" data-tooltip-pos="bottom" data-tooltip-align="right" hidden>
+          <button id="clearFileBtn" type="button" class="clear-file-btn" aria-label="Hapus file termuat">
+            <span data-icon="x" data-icon-size="13"></span>
+          </button>
+        </div>
+      </div>
       <button
         id="themeToggleBtn"
         type="button"
@@ -1082,10 +1367,16 @@
             <span data-icon="reset" data-icon-size="14"></span>
             <span>Reset</span>
           </button>
-          <button id="rerollPreviewBtn" class="btn btn-blue">
+          <button id="rerollPreviewBtn" class="btn btn-amber">
             <span data-icon="dice" data-icon-size="14"></span>
             <span>Simulasi Acak</span>
           </button>
+          <div id="exportJsonWrap" class="tooltip-wrap" data-tooltip="Muat file .pmr / .json terlebih dahulu untuk Export JSON" data-tooltip-pos="top" data-tooltip-align="right">
+            <button id="exportJsonBtn" class="btn btn-export" type="button" disabled>
+              <span data-icon="download" data-icon-size="14"></span>
+              <span>Export JSON</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1112,7 +1403,7 @@
         <div class="toolbar-actions">
           <a href="https://crocolatozz.github.io/pmr-editor/" target="_blank" rel="noopener noreferrer" class="btn btn-editor">
             <span data-icon="edit" data-icon-size="14"></span>
-            <span>Buka PMR Editor</span>
+            <span>Buka DILOC Editor</span>
             <span data-icon="externalLink" data-icon-size="13"></span>
           </a>
         </div>
@@ -1149,7 +1440,7 @@
     <div id="tableContainer"></div>
 
     <footer class="page-footer">
-      <span>DILOC Automator v2.0.0</span>
+      <span>DILOC Automator v2.1.2</span>
       <span>© 2026 — Developed by FIKRI</span>
     </footer>
   </div>
@@ -1157,6 +1448,23 @@
   <div id="saveToast" class="save-toast">
     <span data-icon="checkCircle" data-icon-size="15"></span>
     <span id="saveToastText">Tersimpan otomatis</span>
+  </div>
+
+  <div id="clearConfirmModal" class="confirm-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="clearConfirmTitle" hidden>
+    <div class="confirm-modal-card">
+      <div class="confirm-modal-icon">
+        <span data-icon="warn" data-icon-size="20"></span>
+      </div>
+      <h3 id="clearConfirmTitle" class="confirm-modal-title">Hapus File Termuat?</h3>
+      <p class="confirm-modal-desc">
+        File aktif berikut akan dilepas dari runner, namun preset centang Op. Lap yang tersimpan tetap aman:
+        <span id="clearConfirmFileName" class="confirm-modal-file"></span>
+      </p>
+      <div class="confirm-modal-actions">
+        <button id="confirmClearCancelBtn" type="button" class="confirm-modal-btn confirm-btn-cancel">Batal</button>
+        <button id="confirmClearOkBtn" type="button" class="confirm-modal-btn confirm-btn-danger">Ya, Hapus</button>
+      </div>
+    </div>
   </div>
 
   <script src="icons.js"></script>

@@ -5,6 +5,7 @@ let lastFocusedParamCell = null;
 let lastLockedClickCell = null;
 let lastFilledInput = null;
 let activeAbortCallback = null;
+let activeSleepController = null;
 
 const PRESET_SHORT_LABELS = {
   operator1: 'Op. Lap 1',
@@ -58,6 +59,41 @@ function detectOperatorFromH5() {
   }
   return '';
 }
+
+function isDilocLogsheetPage() {
+  try {
+    if (/\/elogsheet\//i.test(String(window.location && window.location.href ? window.location.href : ''))) {
+      return true;
+    }
+    if (detectOperatorFromH5()) return true;
+    if (document.querySelector('tbody tr.data-row')) return true;
+  } catch (e) {}
+  return false;
+}
+
+function resetRunningStateOnPageLifecycle() {
+  isRunning = false;
+  if (isDilocLogsheetPage()) {
+    syncRunningState(false);
+  }
+}
+
+resetRunningStateOnPageLifecycle();
+
+window.addEventListener('beforeunload', () => {
+  if (isRunning || isDilocLogsheetPage()) {
+    if (typeof activeAbortCallback === 'function') {
+      activeAbortCallback('Tab logsheet ditutup atau dimuat ulang');
+    }
+    isRunning = false;
+    activeAbortCallback = null;
+    if (activeSleepController && typeof activeSleepController.cleanupWorker === 'function') {
+      activeSleepController.cleanupWorker();
+      activeSleepController = null;
+    }
+    syncRunningState(false);
+  }
+});
 
 function isModalDomNode(node) {
   if (!node) return false;
@@ -884,11 +920,9 @@ function formatRandomizerSummary(request) {
 async function autoResetSettingsAfterExecution() {
   try {
     await chrome.storage.local.set({
-      rowCount: 1,
       randomMode: 'off',
-      randomRange: 0,
-      selectedCellIndices: [],
-      selectedCellsByPreset: {}
+      typingSpeedMs: 400,
+      rowCount: 1
     });
   } catch (e) {}
 }
@@ -1674,6 +1708,36 @@ async function handleStartMacro(request) {
     return;
   }
 
+  // Re-validasi kondisi baris sesaat sebelum masuk Phase 2 agar tidak macet jika baris berubah terkunci/jam belum tiba
+  if (
+    !startLoc.row ||
+    !document.body ||
+    !document.body.contains(startLoc.row) ||
+    isRowOutsideShift(startLoc.row) ||
+    isRowNonNormalStatus(startLoc.row) ||
+    isRowFullyLocked(startLoc.row)
+  ) {
+    syncRunningState(false);
+    const rowTime = startLoc.row ? getRowTimeLabel(startLoc.row) : '';
+    const firstCtrl = startLoc.row ? getRowDataCellInputs(startLoc.row)[0] : null;
+    const notArrived = Boolean(
+      (startLoc.row && isRowOutsideShift(startLoc.row)) ||
+      (firstCtrl && inspectCellLock(firstCtrl).notArrived)
+    );
+    await renderPhase3Summary(session, {
+      aborted: false,
+      abortReason: '',
+      stoppedByBrake: true,
+      blockedTime: rowTime,
+      blockedNotArrived: notArrived,
+      lastCompletedRowTime: '',
+      filledRowsCount: 0,
+      filledCellsCount: 0,
+      skippedCellsCount: 0
+    });
+    return;
+  }
+
   const speedMs = Math.max(200, Number(request.speedMs) || 400);
   const runMeta = {
     randomMode: request.randomMode || 'off',
@@ -1796,6 +1860,9 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}, se
   lastFilledInput = null;
   syncRunningState(true);
 
+  const sleepController = createReusableWorkerSleepController();
+  activeSleepController = sleepController;
+
   const totalRows = Math.min(4, rowsPayload.length);
   const selectedColSet = runMeta.selectedSet instanceof Set ? runMeta.selectedSet : null;
   const totalPlannedFillable = Math.max(1, Number(runMeta.totalPlannedFillable) || 1);
@@ -1817,6 +1884,7 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}, se
     abortedByUser = true;
     abortReason = reason || 'Pengisian dihentikan';
     isRunning = false;
+    sleepController.wakeUpAll();
   };
   activeAbortCallback = triggerAbort;
 
@@ -1825,156 +1893,166 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}, se
     ? renderPhase2Progress(session, initialRowTime, totalRows, triggerAbort)
     : null;
 
-  for (let r = 0; r < totalRows; r++) {
-    while (r > 0 && currentRow && isRowNonNormalStatus(currentRow) && !isRowOutsideShift(currentRow)) {
-      currentRow = getNextDataRow(currentRow);
-    }
-    if (!isRunning || abortedByUser || !currentRow) break;
+  try {
+    for (let r = 0; r < totalRows; r++) {
+      while (r > 0 && currentRow && isRowNonNormalStatus(currentRow) && !isRowOutsideShift(currentRow)) {
+        currentRow = getNextDataRow(currentRow);
+      }
+      if (!isRunning || abortedByUser || !currentRow) break;
 
-    const rowInputs = getRowDataCellInputs(currentRow);
-    const rowValues = rowsPayload[r] || [];
-    const startAbsCol = (r === 0) ? (startLoc.colIdx || 0) : 0;
-    const rowTimeLabel = getRowTimeLabel(currentRow);
-    const cleanRowJam = cleanTimeText(rowTimeLabel) || `#${r + 1}`;
+      const rowInputs = getRowDataCellInputs(currentRow);
+      const rowValues = rowsPayload[r] || [];
+      const startAbsCol = (r === 0) ? (startLoc.colIdx || 0) : 0;
+      const rowTimeLabel = getRowTimeLabel(currentRow);
+      const cleanRowJam = cleanTimeText(rowTimeLabel) || `#${r + 1}`;
 
-    if (rowInputs.length === 0 || startAbsCol >= rowInputs.length) {
-      break;
-    }
+      if (rowInputs.length === 0 || startAbsCol >= rowInputs.length) {
+        break;
+      }
 
-    if (r > 0) {
-      if (isRowFullyLocked(currentRow)) {
+      if (isRowOutsideShift(currentRow) || isRowNonNormalStatus(currentRow) || isRowFullyLocked(currentRow)) {
         const firstLock = inspectCellLock(rowInputs[0]);
         stoppedByBrake = true;
         blockedTime = rowTimeLabel;
-        blockedNotArrived = firstLock.notArrived;
-        break;
-      }
-      rowInputs[0].scrollIntoView({ block: 'nearest', inline: 'start' });
-      const okRowDelay = await interruptibleSleep(250);
-      if (!okRowDelay || abortedByUser) break;
-    }
-
-    const isDirectIndexMapping = (rowValues.length === rowInputs.length);
-    let sequentialCursor = 0;
-    if (!isDirectIndexMapping && startAbsCol > 0) {
-      for (let prevIdx = 0; prevIdx < startAbsCol; prevIdx++) {
-        const prevInput = rowInputs[prevIdx];
-        const prevLock = inspectCellLock(prevInput);
-        if (!prevInput.disabled && !prevInput.readOnly && !isInactiveSkippableControl(prevInput, prevLock)) {
-          sequentialCursor += 1;
-        }
-      }
-    }
-
-    let rowTouchedAnyCell = false;
-
-    for (let absColIdx = startAbsCol; absColIdx < rowInputs.length; absColIdx++) {
-      if (!isRunning || abortedByUser) break;
-
-      const targetInput = rowInputs[absColIdx];
-      const lockStatus = inspectCellLock(targetInput);
-
-      if (lockStatus.notArrived || lockStatus.permissionLocked) {
-        stoppedByBrake = true;
-        blockedTime = rowTimeLabel;
-        blockedNotArrived = lockStatus.notArrived;
+        blockedNotArrived = isRowOutsideShift(currentRow) || firstLock.notArrived;
         break;
       }
 
-      if (targetInput.disabled || targetInput.readOnly || isInactiveSkippableControl(targetInput, lockStatus)) {
-        skippedCellsCount += 1;
-        continue;
+      if (r > 0) {
+        rowInputs[0].scrollIntoView({ block: 'nearest', inline: 'start' });
+        const okRowDelay = await interruptibleSleep(250);
+        if (!okRowDelay || abortedByUser) break;
       }
 
-      if (isSpecialStatusSelect(targetInput)) {
-        skippedCellsCount += 1;
-        if (!isDirectIndexMapping && sequentialCursor < rowValues.length) {
-          sequentialCursor += 1;
+      const isDirectIndexMapping = (rowValues.length === rowInputs.length);
+      let sequentialCursor = 0;
+      if (!isDirectIndexMapping && startAbsCol > 0) {
+        for (let prevIdx = 0; prevIdx < startAbsCol; prevIdx++) {
+          const prevInput = rowInputs[prevIdx];
+          const prevLock = inspectCellLock(prevInput);
+          if (!prevInput.disabled && !prevInput.readOnly && !isInactiveSkippableControl(prevInput, prevLock)) {
+            sequentialCursor += 1;
+          }
         }
-        continue;
       }
 
-      let cellValue;
-      if (isDirectIndexMapping) {
-        cellValue = rowValues[absColIdx];
-      } else {
-        if (sequentialCursor >= rowValues.length) break;
-        cellValue = rowValues[sequentialCursor];
-        sequentialCursor += 1;
-      }
+      let rowTouchedAnyCell = false;
 
-      const isColSelected = selectedColSet ? selectedColSet.has(absColIdx) : false;
-      if (runMeta.randomMode === 'selected' && selectedColSet && !isColSelected && cellValue === undefined) {
-        continue;
-      }
-
-      injectCellValueVueReactive(targetInput, cellValue);
-      lastFilledInput = targetInput;
-      currentTargetEl = targetInput;
-      lastFocusedParamCell = targetInput;
-      rowTouchedAnyCell = true;
-      filledCellsCount += 1;
-
-      if (progressRefs) {
-        const pct = Math.min(100, Math.round((filledCellsCount / totalPlannedFillable) * 100));
-        progressRefs.fillEl.style.width = `${pct}%`;
-        progressRefs.pctEl.textContent = `${pct}%`;
-        progressRefs.statusEl.textContent = `Mengisi baris jam ${cleanRowJam} • Kolom #${absColIdx + 1} dari #${rowInputs.length}`;
-      }
-
-      const hasMoreDirect = isDirectIndexMapping && (absColIdx < rowInputs.length - 1);
-      const hasMoreSeq = !isDirectIndexMapping && (sequentialCursor < rowValues.length) && (absColIdx < rowInputs.length - 1);
-      if (hasMoreDirect || hasMoreSeq) {
-        const okCellDelay = await interruptibleSleep(speedMs);
-        if (!okCellDelay || abortedByUser) break;
-      }
-    }
-
-    if (rowTouchedAnyCell) {
-      filledRowsCount += 1;
-      lastRowNeedsAutosaveSync = true;
-      if (rowTimeLabel) {
-        lastCompletedRowTime = rowTimeLabel;
-      }
-    }
-
-    if (!isRunning || abortedByUser || stoppedByBrake) break;
-
-    if (r < totalRows - 1) {
-      if (rowTouchedAnyCell) {
-        await waitForDilocAutosaveSync(progressRefs);
-        lastRowNeedsAutosaveSync = false;
+      for (let absColIdx = startAbsCol; absColIdx < rowInputs.length; absColIdx++) {
         if (!isRunning || abortedByUser) break;
+
+        const targetInput = rowInputs[absColIdx];
+        const lockStatus = inspectCellLock(targetInput);
+
+        if (lockStatus.notArrived || lockStatus.permissionLocked) {
+          stoppedByBrake = true;
+          blockedTime = rowTimeLabel;
+          blockedNotArrived = lockStatus.notArrived;
+          break;
+        }
+
+        if (targetInput.disabled || targetInput.readOnly || isInactiveSkippableControl(targetInput, lockStatus)) {
+          skippedCellsCount += 1;
+          continue;
+        }
+
+        if (isSpecialStatusSelect(targetInput)) {
+          skippedCellsCount += 1;
+          if (!isDirectIndexMapping && sequentialCursor < rowValues.length) {
+            sequentialCursor += 1;
+          }
+          continue;
+        }
+
+        let cellValue;
+        if (isDirectIndexMapping) {
+          cellValue = rowValues[absColIdx];
+        } else {
+          if (sequentialCursor >= rowValues.length) break;
+          cellValue = rowValues[sequentialCursor];
+          sequentialCursor += 1;
+        }
+
+        const isColSelected = selectedColSet ? selectedColSet.has(absColIdx) : false;
+        if (runMeta.randomMode === 'selected' && selectedColSet && !isColSelected && cellValue === undefined) {
+          continue;
+        }
+
+        injectCellValueVueReactive(targetInput, cellValue);
+        lastFilledInput = targetInput;
+        currentTargetEl = targetInput;
+        lastFocusedParamCell = targetInput;
+        rowTouchedAnyCell = true;
+        filledCellsCount += 1;
+
+        if (progressRefs) {
+          const pct = Math.min(100, Math.round((filledCellsCount / totalPlannedFillable) * 100));
+          progressRefs.fillEl.style.width = `${pct}%`;
+          progressRefs.pctEl.textContent = `${pct}%`;
+          progressRefs.statusEl.textContent = `Mengisi baris jam ${cleanRowJam} • Kolom #${absColIdx + 1} dari #${rowInputs.length}`;
+        }
+
+        const hasMoreDirect = isDirectIndexMapping && (absColIdx < rowInputs.length - 1);
+        const hasMoreSeq = !isDirectIndexMapping && (sequentialCursor < rowValues.length) && (absColIdx < rowInputs.length - 1);
+        if (hasMoreDirect || hasMoreSeq) {
+          const okCellDelay = await interruptibleSleep(speedMs);
+          if (!okCellDelay || abortedByUser) break;
+        }
       }
 
-      const nextRow = getNextDataRow(currentRow);
-      if (!nextRow) {
-        break;
+      if (rowTouchedAnyCell) {
+        filledRowsCount += 1;
+        lastRowNeedsAutosaveSync = true;
+        if (rowTimeLabel) {
+          lastCompletedRowTime = rowTimeLabel;
+        }
       }
-      currentRow = nextRow;
+
+      if (!isRunning || abortedByUser || stoppedByBrake) break;
+
+      if (r < totalRows - 1) {
+        if (rowTouchedAnyCell) {
+          await waitForDilocAutosaveSync(progressRefs);
+          lastRowNeedsAutosaveSync = false;
+          if (!isRunning || abortedByUser) break;
+        }
+
+        const nextRow = getNextDataRow(currentRow);
+        if (!nextRow) {
+          break;
+        }
+        currentRow = nextRow;
+      }
     }
+
+    if (lastFilledInput && document.body && document.body.contains(lastFilledInput) && !inspectCellLock(lastFilledInput).locked) {
+      lastFocusedParamCell = lastFilledInput;
+      currentTargetEl = lastFilledInput;
+    }
+
+    if (isRunning && !abortedByUser && lastRowNeedsAutosaveSync) {
+      await waitForDilocAutosaveSync(progressRefs);
+    }
+
+    if (progressRefs && !abortedByUser && !stoppedByBrake) {
+      progressRefs.fillEl.style.width = '100%';
+      progressRefs.pctEl.textContent = '100%';
+    }
+  } finally {
+    sleepController.cleanupWorker();
+    if (activeSleepController === sleepController) {
+      activeSleepController = null;
+    }
+    isRunning = false;
+    activeAbortCallback = null;
+    syncRunningState(false);
   }
 
-  if (lastFilledInput && document.body && document.body.contains(lastFilledInput) && !inspectCellLock(lastFilledInput).locked) {
-    lastFocusedParamCell = lastFilledInput;
-    currentTargetEl = lastFilledInput;
+  // Auto-reset hanya 3 pengaturan (randomMode, typingSpeedMs, rowCount) jika pengisian 100% sukses tanpa batal/rem
+  const isFullSuccess = !abortedByUser && !stoppedByBrake && filledCellsCount > 0;
+  if (isFullSuccess) {
+    await autoResetSettingsAfterExecution();
   }
-
-  if (isRunning && !abortedByUser && lastRowNeedsAutosaveSync) {
-    await waitForDilocAutosaveSync(progressRefs);
-  }
-
-  if (progressRefs && !abortedByUser && !stoppedByBrake) {
-    progressRefs.fillEl.style.width = '100%';
-    progressRefs.pctEl.textContent = '100%';
-  }
-
-  isRunning = false;
-  activeAbortCallback = null;
-  syncRunningState(false);
-
-  // Auto-reset setting setelah Phase 2 benar-benar dieksekusi (selesai maupun dibatalkan tengah jalan)
-  await autoResetSettingsAfterExecution();
 
   if (session) {
     await renderPhase3Summary(session, {
@@ -1991,6 +2069,166 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}, se
   }
 }
 
+function createReusableWorkerSleepController() {
+  let worker = null;
+  let blobUrl = '';
+  let useFallback = false;
+  let cleanedUp = false;
+  let nextId = 1;
+  const pendingSleeps = new Map();
+
+  const resolveEntry = (id) => {
+    const entry = pendingSleeps.get(id);
+    if (!entry) return;
+    pendingSleeps.delete(id);
+    if (entry.fallbackTimerId !== null) {
+      clearTimeout(entry.fallbackTimerId);
+      entry.fallbackTimerId = null;
+    }
+    entry.resolve();
+  };
+
+  const disposeBrokenWorker = () => {
+    if (worker) {
+      worker.onmessage = null;
+      worker.onerror = null;
+      try {
+        worker.terminate();
+      } catch (e) {}
+      worker = null;
+    }
+    if (blobUrl) {
+      try {
+        URL.revokeObjectURL(blobUrl);
+      } catch (e) {}
+      blobUrl = '';
+    }
+  };
+
+  const fallbackAllPendingSleeps = () => {
+    useFallback = true;
+    disposeBrokenWorker();
+    if (cleanedUp) return;
+
+    const entries = Array.from(pendingSleeps.values());
+    for (const entry of entries) {
+      if (entry.fallbackTimerId !== null) {
+        clearTimeout(entry.fallbackTimerId);
+        entry.fallbackTimerId = null;
+      }
+      const elapsed = Date.now() - entry.startedAt;
+      const remaining = Math.max(0, entry.durationMs - elapsed);
+      if (remaining === 0) {
+        resolveEntry(entry.id);
+      } else {
+        entry.fallbackTimerId = setTimeout(() => resolveEntry(entry.id), remaining);
+      }
+    }
+  };
+
+  if (
+    typeof Worker !== 'function' ||
+    typeof Blob !== 'function' ||
+    typeof URL === 'undefined' ||
+    typeof URL.createObjectURL !== 'function'
+  ) {
+    useFallback = true;
+  } else {
+    try {
+      const workerSource =
+        'var timers={};' +
+        'self.onmessage=function(e){' +
+        'var d=e.data||{};' +
+        'if(d.type==="cancel"){clearTimeout(timers[d.id]);delete timers[d.id];return;}' +
+        'var id=d.id;var ms=Math.max(0,Number(d.ms)||0);' +
+        'timers[id]=setTimeout(function(){delete timers[id];self.postMessage({id:id});},ms);' +
+        '};';
+      const blob = new Blob([workerSource], { type: 'application/javascript' });
+      blobUrl = URL.createObjectURL(blob);
+      worker = new Worker(blobUrl);
+
+      worker.onmessage = (e) => {
+        const msgId = e && e.data ? e.data.id : null;
+        if (msgId !== null && msgId !== undefined) {
+          resolveEntry(msgId);
+        }
+      };
+
+      worker.onerror = () => {
+        fallbackAllPendingSleeps();
+      };
+    } catch (err) {
+      useFallback = true;
+      disposeBrokenWorker();
+    }
+  }
+
+  const sleepWithController = (ms) => {
+    const safeMs = Math.max(0, Number(ms) || 0);
+    if (cleanedUp || safeMs === 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      const id = nextId++;
+      const entry = {
+        id,
+        resolve,
+        fallbackTimerId: null,
+        startedAt: Date.now(),
+        durationMs: safeMs
+      };
+      pendingSleeps.set(id, entry);
+
+      if (useFallback || !worker) {
+        entry.fallbackTimerId = setTimeout(() => resolveEntry(id), safeMs);
+        return;
+      }
+
+      entry.fallbackTimerId = setTimeout(() => resolveEntry(id), safeMs + 2500);
+      try {
+        worker.postMessage({ id, ms: safeMs });
+      } catch (err) {
+        fallbackAllPendingSleeps();
+      }
+    });
+  };
+
+  const wakeUpAll = () => {
+    const ids = Array.from(pendingSleeps.keys());
+    for (const id of ids) {
+      if (worker && !useFallback) {
+        try {
+          worker.postMessage({ type: 'cancel', id });
+        } catch (e) {}
+      }
+      resolveEntry(id);
+    }
+  };
+
+  const cleanupWorker = () => {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    wakeUpAll();
+    disposeBrokenWorker();
+  };
+
+  return {
+    sleep: sleepWithController,
+    wakeUpAll,
+    cleanupWorker,
+    getPendingCount: () => pendingSleeps.size,
+    isUsingFallback: () => useFallback
+  };
+}
+
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  if (activeSleepController) {
+    return activeSleepController.sleep(ms);
+  }
+  const safeMs = Math.max(0, Number(ms) || 0);
+  if (safeMs === 0) {
+    return Promise.resolve();
+  }
+  return new Promise(resolve => setTimeout(resolve, safeMs));
 }

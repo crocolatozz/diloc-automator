@@ -899,7 +899,7 @@
     <header class="toolbar">
       <div class="brand-group">
         <h1 class="brand-title">DILOC Automator — Dev Workbench</h1>
-        <span class="folder-lock-pill" title="Target folder ekstensi dikunci ke pmr-web-runner">pmr-web-runner</span>
+        <span class="folder-lock-pill" title="Target folder ekstensi dikunci ke diloc-automator">diloc-automator</span>
         <span id="manifest-meta" class="manifest-meta">Memuat manifest...</span>
       </div>
 
@@ -955,7 +955,7 @@
             <div class="chrome-popup-window">
               <div class="chrome-window-bar">
                 <span id="popup-win-title" class="chrome-window-title">DILOC Automator</span>
-                <span id="popup-win-path" class="chrome-window-path">./pmr-web-runner/popup.html</span>
+                <span id="popup-win-path" class="chrome-window-path">./diloc-automator/popup.html</span>
               </div>
               <iframe
                 id="popup-frame"
@@ -1055,7 +1055,7 @@
         <div class="options-stage">
           <div class="options-bar">
             <span>
-              Pratinjau Penuh: <code id="options-path-label">./pmr-web-runner/options.html</code>
+              Pratinjau Penuh: <code id="options-path-label">./diloc-automator/options.html</code>
             </span>
             <button id="back-to-popup-btn" type="button" class="btn btn-sm">
               Kembali ke Popup + Target Web
@@ -1095,7 +1095,7 @@
     (function () {
       'use strict';
 
-      const FIXED_FOLDER = 'pmr-web-runner';
+      const FIXED_FOLDER = 'diloc-automator';
       const OPERATOR_COLUMN_COUNTS = {
         operator1: 167,
         operator2: 51,
@@ -1644,7 +1644,7 @@
                 return state.manifest ? cloneVal(state.manifest) : {
                   manifest_version: 3,
                   name: 'DILOC Automator',
-                  version: '2.0.0'
+                  version: '2.1.2'
                 };
               },
               openOptionsPage: function (callback) {
@@ -2307,7 +2307,7 @@
 
       // Event Listeners
       elReloadBtn.addEventListener('click', function () {
-        addLog('tabs', 'workbench', 'Memuat ulang workbench pmr-web-runner');
+        addLog('tabs', 'workbench', 'Memuat ulang workbench diloc-automator');
         loadExtension();
       });
 

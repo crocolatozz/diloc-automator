@@ -32,7 +32,8 @@ const PMR_ICON_PATHS = {
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
   lock: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   shuffle: '<polyline points="16 3 21 3 21 8"/><line x1="4" x2="21" y1="20" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" x2="21" y1="15" y2="21"/><line x1="4" x2="9" y1="4" y2="9"/>',
-  keyboard: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.001"/><path d="M10 8h.001"/><path d="M14 8h.001"/><path d="M18 8h.001"/><path d="M8 12h.001"/><path d="M12 12h.001"/><path d="M16 12h.001"/><path d="M7 16h10"/>'
+  keyboard: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.001"/><path d="M10 8h.001"/><path d="M14 8h.001"/><path d="M18 8h.001"/><path d="M8 12h.001"/><path d="M12 12h.001"/><path d="M16 12h.001"/><path d="M7 16h10"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>'
 };
 
 const PMR_ROBOT_RED_SVG_INNER =
@@ -73,5 +74,92 @@ function hydrateDataIcons(root = document) {
     if (svgEl) {
       el.replaceWith(svgEl);
     }
+  });
+}
+
+function setElementTooltip(wrapEl, text) {
+  if (!wrapEl) return;
+  const cleanText = String(text || '').trim();
+  wrapEl.setAttribute('data-tooltip', cleanText);
+
+  let bubble = Array.from(wrapEl.children).find(ch => ch.classList && ch.classList.contains('custom-tooltip'));
+  if (!cleanText) {
+    if (bubble) bubble.remove();
+    return;
+  }
+
+  if (!bubble) {
+    bubble = document.createElement('span');
+    bubble.className = 'custom-tooltip';
+    bubble.setAttribute('role', 'tooltip');
+    bubble.setAttribute('aria-hidden', 'true');
+    bubble.innerHTML = `${renderIcon('info', { size: 12, className: 'tooltip-info-icon' })}<span class="custom-tooltip-text"></span>`;
+    wrapEl.appendChild(bubble);
+  }
+  const textNode = bubble.querySelector('.custom-tooltip-text');
+  if (textNode) {
+    textNode.textContent = cleanText;
+  }
+}
+
+function adjustTooltipAlignment(wrapEl) {
+  if (!wrapEl || typeof wrapEl.getBoundingClientRect !== 'function') return;
+  const bubble = Array.from(wrapEl.children).find(ch => ch.classList && ch.classList.contains('custom-tooltip'));
+  if (!bubble) return;
+
+  const vw = window.innerWidth || document.documentElement.clientWidth || 360;
+  const vh = window.innerHeight || document.documentElement.clientHeight || 480;
+  const rect = wrapEl.getBoundingClientRect();
+  const estWidth = Math.min(240, Math.max(110, bubble.offsetWidth || 180));
+  const estHeight = bubble.offsetHeight || 34;
+
+  const defaultAlign = wrapEl.getAttribute('data-tooltip-default-align') || wrapEl.getAttribute('data-tooltip-align') || 'center';
+  const defaultPos = wrapEl.getAttribute('data-tooltip-default-pos') || wrapEl.getAttribute('data-tooltip-pos') || 'top';
+
+  if (!wrapEl.hasAttribute('data-tooltip-default-align')) {
+    wrapEl.setAttribute('data-tooltip-default-align', defaultAlign);
+  }
+  if (!wrapEl.hasAttribute('data-tooltip-default-pos')) {
+    wrapEl.setAttribute('data-tooltip-default-pos', defaultPos);
+  }
+
+  let nextAlign = defaultAlign;
+  const centerLeft = rect.left + (rect.width / 2) - (estWidth / 2);
+  const centerRight = rect.left + (rect.width / 2) + (estWidth / 2);
+
+  if (nextAlign === 'center') {
+    if (centerRight > vw - 8 && rect.right - estWidth >= 8) {
+      nextAlign = 'right';
+    } else if (centerLeft < 8 && rect.left + estWidth <= vw - 8) {
+      nextAlign = 'left';
+    }
+  } else if (nextAlign === 'left' && rect.left + estWidth > vw - 8) {
+    nextAlign = 'right';
+  } else if (nextAlign === 'right' && rect.right - estWidth < 8) {
+    nextAlign = 'left';
+  }
+
+  let nextPos = defaultPos;
+  if (nextPos === 'top' && rect.top - estHeight - 10 < 4 && rect.bottom + estHeight + 10 <= vh - 4) {
+    nextPos = 'bottom';
+  } else if (nextPos === 'bottom' && rect.bottom + estHeight + 10 > vh - 4 && rect.top - estHeight - 10 >= 4) {
+    nextPos = 'top';
+  }
+
+  wrapEl.setAttribute('data-tooltip-align', nextAlign);
+  wrapEl.setAttribute('data-tooltip-pos', nextPos);
+}
+
+function initCustomTooltips(root = document) {
+  const wraps = root.querySelectorAll('.tooltip-wrap');
+  wraps.forEach((wrapEl) => {
+    const initial = wrapEl.getAttribute('data-tooltip') || '';
+    if (initial) {
+      setElementTooltip(wrapEl, initial);
+    }
+    if (wrapEl.dataset.tooltipBound === 'true') return;
+    wrapEl.dataset.tooltipBound = 'true';
+    wrapEl.addEventListener('mouseenter', () => adjustTooltipAlignment(wrapEl));
+    wrapEl.addEventListener('focusin', () => adjustTooltipAlignment(wrapEl));
   });
 }

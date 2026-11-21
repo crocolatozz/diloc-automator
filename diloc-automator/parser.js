@@ -258,13 +258,17 @@ function extractCleanCellListFromJson(data) {
 
   return list.map(item => {
     if (item && typeof item === 'object') {
-      if (typeof item.arrowIndex === 'number' && item.arrowIndex >= 1) {
+      if (typeof item.arrowIndex === 'number' && !Number.isNaN(item.arrowIndex) && item.arrowIndex >= 1) {
         return encodeDropdownArrowToken(item.arrowIndex);
       }
-      const raw = item.value ?? item.val ?? '';
-      const arrowFromRaw = parseDropdownArrowToken(raw);
+      const raw = Object.prototype.hasOwnProperty.call(item, 'value') ? item.value : item.val;
+      if (typeof raw !== 'string' && !(typeof raw === 'number' && !Number.isNaN(raw))) {
+        return '';
+      }
+      const strVal = String(raw);
+      const arrowFromRaw = parseDropdownArrowToken(strVal);
       if (arrowFromRaw !== null) return encodeDropdownArrowToken(arrowFromRaw);
-      return sanitizeCellBuffer(String(raw));
+      return sanitizeCellBuffer(strVal);
     }
     const str = String(item);
     const arrowFromRaw = parseDropdownArrowToken(str);
@@ -286,7 +290,7 @@ function parsePMRData(data) {
   if (cleanCells && cleanCells.length > 0) {
     const seq = [];
     for (let i = 0; i < cleanCells.length; i++) {
-      const nav = i < cleanCells.length - 1 ? 'Key.tab' : null;
+      const nav = (i < cleanCells.length - 1 || cleanCells[i] === '') ? 'Key.tab' : null;
       appendSanitizedCellToSequence(seq, cleanCells[i], nav);
     }
     return seq;
@@ -490,12 +494,112 @@ function buildMacroRecord(fileName, sequence, operatorKey = '') {
   };
 }
 
+function validateNativePresetStructure(rawData, standardCounts) {
+  if (!Array.isArray(rawData.cells) || rawData.cells.length === 0) {
+    const err = new Error('File JSON preset tidak valid: properti "cells" harus berupa array tidak kosong.');
+    err.code = 'STRICT_OPERATOR_MISMATCH';
+    throw err;
+  }
+
+  const isValidCellValueType = (val) =>
+    typeof val === 'string' || (typeof val === 'number' && !Number.isNaN(val));
+
+  for (let i = 0; i < rawData.cells.length; i++) {
+    const item = rawData.cells[i];
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      const err = new Error(`File JSON preset rusak pada sel ke-${i + 1}: format item tidak valid.`);
+      err.code = 'STRICT_OPERATOR_MISMATCH';
+      throw err;
+    }
+
+    const hasValueProp = Object.prototype.hasOwnProperty.call(item, 'value');
+    const hasValProp = Object.prototype.hasOwnProperty.call(item, 'val');
+    const hasArrowProp = Object.prototype.hasOwnProperty.call(item, 'arrowIndex');
+
+    if (hasValueProp) {
+      if (!isValidCellValueType(item.value)) {
+        const err = new Error(`File JSON preset rusak pada sel ke-${i + 1}: tipe "value" tidak valid.`);
+        err.code = 'STRICT_OPERATOR_MISMATCH';
+        throw err;
+      }
+      item.value = String(item.value);
+    } else if (hasValProp) {
+      if (!isValidCellValueType(item.val)) {
+        const err = new Error(`File JSON preset rusak pada sel ke-${i + 1}: tipe "val" tidak valid.`);
+        err.code = 'STRICT_OPERATOR_MISMATCH';
+        throw err;
+      }
+      item.val = String(item.val);
+    } else if (hasArrowProp) {
+      if (typeof item.arrowIndex !== 'number' || Number.isNaN(item.arrowIndex) || item.arrowIndex < 1) {
+        const err = new Error(`File JSON preset rusak pada sel ke-${i + 1}: "arrowIndex" tidak valid.`);
+        err.code = 'STRICT_OPERATOR_MISMATCH';
+        throw err;
+      }
+    } else {
+      const err = new Error(`File JSON preset tidak lengkap pada sel ke-${i + 1}: properti "value" tidak ditemukan.`);
+      err.code = 'STRICT_OPERATOR_MISMATCH';
+      throw err;
+    }
+
+    if (item.index !== undefined && (!Number.isInteger(item.index) || item.index < 0 || item.index >= rawData.cells.length)) {
+      const err = new Error(`File JSON preset rusak pada sel ke-${i + 1}: indeks sel tidak valid.`);
+      err.code = 'STRICT_OPERATOR_MISMATCH';
+      throw err;
+    }
+  }
+
+  if (rawData.opLap !== undefined && rawData.opLap !== null) {
+    const opNum = Number(rawData.opLap);
+    if (!Number.isInteger(opNum) || ![1, 2, 3].includes(opNum)) {
+      const err = new Error(`File JSON preset tidak valid: nilai "opLap" (${String(rawData.opLap)}) harus 1, 2, atau 3.`);
+      err.code = 'STRICT_OPERATOR_MISMATCH';
+      throw err;
+    }
+    const candidateOp = `operator${opNum}`;
+    const expectedCount = Number(standardCounts && standardCounts[candidateOp]) || PRESET_EXPECTED_COUNTS[candidateOp];
+    if (rawData.cells.length !== expectedCount) {
+      const err = new Error(
+        `File ditolak: preset Op. Lap ${opNum} terbaca ${rawData.cells.length} kolom, seharusnya ${expectedCount} kolom.`
+      );
+      err.code = 'STRICT_OPERATOR_MISMATCH';
+      err.readCount = rawData.cells.length;
+      err.standardCounts = standardCounts;
+      throw err;
+    }
+  }
+}
+
 async function persistImportedMacroFile(fileName, rawData) {
+  const isNativePreset = Boolean(
+    rawData &&
+    typeof rawData === 'object' &&
+    !Array.isArray(rawData) &&
+    rawData.format === 'diloc-automator-preset'
+  );
+
   const standardCounts = await getStandardOperatorCountsFromStorage();
+
+  if (isNativePreset) {
+    validateNativePresetStructure(rawData, standardCounts);
+  }
+
   const parsedSeq = parsePMRData(rawData);
   const cells = groupSequenceIntoCells(parsedSeq);
   const totalCells = cells.length;
-  const matchedOp = resolveStrictOperatorByCount(totalCells, standardCounts, fileName);
+
+  let matchedOp = '';
+  if (isNativePreset && [1, 2, 3].includes(Number(rawData.opLap))) {
+    const candidateOp = `operator${Number(rawData.opLap)}`;
+    if (Number(standardCounts[candidateOp]) === totalCells) {
+      matchedOp = candidateOp;
+    }
+  }
+  if (!matchedOp && !isNativePreset) {
+    matchedOp = resolveStrictOperatorByCount(totalCells, standardCounts, fileName);
+  } else if (!matchedOp && isNativePreset && rawData.opLap === undefined) {
+    matchedOp = resolveStrictOperatorByCount(totalCells, standardCounts, fileName);
+  }
 
   if (parsedSeq.length === 0 || totalCells === 0 || !matchedOp) {
     const err = new Error(formatRejectedFileMessage(totalCells, standardCounts));
@@ -509,7 +613,8 @@ async function persistImportedMacroFile(fileName, rawData) {
     'selectedCellsByPreset',
     'selectedCellIndices',
     'activePreset',
-    'macrosByPreset'
+    'macrosByPreset',
+    'randomRange'
   ]);
 
   const existingByPreset = (existing.selectedCellsByPreset && typeof existing.selectedCellsByPreset === 'object')
@@ -541,9 +646,33 @@ async function persistImportedMacroFile(fileName, rawData) {
   const macroRecord = buildMacroRecord(fileName, parsedSeq, matchedOp);
   existingMacrosByPreset[matchedOp] = macroRecord;
 
-  const restoredForPreset = Array.isArray(existingByPreset[matchedOp])
-    ? existingByPreset[matchedOp].filter(idx => idx >= 0 && idx < totalCells)
-    : [];
+  let restoredForPreset;
+  if (isNativePreset) {
+    const checkedIndices = [];
+    rawData.cells.forEach((item, arrayIdx) => {
+      const idx = (item && typeof item.index === 'number' && Number.isInteger(item.index))
+        ? item.index
+        : arrayIdx;
+      if (
+        idx >= 0 &&
+        idx < totalCells &&
+        item &&
+        item.checked === true &&
+        cells[idx] &&
+        cells[idx].isRandomizable &&
+        !checkedIndices.includes(idx)
+      ) {
+        checkedIndices.push(idx);
+      }
+    });
+    checkedIndices.sort((a, b) => a - b);
+    existingByPreset[matchedOp] = checkedIndices;
+    restoredForPreset = checkedIndices;
+  } else {
+    restoredForPreset = Array.isArray(existingByPreset[matchedOp])
+      ? existingByPreset[matchedOp].filter(idx => idx >= 0 && idx < totalCells)
+      : [];
+  }
 
   const storagePayload = {
     savedMacro: macroRecord,
@@ -556,6 +685,16 @@ async function persistImportedMacroFile(fileName, rawData) {
     macroRunning: false
   };
 
+  if (isNativePreset) {
+    storagePayload.randomMode = restoredForPreset.length > 0 ? 'selected' : 'off';
+    if (restoredForPreset.length > 0) {
+      const curRange = parseInt(existing.randomRange, 10);
+      if (curRange !== 1 && curRange !== 2 && curRange !== 3) {
+        storagePayload.randomRange = 1;
+      }
+    }
+  }
+
   await chrome.storage.local.set(storagePayload);
   try {
     await chrome.storage.local.remove('fileSourceType');
@@ -563,6 +702,7 @@ async function persistImportedMacroFile(fileName, rawData) {
 
   return {
     ...storagePayload,
+    isNativePreset,
     operatorKey: matchedOp,
     totalCells
   };

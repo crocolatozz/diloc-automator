@@ -2,6 +2,45 @@
 
 Semua perubahan penting pada proyek **DILOC Automator** (sebelumnya *PMR Web Runner*) dicatat dalam file ini.
 
+## [2.1.2] - 2026-11-21
+
+### Changed
+- **Arsitektur 1 Reusable Web Worker per Eksekusi (`content.js`):** Mengubah mekanisme jeda `sleep(ms)` agar hanya membuat 1 instance `Blob` Web Worker per eksekusi (awal Fase 2) menggunakan antrean `Map` (`pendingSleeps`) berbasis `id` unik, mendukung *wake-up* instan seluruh antrean saat user klik `Stop`/`Batal`, serta memanggil `cleanupWorker()` satu kali di blok `finally` (`worker.terminate()` + `URL.revokeObjectURL()`).
+- **`Export JSON` Membaca Langsung Storage Permanen (`options.js`):** Memastikan tombol `Export JSON` selalu mengambil data file aktif (`savedMacro`), `headerMeta`, dan `selectedCellsByPreset` terbaru langsung dari `chrome.storage.local` sehingga hasil export tetap akurat setelah impor via Popup atau refresh halaman Options.
+- **Sinkronisasi Versi Final `v2.1.2` (`manifest.json`, `popup.html`, `options.html`, `options.js`, `import.html`, `index.html`, `README.txt`, `README.md`):** Memperbarui nomor versi ke `v2.1.2` termasuk metadata `"version": "2.1.2"` pada file JSON hasil export, dengan footer `© 2026 — Developed by FIKRI`.
+
+### Fixed
+- **Fallback CSP Asinkron pada Antrean Web Worker (`content.js`):** Memasang `try-catch` dan `worker.onerror` pada Worker reusable agar bila diblokir CSP atau gagal asinkron, `useFallback = true` aktif seketika, Worker rusak dihentikan, dan seluruh `pendingSleeps` langsung dialihkan ke `setTimeout` tanpa hang di sel pertama.
+- **Double-Lock Anti-Nyangkut Status `Running` (`content.js`, `popup.js`):** Mereset status eksekusi ke idle (`isRunning: false`) saat `content.js` dimuat pada halaman DILOC dan saat `beforeunload` bila tab ditutup/di-refresh di tengah proses, serta menyinkronkan validasi status aktif tab DILOC di `popup.js` ke `chrome.storage.local` agar tombol `Play` tidak pernah terkunci mati.
+- **Validasi Ketat Import JSON Anti-Jebakan Angka `0` (`parser.js`):** Mengganti pengecekan nilai di `validateNativePresetStructure()` dan `extractCleanCellListFromJson()` menjadi validasi tipe eksplisit `(typeof val === 'string' || (typeof val === 'number' && !Number.isNaN(val)))` + konversi `String(...)` serta mempertahankan sel terakhir bernilai kosong `""`, sehingga angka `0` murni dan string kosong lolos mulus sementara `null`, `undefined`, `NaN`, maupun objek ditolak rapi.
+
+## [2.1.1] - 2026-11-21
+
+### Changed
+- **Pemangkasan & Penyempurnaan Floating Tooltip (`popup.html`, `popup.js`, `options.html`, `options.js`):** Mempertahankan floating tooltip hanya pada elemen krusial — di Popup pada tombol Hapus File (`×`) dan `Play` saat `disabled`, serta di Options pada tombol Hapus File (`×`), `Export JSON` (dinamis menampilkan rincian `"Export Op. Lap X (N sel, M dicentang)"` saat aktif atau alasan saat `disabled`), dan 3 badge ringkasan.
+- **Kolom Sticky Kiri Solid Anti-Bleed & Kontras Tabel Options (`options.html`):** Menyeragamkan seluruh label kolom sticky kiri menjadi `12px SemiBold` (`#cbd5e1`) dengan latar belakang solid `#080c14` (tanpa transparansi `rgba`), `z-index: 5`, dan batas vertikal kanan `2px solid #334155`, serta mencerahkan teks *Satuan / Tipe* pada kolom `.col-selected`.
+- **Pembedaan Warna Tombol & Rename `Buka DILOC Editor` (`options.html`):** Mengubah tombol `Simulasi Acak` ke aksen outline amber/oranye (`.btn-amber`), membedakan `Export JSON` dengan aksen biru/cyan (`.btn-export`) dan status `disabled` redup yang tegas, serta mengganti label `"Buka PMR Editor"` menjadi **`"Buka DILOC Editor"`** dengan aksen emerald outline (`.btn-editor`).
+- **Sinkronisasi Versi v2.1.1 (`manifest.json`, `popup.html`, `options.html`, `options.js`, `import.html`, `index.html`, `README.txt`, `README.md`):** Memperbarui versi ke `v2.1.1` beserta versi metadata export JSON.
+
+### Fixed
+- **Pembersihan Web Worker & Fallback CSP di `sleep(ms)` (`content.js`):** Memastikan setiap timer `Blob` Web Worker langsung memanggil `worker.terminate()` dan `URL.revokeObjectURL()` tepat setelah delay selesai serta fallback instan ke `setTimeout` pada `worker.onerror` atau blokir CSP tanpa menggantung Promise maupun membocorkan memori RAM.
+- **Validasi Ketat Struktur Import JSON Native (`parser.js`):** Menambahkan validasi struktur `diloc-automator-preset` (`opLap` valid `1`/`2`/`3` wajib cocok tepat dengan jumlah kolom `167`/`51`/`44`, tipe array `cells`, properti `index` dan `value` valid) sehingga file JSON native yang dimanipulasi atau rusak ditolak rapi dengan pesan error terstruktur tanpa crash.
+
+## [2.1.0] - 2026-11-21
+
+### Added
+- **Export & Import JSON Native (`options.html`, `options.js`, `parser.js`, `randomizer.js`):** Menambahkan tombol **Export JSON** khusus di halaman Options untuk mengunduh preset bersih format `diloc-automator-preset` (`DILOC_OpLap{1|2|3}_Preset_YYYY-MM-DD.json`) lengkap dengan nilai bersih dan status centang per sel; saat diimpor ulang via Popup atau Mini Window Import, `persistImportedMacroFile()` otomatis memulihkan daftar centang serta mengaktifkan mode `Selected` bila ada sel tercentang.
+- **Tombol Hapus File Termuat (`×`) & Modal Konfirmasi (`popup.html`, `popup.js`, `options.html`, `options.js`):** Menambahkan tombol ikon silang (`×`) di Status Card Popup dan pil file aktif Options yang membuka overlay modal konfirmasi *in-DOM* bebas shortcut keyboard (hanya melepas file aktif dan menjaga `selectedCellsByPreset` tetap aman, serta otomatis disembunyikan/nonaktif selama eksekusi berlangsung).
+- **Sistem Floating Tooltip CSS Adaptif (`icons.js`, `popup.html`, `popup.js`, `options.html`, `options.js`):** Menambahkan tooltip kustom bertunda `250ms` dengan ikon SVG `info` (`12px`) yang menyesuaikan posisi tepi jendela secara otomatis, termasuk alasan dinamis pada tombol `Play` (saat `disabled`) di Popup dan `Export JSON` / tombol toolbar / badge ringkasan di Options.
+
+### Changed
+- **Migrasi Folder Repositori ke `diloc-automator/` (`index.html`, `README.md`, `README.txt`, `manifest.json`):** Memindahkan seluruh file inti ekstensi dari `pmr-web-runner/` ke `diloc-automator/`, menghapus folder lama, serta memperbarui seluruh path dokumentasi, Dev Workbench `index.html`, badge versi Popup (`v2.1.0`), Mini Window Import (`v2.1.0 · .PMR / .JSON`), dan footer Options.
+- **Hierarki Tipografi & Kontras Tabel Options (`options.html`):** Memperbesar judul header (`20px Bold`) dan angka data inti (`15px Bold tabular-nums`), memisahkan hierarki kolom sticky kiri (4 baris metadata muted `11px` vs 3 baris inti `13px SemiBold`), mencerahkan teks *Equipment* saat `.col-selected`, serta mempertegas sel preview berubah (`#fef08a` di atas hijau gelap `#15803d`/`#166534`).
+- **Auto-Reset Selektif Setelah 100% Sukses (`content.js`):** Mengubah `autoResetSettingsAfterExecution()` agar hanya berjalan ketika `!abortedByUser && !stoppedByBrake && filledCellsCount > 0`, dan hanya mereset 3 pengaturan (`randomMode: 'off'`, `typingSpeedMs: 400`, `rowCount: 1`) tanpa menghapus file maupun preset centang pengguna.
+
+### Fixed
+- **Web Worker Anti-Throttle Tab Background & Proteksi Baris Terkunci (`content.js`):** Mengimplementasikan `sleep(ms)` berbasis *inline Blob Web Worker* lengkap dengan penanganan CSP (`try/catch` + `worker.onerror` ke `setTimeout`) agar pengisian tetap berjalan lancar saat tab berada di latar belakang, serta mengamankan kondisi kursor di baris `row-outside-shift` / `Jam belum tiba` / berstatus non-Normal agar langsung diarahkan ke modal Fase 3 tanpa macet di Fase 2.
+
 ## [2.0.0] - 2026-11-20
 
 ### Changed

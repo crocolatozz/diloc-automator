@@ -17,6 +17,7 @@ let activeTableFilter = "all";
 let currentTheme = "light";
 let lastCells = [];
 let lastPreviewResults = [];
+let isMacroRunning = false;
 let isSyncingFromStorage = false;
 
 const PRESET_NAMES = {
@@ -26,6 +27,8 @@ const PRESET_NAMES = {
 };
 
 const activeFilePill = document.getElementById('activeFilePill');
+const clearFileBtnWrap = document.getElementById('clearFileBtnWrap');
+const clearFileBtn = document.getElementById('clearFileBtn');
 const macroFileOptions = document.getElementById('macroFileOptions');
 const fileLabelTop = document.querySelector('label[for="macroFileOptions"]');
 const themeToggleBtn = document.getElementById('themeToggleBtn');
@@ -39,8 +42,14 @@ const filterButtons = document.querySelectorAll('.filter-btn');
 const selectAllNumBtn = document.getElementById('selectAllNumBtn');
 const clearAllBtn = document.getElementById('clearAllBtn');
 const rerollPreviewBtn = document.getElementById('rerollPreviewBtn');
+const exportJsonWrap = document.getElementById('exportJsonWrap');
+const exportJsonBtn = document.getElementById('exportJsonBtn');
 const searchInput = document.getElementById('searchInput');
 const saveToast = document.getElementById('saveToast');
+const clearConfirmModal = document.getElementById('clearConfirmModal');
+const clearConfirmFileName = document.getElementById('clearConfirmFileName');
+const confirmClearCancelBtn = document.getElementById('confirmClearCancelBtn');
+const confirmClearOkBtn = document.getElementById('confirmClearOkBtn');
 
 function getPresetStorageKey(presetKey) {
   return presetKey && PRESET_SHORT_LABELS[presetKey] ? presetKey : 'operator1';
@@ -194,6 +203,34 @@ function syncToolbarState() {
   selectAllNumBtn.disabled = !hasData;
   clearAllBtn.disabled = !hasData || selectedSet.size === 0;
   rerollPreviewBtn.disabled = !hasData || randomMode === 'off';
+
+  if (exportJsonBtn) {
+    exportJsonBtn.disabled = !hasData;
+  }
+  if (exportJsonWrap) {
+    if (hasData) {
+      const cells = groupSequenceIntoCells(loadedSequence);
+      const resolvedOpKey = activePreset && PRESET_NAMES[activePreset]
+        ? activePreset
+        : resolveStrictOperatorByCount(cells.length, operatorStandardCounts, loadedFileName);
+      const opLapNum = resolvedOpKey === 'operator2' ? 2 : (resolvedOpKey === 'operator3' ? 3 : 1);
+      const checkedCount = cells.filter(c => c.isRandomizable && selectedSet.has(c.index)).length;
+      setElementTooltip(
+        exportJsonWrap,
+        `Export Op. Lap ${opLapNum} (${cells.length} sel, ${checkedCount} dicentang)`
+      );
+    } else {
+      setElementTooltip(
+        exportJsonWrap,
+        'Muat file .pmr / .json terlebih dahulu untuk Export JSON'
+      );
+    }
+  }
+  if (clearFileBtnWrap && clearFileBtn) {
+    const canClear = Boolean(hasData) && !isMacroRunning;
+    clearFileBtnWrap.hidden = !canClear;
+    clearFileBtn.disabled = !canClear;
+  }
 }
 
 function renderMismatchBanner(totalCells) {
@@ -365,10 +402,17 @@ function renderStatsBadges(randomizableCount, lockedTotal, zeroCount, textCount,
   }
 
   statsBadges.innerHTML = `
-    <span class="badge blue">${renderIcon('shuffle', { size: 13 })}<span>Bisa Diacak: <span class="count">${randomizableCount}</span></span></span>
-    <span class="badge amber">${renderIcon('lock', { size: 13 })}<span>Dikunci: <span class="count">${lockedTotal}</span> (<span class="count-zero">${zeroCount}</span> nilai nol, <span class="count-text">${textCount}</span> teks/dropdown)</span></span>
-    <span class="badge green">${renderIcon('checkSquare', { size: 13 })}<span>Dicentang: <span class="count">${validSelectedCount}</span></span></span>
+    <span class="tooltip-wrap" data-tooltip="Jumlah sel angka bukan nol yang bisa diacak" data-tooltip-pos="top" data-tooltip-align="left">
+      <span class="badge blue">${renderIcon('shuffle', { size: 13 })}<span>Bisa Diacak: <span class="count">${randomizableCount}</span></span></span>
+    </span>
+    <span class="tooltip-wrap" data-tooltip="Sel bernilai 0, teks, atau dropdown otomatis dikunci" data-tooltip-pos="top" data-tooltip-align="center">
+      <span class="badge amber">${renderIcon('lock', { size: 13 })}<span>Dikunci: <span class="count">${lockedTotal}</span> (<span class="count-zero">${zeroCount}</span> nilai nol, <span class="count-text">${textCount}</span> teks/dropdown)</span></span>
+    </span>
+    <span class="tooltip-wrap" data-tooltip="Jumlah sel yang dipilih untuk mode Selected" data-tooltip-pos="top" data-tooltip-align="center">
+      <span class="badge green">${renderIcon('checkSquare', { size: 13 })}<span>Dicentang: <span class="count">${validSelectedCount}</span></span></span>
+    </span>
   `;
+  initCustomTooltips(statsBadges);
 }
 
 function renderAll() {
@@ -608,6 +652,12 @@ macroFileOptions.addEventListener('change', (e) => {
       headerMeta = result.headerMeta || [];
       selectedCellsByPreset = result.selectedCellsByPreset || {};
       selectedSet = new Set(result.selectedCellIndices || []);
+      if (typeof result.randomMode === 'string') {
+        randomMode = result.randomMode;
+      }
+      if (result.randomRange !== undefined) {
+        randomRange = sanitizeRandomRange(result.randomRange, true);
+      }
 
       hideOptionsAlert();
       renderAll();
@@ -686,6 +736,197 @@ rerollPreviewBtn.addEventListener('click', () => {
   renderAll();
   notifySaved("Simulasi preview diperbarui", "dice");
 });
+
+async function buildNativeExportPayload() {
+  let storageData = {};
+  try {
+    storageData = await chrome.storage.local.get([
+      'savedMacro',
+      'activePreset',
+      'headerMeta',
+      'operatorStandardCounts',
+      'selectedCellsByPreset',
+      'selectedCellIndices'
+    ]);
+  } catch (e) {
+    storageData = {};
+  }
+
+  const savedMacro = storageData && storageData.savedMacro;
+  const sequence = (savedMacro && Array.isArray(savedMacro.sequence) && savedMacro.sequence.length > 0)
+    ? savedMacro.sequence
+    : loadedSequence;
+  if (!Array.isArray(sequence) || sequence.length === 0) {
+    return null;
+  }
+
+  const fileName = (savedMacro && savedMacro.fileName) ? savedMacro.fileName : loadedFileName;
+  const stdCounts = (storageData && storageData.operatorStandardCounts)
+    ? normalizeStandardCounts(storageData.operatorStandardCounts)
+    : operatorStandardCounts;
+  const cells = groupSequenceIntoCells(sequence);
+
+  const storedPreset = (storageData && typeof storageData.activePreset === 'string')
+    ? storageData.activePreset
+    : activePreset;
+  const resolvedOpKey = (storedPreset && PRESET_NAMES[storedPreset] && Number(stdCounts[storedPreset]) === cells.length)
+    ? storedPreset
+    : (resolveStrictOperatorByCount(cells.length, stdCounts, fileName) || getPresetStorageKey(storedPreset));
+  const opLapNum = resolvedOpKey === 'operator2' ? 2 : (resolvedOpKey === 'operator3' ? 3 : 1);
+
+  let exportMeta = (Array.isArray(storageData && storageData.headerMeta) && storageData.headerMeta.length > 0)
+    ? storageData.headerMeta
+    : headerMeta;
+  if ((!Array.isArray(exportMeta) || exportMeta.length === 0) && typeof fetchBuiltInPreset === 'function') {
+    try {
+      const fetchedMeta = await fetchBuiltInPreset(resolvedOpKey);
+      if (Array.isArray(fetchedMeta) && fetchedMeta.length > 0) {
+        exportMeta = fetchedMeta;
+      }
+    } catch (e) {}
+  }
+
+  const byPreset = (storageData && storageData.selectedCellsByPreset && typeof storageData.selectedCellsByPreset === 'object')
+    ? storageData.selectedCellsByPreset
+    : selectedCellsByPreset;
+  let storedCheckedList;
+  if (byPreset && Array.isArray(byPreset[resolvedOpKey])) {
+    storedCheckedList = byPreset[resolvedOpKey];
+  } else if (Array.isArray(storageData && storageData.selectedCellIndices)) {
+    storedCheckedList = storageData.selectedCellIndices;
+  } else {
+    storedCheckedList = Array.from(selectedSet);
+  }
+  const storedCheckedSet = new Set(
+    storedCheckedList.filter(idx => Number.isInteger(idx) && idx >= 0 && idx < cells.length)
+  );
+
+  const exportedCells = cells.map((cell) => {
+    const meta = exportMeta[cell.index] || null;
+    const isChecked = cell.isRandomizable ? storedCheckedSet.has(cell.index) : false;
+    const cellType = (cell.isDropdownArrow || (meta && meta.type === 'select'))
+      ? 'dropdown'
+      : (cell.isNumeric ? 'number' : 'text');
+
+    return {
+      index: cell.index,
+      tag: meta && meta.tag ? meta.tag : `Sel #${cell.index + 1}`,
+      equipment: meta && meta.equipment ? meta.equipment : '-',
+      type: cellType,
+      value: resolveCleanExportValue(cell, meta),
+      checked: isChecked
+    };
+  });
+
+  return {
+    opLapNum,
+    payload: {
+      format: 'diloc-automator-preset',
+      version: '2.1.2',
+      opLap: opLapNum,
+      exportedAt: new Date().toISOString(),
+      cells: exportedCells
+    }
+  };
+}
+
+async function exportNativeJsonPreset() {
+  const result = await buildNativeExportPayload();
+  if (!result) {
+    notifySaved('Belum ada file aktif untuk di-export', 'warn', 'warn');
+    return;
+  }
+  const { opLapNum, payload } = result;
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const exportFileName = `DILOC_OpLap${opLapNum}_Preset_${yyyy}-${mm}-${dd}.json`;
+
+  const jsonText = JSON.stringify(payload, null, 2);
+  const blob = new Blob([jsonText], { type: 'application/json;charset=utf-8' });
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = exportFileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => {
+    try {
+      URL.revokeObjectURL(blobUrl);
+    } catch (e) {}
+  }, 500);
+
+  notifySaved(`Export ${exportFileName} berhasil`, 'download');
+}
+
+if (exportJsonBtn) {
+  exportJsonBtn.addEventListener('click', () => {
+    exportNativeJsonPreset();
+  });
+}
+
+function openClearConfirmModal() {
+  if (!clearConfirmModal || isMacroRunning || !loadedSequence || loadedSequence.length === 0) return;
+  if (document.activeElement && typeof document.activeElement.blur === 'function') {
+    try {
+      document.activeElement.blur();
+    } catch (e) {}
+  }
+  if (clearConfirmFileName) {
+    clearConfirmFileName.textContent = loadedFileName || 'macro.pmr';
+  }
+  clearConfirmModal.hidden = false;
+}
+
+function closeClearConfirmModal() {
+  if (!clearConfirmModal) return;
+  clearConfirmModal.hidden = true;
+}
+
+async function performClearLoadedFile() {
+  closeClearConfirmModal();
+  loadedSequence = [];
+  loadedFileName = '';
+  activePreset = '';
+  headerMeta = [];
+  selectedSet = new Set();
+  hideOptionsAlert();
+  try {
+    await chrome.storage.local.remove(['savedMacro', 'activePreset', 'headerMeta', 'fileSourceType']);
+    await chrome.storage.local.set({ selectedCellIndices: [] });
+  } catch (e) {}
+  renderAll();
+  notifySaved('File termuat dilepas (preset centang aman)', 'xCircle');
+}
+
+if (clearFileBtn) {
+  clearFileBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openClearConfirmModal();
+  });
+}
+
+if (confirmClearCancelBtn) {
+  confirmClearCancelBtn.addEventListener('click', () => {
+    closeClearConfirmModal();
+  });
+}
+
+if (confirmClearOkBtn) {
+  confirmClearOkBtn.addEventListener('click', () => {
+    performClearLoadedFile();
+  });
+}
+
+if (clearConfirmModal) {
+  clearConfirmModal.addEventListener('click', (e) => {
+    if (e.target === clearConfirmModal) {
+      closeClearConfirmModal();
+    }
+  });
+}
 
 function applySearchHighlight(shouldScroll = true) {
   const query = searchInput.value.trim().toLowerCase();
@@ -781,7 +1022,20 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       } else {
         loadedSequence = [];
         loadedFileName = '';
+        if (!changes.activePreset) {
+          activePreset = '';
+        }
+        if (!changes.headerMeta) {
+          headerMeta = [];
+        }
+        if (!changes.selectedCellIndices && !changes.selectedCellsByPreset) {
+          selectedSet = new Set();
+        }
       }
+      tableDirty = true;
+    }
+    if (changes.macroRunning) {
+      isMacroRunning = Boolean(changes.macroRunning.newValue);
       tableDirty = true;
     }
     if (changes.macrosByPreset) {
@@ -848,9 +1102,11 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 document.addEventListener('DOMContentLoaded', async () => {
   hydrateDataIcons();
+  initCustomTooltips();
 
   const stdCounts = await syncOperatorStandardCountsToStorage();
   const data = await chrome.storage.local.get([...UNIFIED_STORAGE_KEYS, 'fileSourceType']);
+  isMacroRunning = Boolean(data.macroRunning);
 
   let initialTheme = data.optionsTheme;
   if (initialTheme !== 'dark' && initialTheme !== 'light') {

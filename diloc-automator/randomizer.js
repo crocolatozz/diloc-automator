@@ -177,6 +177,22 @@ function buildPlaybackSequence(baseSequence, mode, selectedIndices, headerMeta =
   return outputSequence;
 }
 
+function resolveCleanExportValue(cell, meta = null) {
+  if (!cell) return '';
+  if (cell.isDropdownArrow) {
+    const rawOpts = meta && Array.isArray(meta.options) ? meta.options : [];
+    const validOpts = rawOpts
+      .map(o => String(o ?? '').trim())
+      .filter(txt => txt !== '' && !/^(select\.{0,3}|pilih\.{0,3}|-+|--.*)?$/i.test(txt));
+    if (validOpts.length > 0) {
+      const idx = Math.min(validOpts.length - 1, Math.max(0, (Number(cell.arrowStepIndex) || 1) - 1));
+      return validOpts[idx];
+    }
+    return String(cell.rawValue ?? '');
+  }
+  return String(cell.rawValue ?? '');
+}
+
 function normalizeHeaderMetadata(rawJson) {
   const list = Array.isArray(rawJson)
     ? rawJson
@@ -184,14 +200,23 @@ function normalizeHeaderMetadata(rawJson) {
 
   if (!Array.isArray(list) || list.length === 0) return [];
 
-  return list.map((item, idx) => ({
-    index: typeof item.index === 'number' ? item.index : idx,
-    equipment: String(item.equipment || item.group || item.area || '-').trim(),
-    tag: String(item.tag || item.code || item.id || `Sel #${idx + 1}`).trim(),
-    label: String(item.label || item.name || item.nama || '').trim(),
-    unit: String(item.unit || item.satuan || '-').trim(),
-    type: String(item.type || '').trim().toLowerCase()
-  }));
+  return list.map((item, idx) => {
+    const rawOptions = Array.isArray(item.options)
+      ? item.options
+      : (Array.isArray(item.choices) ? item.choices : (Array.isArray(item.values) ? item.values : null));
+    const entry = {
+      index: typeof item.index === 'number' ? item.index : idx,
+      equipment: String(item.equipment || item.group || item.area || '-').trim(),
+      tag: String(item.tag || item.code || item.id || `Sel #${idx + 1}`).trim(),
+      label: String(item.label || item.name || item.nama || '').trim(),
+      unit: String(item.unit || item.satuan || '-').trim(),
+      type: String(item.type || '').trim().toLowerCase()
+    };
+    if (rawOptions) {
+      entry.options = rawOptions.map(o => String(o ?? '').trim()).filter(Boolean);
+    }
+    return entry;
+  });
 }
 
 async function fetchBuiltInPreset(presetKey) {

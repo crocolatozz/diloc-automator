@@ -183,6 +183,18 @@
       transition: color 0.25s ease;
     }
 
+    .popup-ver-badge {
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 1.5px 6px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.14);
+      border: 1px solid rgba(16, 185, 129, 0.45);
+      color: var(--text-pill-active);
+      flex-shrink: 0;
+      letter-spacing: 0.01em;
+    }
+
     /* Interactive Sliding Pill Toggle */
     .theme-pill-switch {
       position: relative;
@@ -294,6 +306,99 @@
     :root[data-theme="dark"] .speed-icon-normal { color: #34d399; }
     :root[data-theme="dark"] .speed-icon-santai { color: #38bdf8; }
 
+    /* Custom CSS Floating Tooltip System */
+    .tooltip-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .tooltip-wrap.tooltip-block {
+      display: block;
+      width: 100%;
+    }
+
+    .custom-tooltip {
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 7px);
+      transform: translateX(-50%) translateY(3px);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      max-width: 240px;
+      width: max-content;
+      padding: 5px 8px;
+      border-radius: 7px;
+      background: #0f172a;
+      color: #f8fafc;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      box-shadow: 0 8px 20px rgba(2, 6, 23, 0.38);
+      font-size: 10.5px;
+      font-weight: 600;
+      line-height: 1.35;
+      text-align: left;
+      white-space: normal;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      z-index: 60;
+      transition: opacity 0.14s ease 0ms, transform 0.14s ease 0ms, visibility 0s linear 0.14s;
+    }
+
+    :root[data-theme="dark"] .custom-tooltip {
+      background: #1e293b;
+      color: #f8fafc;
+      border-color: rgba(148, 163, 184, 0.42);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55);
+    }
+
+    .custom-tooltip .tooltip-info-icon {
+      color: #38bdf8;
+      flex-shrink: 0;
+    }
+
+    .tooltip-wrap[data-tooltip-pos="bottom"] > .custom-tooltip {
+      bottom: auto;
+      top: calc(100% + 7px);
+      transform: translateX(-50%) translateY(-3px);
+    }
+
+    .tooltip-wrap[data-tooltip-align="left"] > .custom-tooltip {
+      left: 0;
+      transform: translateX(0) translateY(3px);
+    }
+
+    .tooltip-wrap[data-tooltip-pos="bottom"][data-tooltip-align="left"] > .custom-tooltip {
+      transform: translateX(0) translateY(-3px);
+    }
+
+    .tooltip-wrap[data-tooltip-align="right"] > .custom-tooltip {
+      left: auto;
+      right: 0;
+      transform: translateX(0) translateY(3px);
+    }
+
+    .tooltip-wrap[data-tooltip-pos="bottom"][data-tooltip-align="right"] > .custom-tooltip {
+      transform: translateX(0) translateY(-3px);
+    }
+
+    .tooltip-wrap:hover > .custom-tooltip,
+    .tooltip-wrap:focus-within > .custom-tooltip {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+      transition: opacity 0.16s ease 250ms, transform 0.16s ease 250ms, visibility 0s linear 250ms;
+    }
+
+    .tooltip-wrap[data-tooltip-align="left"]:hover > .custom-tooltip,
+    .tooltip-wrap[data-tooltip-align="left"]:focus-within > .custom-tooltip,
+    .tooltip-wrap[data-tooltip-align="right"]:hover > .custom-tooltip,
+    .tooltip-wrap[data-tooltip-align="right"]:focus-within > .custom-tooltip {
+      transform: translateX(0) translateY(0);
+    }
+
     .custom-file-upload {
       display: flex;
       align-items: center;
@@ -326,8 +431,9 @@
     }
 
     .status-card {
+      position: relative;
       margin: 8px 0 9px 0;
-      padding: 7px 10px;
+      padding: 7px 28px;
       border-radius: 8px;
       border: 1px solid var(--border-soft);
       background: var(--bg-card);
@@ -341,6 +447,46 @@
 
     .status-card[hidden] {
       display: none;
+    }
+
+    .clear-file-wrap {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+    }
+
+    .clear-file-wrap[hidden] {
+      display: none;
+    }
+
+    .clear-file-btn {
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border-radius: 6px;
+      border: 1px solid rgba(239, 68, 68, 0.28);
+      background: rgba(239, 68, 68, 0.12);
+      color: #ef4444;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.1s ease;
+    }
+
+    .clear-file-btn:hover:not(:disabled) {
+      background: #dc2626;
+      border-color: #ef4444;
+      color: #ffffff;
+    }
+
+    .clear-file-btn:active:not(:disabled) {
+      transform: scale(0.94);
+    }
+
+    .clear-file-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
     }
 
     .status-line {
@@ -677,6 +823,113 @@
       letter-spacing: 0.2px;
       transition: border-color 0.25s ease, color 0.25s ease;
     }
+
+    /* Custom In-DOM Confirm Modal */
+    .confirm-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.72);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
+      z-index: 120;
+    }
+
+    .confirm-modal-backdrop[hidden] {
+      display: none;
+    }
+
+    .confirm-modal-card {
+      width: 100%;
+      max-width: 300px;
+      background: #0f172a;
+      color: #f1f5f9;
+      border: 1px solid rgba(245, 158, 11, 0.48);
+      border-radius: 12px;
+      box-shadow: 0 20px 44px rgba(0, 0, 0, 0.6);
+      padding: 15px 15px 14px;
+      text-align: center;
+    }
+
+    .confirm-modal-icon {
+      width: 34px;
+      height: 34px;
+      margin: 0 auto 8px;
+      border-radius: 9px;
+      background: rgba(245, 158, 11, 0.16);
+      border: 1px solid rgba(251, 191, 36, 0.45);
+      color: #fbbf24;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .confirm-modal-title {
+      margin: 0 0 6px;
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    .confirm-modal-desc {
+      margin: 0;
+      font-size: 11px;
+      line-height: 1.45;
+      color: #cbd5e1;
+      word-break: break-word;
+    }
+
+    .confirm-modal-file {
+      display: block;
+      margin-top: 4px;
+      font-weight: 700;
+      color: #fde68a;
+    }
+
+    .confirm-modal-actions {
+      margin-top: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .confirm-modal-btn {
+      flex: 1;
+      padding: 7px 10px;
+      border-radius: 7px;
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+
+    .confirm-btn-cancel {
+      background: rgba(148, 163, 184, 0.16);
+      color: #e2e8f0;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+    }
+
+    .confirm-btn-cancel:hover {
+      background: rgba(148, 163, 184, 0.28);
+    }
+
+    .confirm-btn-danger {
+      background: #dc2626;
+      color: #ffffff;
+      border: 1px solid #ef4444;
+    }
+
+    .confirm-btn-danger:hover {
+      background: #b91c1c;
+    }
   </style>
 </head>
 <body>
@@ -684,6 +937,7 @@
     <div class="popup-brand">
       <span data-icon="robotRed" data-icon-size="22"></span>
       <h4>DILOC Automator</h4>
+      <span class="popup-ver-badge">v2.1.2</span>
     </div>
     <button
       id="themeToggleBtn"
@@ -706,6 +960,11 @@
   </div>
 
   <div id="statusCard" class="status-card" hidden>
+    <div id="clearFileBtnWrap" class="tooltip-wrap clear-file-wrap" data-tooltip="Hapus file termuat" data-tooltip-pos="bottom" data-tooltip-align="right" hidden>
+      <button id="clearFileBtn" type="button" class="clear-file-btn" aria-label="Hapus file termuat">
+        <span data-icon="x" data-icon-size="13"></span>
+      </button>
+    </div>
     <div id="statusLineFile" class="status-line status-line-file"></div>
     <div id="statusLineOp" class="status-line status-line-op"></div>
   </div>
@@ -766,10 +1025,12 @@
 
   <div id="popupAlert" class="inline-alert" role="alert" hidden></div>
 
-  <button id="toggleBtn" disabled>
-    <span data-icon="play" data-icon-size="15"></span>
-    <span>Play</span>
-  </button>
+  <div id="playBtnWrap" class="tooltip-wrap tooltip-block" data-tooltip="Muat file .pmr / .json terlebih dahulu" data-tooltip-pos="top" data-tooltip-align="center">
+    <button id="toggleBtn" disabled>
+      <span data-icon="play" data-icon-size="15"></span>
+      <span>Play</span>
+    </button>
+  </div>
 
   <button id="openSettingsBtn" class="btn-setting">
     <span data-icon="settings" data-icon-class="icon-sky" data-icon-size="14"></span>
@@ -777,6 +1038,23 @@
   </button>
 
   <div class="footer-credit">© 2026 — Developed by FIKRI</div>
+
+  <div id="clearConfirmModal" class="confirm-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="clearConfirmTitle" hidden>
+    <div class="confirm-modal-card">
+      <div class="confirm-modal-icon">
+        <span data-icon="warn" data-icon-size="18"></span>
+      </div>
+      <h5 id="clearConfirmTitle" class="confirm-modal-title">Hapus File Termuat?</h5>
+      <p class="confirm-modal-desc">
+        File aktif berikut akan dilepas dari runner, namun preset centang Op. Lap tetap aman:
+        <span id="clearConfirmFileName" class="confirm-modal-file"></span>
+      </p>
+      <div class="confirm-modal-actions">
+        <button id="confirmClearCancelBtn" type="button" class="confirm-modal-btn confirm-btn-cancel">Batal</button>
+        <button id="confirmClearOkBtn" type="button" class="confirm-modal-btn confirm-btn-danger">Ya, Hapus</button>
+      </div>
+    </div>
+  </div>
 
   <script src="icons.js"></script>
   <script src="parser.js"></script>

@@ -25,10 +25,14 @@ function handleSelectedFile(file) {
     try {
       const rawData = JSON.parse(event.target.result);
       const result = await persistImportedMacroFile(file.name, rawData);
+      const restoredCount = Array.isArray(result.selectedCellIndices) ? result.selectedCellIndices.length : 0;
+      const presetNote = result.isNativePreset && restoredCount > 0
+        ? ` + ${restoredCount} centang`
+        : '';
       setImportStatus(
         'checkCircle',
         'icon-emerald',
-        `${file.name} dimuat (${result.totalCells} data). Menutup jendela...`,
+        `${file.name} dimuat (${result.totalCells} data${presetNote}). Menutup jendela...`,
         'ok'
       );
       setTimeout(() => {
@@ -58,6 +62,15 @@ function handleSelectedFile(file) {
 document.addEventListener('DOMContentLoaded', () => {
   hydrateDataIcons();
 });
+
+if (chrome.storage && chrome.storage.onChanged && typeof chrome.storage.onChanged.addListener === 'function') {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== 'local') return;
+    if (changes.savedMacro && !changes.savedMacro.newValue) {
+      setImportStatus('', '', 'Pilih file .pmr / .json dari komputer Anda', '');
+    }
+  });
+}
 
 if (importFileInput) {
   importFileInput.addEventListener('change', (e) => {
