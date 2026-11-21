@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PMR Web Runner — Dev Workbench</title>
-  <meta name="description" content="Live-preview workbench, DILOC logsheet simulator, and Chrome MV3 API simulator for PMR Web Runner." />
-  <meta property="og:title" content="PMR Web Runner — Dev Workbench" />
-  <meta property="og:description" content="Live-preview workbench, DILOC logsheet simulator, and Chrome MV3 API simulator for PMR Web Runner." />
+  <title>DILOC Automator — Dev Workbench</title>
+  <meta name="description" content="Live-preview workbench, DILOC logsheet simulator, and Chrome MV3 API simulator for DILOC Automator." />
+  <meta property="og:title" content="DILOC Automator — Dev Workbench" />
+  <meta property="og:description" content="Live-preview workbench, DILOC logsheet simulator, and Chrome MV3 API simulator for DILOC Automator." />
   <meta property="og:type" content="website" />
   <style>
     :root {
@@ -898,7 +898,7 @@
     <!-- Header Toolbar -->
     <header class="toolbar">
       <div class="brand-group">
-        <h1 class="brand-title">PMR Web Runner — Dev Workbench</h1>
+        <h1 class="brand-title">DILOC Automator — Dev Workbench</h1>
         <span class="folder-lock-pill" title="Target folder ekstensi dikunci ke pmr-web-runner">pmr-web-runner</span>
         <span id="manifest-meta" class="manifest-meta">Memuat manifest...</span>
       </div>
@@ -954,7 +954,7 @@
 
             <div class="chrome-popup-window">
               <div class="chrome-window-bar">
-                <span id="popup-win-title" class="chrome-window-title">PMR Web Runner</span>
+                <span id="popup-win-title" class="chrome-window-title">DILOC Automator</span>
                 <span id="popup-win-path" class="chrome-window-path">./pmr-web-runner/popup.html</span>
               </div>
               <iframe
@@ -1084,7 +1084,7 @@
   <div id="mini-window-backdrop" class="mini-window-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="mini-window-title">
     <div class="mini-window-shell">
       <div class="mini-window-bar">
-        <span id="mini-window-title" class="mini-window-title">Import File — PMR Web Runner</span>
+        <span id="mini-window-title" class="mini-window-title">Import File — DILOC Automator</span>
         <button id="mini-window-close" type="button" class="mini-window-close">Tutup</button>
       </div>
       <iframe id="mini-window-frame" class="mini-window-iframe" title="Mini Window Import PMR"></iframe>
@@ -1643,8 +1643,8 @@
               getManifest: function () {
                 return state.manifest ? cloneVal(state.manifest) : {
                   manifest_version: 3,
-                  name: folder,
-                  version: '1.11.0'
+                  name: 'DILOC Automator',
+                  version: '2.0.0'
                 };
               },
               openOptionsPage: function (callback) {
@@ -1886,7 +1886,7 @@
             const lockTitle = isFutureRow
               ? ' title="Jam belum tiba"'
               : (isOp3Inactive25 ? ' title="Hanya aktif jam 06:00 / 14:00 / 22:00"' : '');
-            const tdAttrs = ' class="data-cell' + (isLockedCell ? ' cell-locked' : '') + '"' + lockTitle;
+            const tdAttrs = ' class="data-cell' + (isLockedCell ? ' cell-locked' : '') + (isFutureRow ? ' cell-outside-shift' : '') + '"' + lockTitle;
             const controlAttrs = isLockedCell ? ' disabled' + lockTitle : '';
             const isDefaultSpecialCell = (r === 2 && oneBased === 4 && !isLockedCell);
 
@@ -1907,7 +1907,7 @@
               tds +=
                 '<td' + tdAttrs + '>' +
                   '<select class="cell-input diloc-cell-input"' + controlAttrs + ' data-row="' + r + '" data-col="' + oneBased + '" aria-label="' + escapeHtml(timeText + ' ' + columns[c].tag) + '">' +
-                    '<option value="">-</option>' +
+                    '<option value="">Select...</option>' +
                     '<option value="AUTO">AUTO</option>' +
                     '<option value="MANUAL">MANUAL</option>' +
                     '<option value="ON">ON</option>' +
@@ -1926,7 +1926,8 @@
               tds += '<td class="display-cell"><span class="disp-val">CALC</span></td>';
             }
           }
-          rowsHtml += '<tr>' + tds + '</tr>';
+          const trClass = isFutureRow ? 'data-row row-outside-shift' : 'data-row';
+          rowsHtml += '<tr class="' + trClass + '">' + tds + '</tr>';
         }
 
         const shortOpLabel = String(operatorKey || '').replace(/^operator/i, 'OP ').toUpperCase();
@@ -2172,7 +2173,7 @@
       async function openMiniWindowOverlay(rawUrl) {
         const cleanName = String(rawUrl || 'import.html').split('/').pop().split('?')[0] || 'import.html';
         const targetUrl = './' + FIXED_FOLDER + '/' + cleanName;
-        elMiniTitle.textContent = 'Import File — PMR Web Runner';
+        elMiniTitle.textContent = 'Import File — DILOC Automator';
         elMiniBackdrop.classList.remove('is-hidden');
         try {
           const res = await fetch(targetUrl + '?_ts=' + Date.now(), { cache: 'no-store' });

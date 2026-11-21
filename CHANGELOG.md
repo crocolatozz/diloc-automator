@@ -1,6 +1,17 @@
 # Changelog
 
-Semua perubahan penting pada proyek **PMR Web Runner** dicatat dalam file ini.
+Semua perubahan penting pada proyek **DILOC Automator** (sebelumnya *PMR Web Runner*) dicatat dalam file ini.
+
+## [2.0.0] - 2026-11-20
+
+### Changed
+- **Rebranding Total ke DILOC Automator (`v2.0.0`):** Memperbarui nama ekstensi di `manifest.json`, `<title>` HTML, header `popup.html`, `options.html`, `import.html`, modal `content.js`, `README.txt`, `README.md`, `CHANGELOG.md`, serta `index.html` dengan tetap mempertahankan 100% *storage key* `chrome.storage.local` agar preset pengguna tetap aman.
+- **Identitas Visual Red Robot (`icons/` PNG & Inline SVG):** Menambahkan aset ikon ekstensi PNG tajam (`icons/icon16.png`, `icons/icon48.png`, `icons/icon128.png`), ikon header & favicon SVG Red Robot di Popup, Options, dan Mini Window Import, serta ikon SVG Keyboard di modal progres Fase 2.
+- **Perataan Visual Popup & Pill Badge Options (`popup.html`, `options.js`):** Menjadikan Status Card 2 baris di Popup rata tengah (*center-aligned*) dengan ellipsis rapi untuk nama file panjang, serta memecah ringkasan sel di Options menjadi 3 pill badge berwarna (`Bisa Diacak`, `Dikunci`, `Dicentang`) dengan pembaruan angka inkremental yang menjaga ikon SVG tetap utuh.
+- **Modal Blur 3 Fase 100% Bebas Shortcut Keyboard (`content.js`):** Menghapus seluruh event listener `ESC`/`Enter`, badge `(ESC)`/`(Enter)`, serta auto-focus pada tombol modal, dan menambahkan `.blur()` pada elemen aktif saat modal dibuka agar tombol keyboard tidak pernah memicu aksi modal secara tidak sengaja.
+
+### Fixed
+- **Kompatibilitas DOM DILOC Nyata (`content.js`, `index.html`):** Mengutamakan selektor `tbody tr.data-row`, mengenali `<select>` dengan opsi `"Select..."` / `value=""` sebagai sel kosong (`isCellEmpty`) pada Auto-Detect maupun Phase 1, menyempurnakan pemetaan panah dropdown 1-to-1 (*input* + *change* + *focusout*), serta memproteksi `row-outside-shift`, `cell-outside-shift`, dan baris berstatus non-Normal agar dilewati/dihentikan aman.
 
 ## [1.11.0] - 2026-11-20
 

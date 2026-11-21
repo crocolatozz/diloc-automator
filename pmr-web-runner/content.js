@@ -130,6 +130,7 @@ function inspectCellLock(inputEl) {
     return {
       locked: true,
       notArrived: false,
+      outsideShift: false,
       permissionLocked: false,
       cellLocked: false,
       isDisabledOrReadOnly: true,
@@ -137,10 +138,16 @@ function inspectCellLock(inputEl) {
     };
   }
 
+  const tr = inputEl.closest('tr');
   const td = inputEl.closest('td.data-cell') || inputEl.closest('td, th');
   const tdTitle = td ? String(td.getAttribute('title') || '').toLowerCase() : '';
   const elTitle = String(inputEl.getAttribute('title') || '').toLowerCase();
-  const notArrived = tdTitle.includes('jam belum tiba') || elTitle.includes('jam belum tiba');
+  const outsideShift = Boolean(
+    (tr && tr.classList.contains('row-outside-shift')) ||
+    (td && td.classList.contains('cell-outside-shift')) ||
+    inputEl.classList.contains('cell-outside-shift')
+  );
+  const notArrived = tdTitle.includes('jam belum tiba') || elTitle.includes('jam belum tiba') || outsideShift;
 
   const permissionLocked = Boolean(
     (td && td.classList.contains('permission-locked')) ||
@@ -157,6 +164,7 @@ function inspectCellLock(inputEl) {
   return {
     locked: notArrived || permissionLocked || cellLocked || isDisabledOrReadOnly,
     notArrived,
+    outsideShift,
     permissionLocked,
     cellLocked,
     isDisabledOrReadOnly
@@ -171,10 +179,19 @@ function isInactiveSkippableControl(inputEl, lockStatus = null) {
 
 function isLockedDomNode(node) {
   if (!node) return false;
+  const tr = node.closest ? node.closest('tr') : null;
+  if (tr && tr.classList.contains('row-outside-shift')) {
+    return true;
+  }
   const td = node.closest ? (node.closest('td.data-cell') || node.closest('td, th')) : null;
   if (td) {
     const tdTitle = String(td.getAttribute('title') || '').toLowerCase();
-    if (td.classList.contains('cell-locked') || td.classList.contains('permission-locked') || tdTitle.includes('jam belum tiba')) {
+    if (
+      td.classList.contains('cell-locked') ||
+      td.classList.contains('cell-outside-shift') ||
+      td.classList.contains('permission-locked') ||
+      tdTitle.includes('jam belum tiba')
+    ) {
       return true;
     }
     const innerInput = td.querySelector('input:not([type="hidden"]), select, textarea');
@@ -232,9 +249,41 @@ function getControlRowInfo(el) {
 }
 
 function getAllDataRows() {
+  const dilocRows = Array.from(document.querySelectorAll('tbody tr.data-row')).filter(tr => getRowDataCellInputs(tr).length > 0);
+  if (dilocRows.length > 0) return dilocRows;
   const tbodyRows = Array.from(document.querySelectorAll('tbody tr')).filter(tr => getRowDataCellInputs(tr).length > 0);
   if (tbodyRows.length > 0) return tbodyRows;
   return Array.from(document.querySelectorAll('table tr')).filter(tr => getRowDataCellInputs(tr).length > 0);
+}
+
+function isRowOutsideShift(tr) {
+  if (!tr) return false;
+  if (tr.classList && tr.classList.contains('row-outside-shift')) return true;
+  const paramTds = getRowParamTds(tr);
+  return paramTds.length > 0 && paramTds.every(td => td.classList.contains('cell-outside-shift'));
+}
+
+function getRowNonNormalStatusLabel(tr) {
+  if (!tr) return '';
+  const paramTdSet = new Set(getRowParamTds(tr));
+  const metaTds = Array.from(tr.children).filter(el => el.tagName === 'TD' && !paramTdSet.has(el));
+  for (const td of metaTds) {
+    const sel = td.querySelector('select');
+    if (!sel) continue;
+    const val = String(sel.value ?? '').trim();
+    const selOpt = (typeof sel.selectedIndex === 'number' && sel.selectedIndex >= 0 && sel.options && sel.options[sel.selectedIndex])
+      ? sel.options[sel.selectedIndex]
+      : null;
+    const txt = selOpt ? String(selOpt.textContent ?? '').trim() : '';
+    if (SPECIAL_STATUS_VALUE_RE.test(val) || SPECIAL_STATUS_TEXT_RE.test(txt)) {
+      return txt || val || 'Status Khusus';
+    }
+  }
+  return '';
+}
+
+function isRowNonNormalStatus(tr) {
+  return getRowNonNormalStatusLabel(tr) !== '';
 }
 
 document.addEventListener('pointerdown', (e) => {
@@ -287,6 +336,7 @@ function getRowActiveDataControls(tr) {
 }
 
 function isRowFullyLocked(tr) {
+  if (isRowOutsideShift(tr)) return true;
   const inputs = getRowDataCellInputs(tr);
   if (inputs.length === 0) return true;
   return inputs.every(el => inspectCellLock(el).locked);
@@ -357,8 +407,28 @@ function getNextDataRow(tr) {
   return null;
 }
 
+function isPlaceholderOptionText(text) {
+  const t = String(text ?? '').trim();
+  return t === '' || /^(select\.{0,3}|pilih\.{0,3}|-+|--.*)?$/i.test(t);
+}
+
+function isCellEmpty(el) {
+  if (!el) return true;
+  if (el.tagName === 'SELECT') {
+    const rawVal = String(el.value ?? '').trim();
+    if (rawVal === '') return true;
+    const options = el.options ? Array.from(el.options) : [];
+    const selectedOpt = (typeof el.selectedIndex === 'number' && el.selectedIndex >= 0 && options[el.selectedIndex])
+      ? options[el.selectedIndex]
+      : options.find(opt => String(opt.value ?? '').trim() === rawVal) || null;
+    const optText = selectedOpt ? String(selectedOpt.textContent ?? '').trim() : '';
+    return isPlaceholderOptionText(optText);
+  }
+  return String(el.value ?? '').trim() === '';
+}
+
 function getControlDisplayValue(el) {
-  if (!el) return '';
+  if (!el || isCellEmpty(el)) return '';
   if (el.tagName === 'SELECT') {
     const rawVal = String(el.value ?? '').trim();
     const options = el.options ? Array.from(el.options) : [];
@@ -373,20 +443,18 @@ function getControlDisplayValue(el) {
     }
     const optVal = String(selectedOpt.value ?? '').trim();
     const optText = String(selectedOpt.textContent ?? '').trim();
-    if (optVal === '' && (optText === '' || optText === '-' || /^(--|pilih\b)/i.test(optText))) {
-      return '';
-    }
     return optText || optVal;
   }
   return String(el.value ?? '').trim();
 }
 
 function isControlEmpty(el) {
-  return getControlDisplayValue(el) === '';
+  return isCellEmpty(el);
 }
 
 function findFirstOpenEmptyRow(rows) {
   for (const tr of rows) {
+    if (isRowOutsideShift(tr) || isRowNonNormalStatus(tr)) continue;
     const inputs = getRowDataCellInputs(tr);
     if (inputs.length === 0) continue;
 
@@ -398,7 +466,7 @@ function findFirstOpenEmptyRow(rows) {
     ));
     if (activeInputs.length === 0) continue;
 
-    if (isControlEmpty(activeInputs[0])) {
+    if (isCellEmpty(activeInputs[0])) {
       return { row: tr, colIdx: inputs.indexOf(activeInputs[0]) };
     }
   }
@@ -406,8 +474,8 @@ function findFirstOpenEmptyRow(rows) {
 }
 
 function findAutoDetectStartLocation() {
-  const activeShiftRows = Array.from(document.querySelectorAll('tr'))
-    .filter(tr => tr.querySelector('.active-shift-time') && getRowDataCellInputs(tr).length > 0);
+  const activeShiftRows = getAllDataRows()
+    .filter(tr => tr.querySelector('.active-shift-time'));
 
   const layer1Match = findFirstOpenEmptyRow(activeShiftRows);
   if (layer1Match) {
@@ -432,7 +500,7 @@ function resolveStartLocation() {
     const row = lastLockedClickCell.closest('tr');
     const rowTime = getRowTimeLabel(row);
     const title = String(lastLockedClickCell.getAttribute('title') || '').toLowerCase();
-    const isFuture = title.includes('jam belum tiba');
+    const isFuture = title.includes('jam belum tiba') || isRowOutsideShift(row) || lastLockedClickCell.classList.contains('cell-outside-shift');
     const msg = isFuture
       ? `Sel pada ${formatBarisJamPhrase(rowTime)} belum tiba — pengisian dibatalkan aman.`
       : `Sel pada ${formatBarisJamPhrase(rowTime)} terkunci — klik sel yang terbuka untuk memulai.`;
@@ -465,6 +533,16 @@ function resolveStartLocation() {
         title: lock.notArrived ? "Jam Logsheet Belum Tiba" : "Sel Target Terkunci",
         error: msg,
         icon: lock.notArrived ? 'clock' : 'warn'
+      };
+    }
+
+    if (info && isRowNonNormalStatus(info.row)) {
+      const rowTime = getRowTimeLabel(info.row);
+      const statusLabel = getRowNonNormalStatusLabel(info.row);
+      return {
+        title: "Baris Berstatus Khusus",
+        error: `${formatBarisJamPhrase(rowTime)} berstatus "${statusLabel}" — pengisian dilewati aman.`,
+        icon: 'shieldAlert'
       };
     }
 
@@ -596,6 +674,9 @@ function scanTargetExecutionPlan(rowsPayload, startLoc) {
   let maxParamNumber = startColNumber;
 
   for (let r = 0; r < totalRows; r++) {
+    while (r > 0 && currentRow && isRowNonNormalStatus(currentRow) && !isRowOutsideShift(currentRow)) {
+      currentRow = getNextDataRow(currentRow);
+    }
     if (!currentRow) break;
 
     const rowInputs = getRowDataCellInputs(currentRow);
@@ -707,6 +788,10 @@ function createInlineSvgMarkup(pathsMarkup, size = 14) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pathsMarkup}</svg>`;
 }
 
+function createBrandRobotSvgMarkup(size = 16) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" aria-hidden="true" style="flex-shrink:0"><line x1="12" y1="2.8" x2="12" y2="6.1" stroke="#dc2626" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="2.5" r="1.5" fill="#f87171"/><rect x="1.5" y="10.2" width="2.5" height="5.6" rx="1.1" fill="#b91c1c"/><rect x="20" y="10.2" width="2.5" height="5.6" rx="1.1" fill="#b91c1c"/><rect x="4" y="6" width="16" height="14.8" rx="3.4" fill="#ef4444" stroke="#991b1b" stroke-width="1.3"/><rect x="6.6" y="9.3" width="10.8" height="5" rx="1.6" fill="#0f172a"/><circle cx="9.6" cy="11.8" r="1.25" fill="#38bdf8"/><circle cx="14.4" cy="11.8" r="1.25" fill="#38bdf8"/><line x1="8.8" y1="17.3" x2="15.2" y2="17.3" stroke="#fee2e2" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+}
+
 const MODAL_SVG = {
   target: '<circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/>',
   warn: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
@@ -715,7 +800,7 @@ const MODAL_SVG = {
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   play: '<polygon points="6 3 20 12 6 21 6 3"/>',
   stop: '<rect width="14" height="14" x="5" y="5" rx="2"/>',
-  zap: '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+  keyboard: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.001"/><path d="M10 8h.001"/><path d="M14 8h.001"/><path d="M18 8h.001"/><path d="M8 12h.001"/><path d="M12 12h.001"/><path d="M16 12h.001"/><path d="M7 16h10"/>',
   clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>'
 };
@@ -848,6 +933,16 @@ function getModalSharedStyles() {
     }
     .pmr-modal-card.tone-progress {
       border-color: rgba(56, 189, 248, 0.45);
+    }
+    .pmr-modal-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: #94a3b8;
+      margin-bottom: 8px;
     }
     .pmr-modal-header {
       display: flex;
@@ -1113,22 +1208,18 @@ function getModalSharedStyles() {
     .pmr-btn-amber:hover {
       background: #d97706;
     }
-    .pmr-modal-kbd {
-      font-size: 10px;
-      opacity: 0.8;
-      padding: 1px 5px;
-      border-radius: 4px;
-      background: rgba(0, 0, 0, 0.2);
-    }
-    .pmr-btn-amber .pmr-modal-kbd {
-      background: rgba(15, 23, 42, 0.14);
-    }
   `;
 }
 
 function createModalHostSession() {
   const existingHost = document.getElementById('pmr-confirm-modal-host');
   if (existingHost) existingHost.remove();
+
+  if (document.activeElement && typeof document.activeElement.blur === 'function') {
+    try {
+      document.activeElement.blur();
+    } catch (e) {}
+  }
 
   const host = document.createElement('div');
   host.id = 'pmr-confirm-modal-host';
@@ -1148,34 +1239,15 @@ function createModalHostSession() {
   shadow.appendChild(backdrop);
 
   isModalOpen = true;
-  let keyHandler = null;
-
-  const setKeyHandler = (fn) => {
-    keyHandler = fn;
-  };
-
-  const onGlobalKeyDown = (e) => {
-    if (!isModalOpen) return;
-    if (e.key === 'Escape' || e.key === 'Enter') {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if (typeof keyHandler === 'function') {
-        keyHandler(e.key);
-      }
-    }
-  };
-
-  document.addEventListener('keydown', onGlobalKeyDown, true);
   (document.documentElement || document.body).appendChild(host);
 
   const destroy = () => {
-    document.removeEventListener('keydown', onGlobalKeyDown, true);
     host.remove();
     isModalOpen = false;
     activeAbortCallback = null;
   };
 
-  return { host, shadow, backdrop, setKeyHandler, destroy };
+  return { host, shadow, backdrop, destroy };
 }
 
 function openPhase3WarningModal(title, message, iconName = 'warn') {
@@ -1187,6 +1259,7 @@ function openPhase3WarningModal(title, message, iconName = 'warn') {
 
   session.backdrop.innerHTML = `
     <div class="pmr-modal-card tone-warn" role="dialog" aria-modal="true" aria-labelledby="pmr-modal-title">
+      <div class="pmr-modal-brand">${createBrandRobotSvgMarkup(15)}<span>DILOC Automator</span></div>
       <div class="pmr-modal-header">
         <div class="pmr-modal-title-wrap">
           <span class="pmr-modal-icon ${isShield ? 'is-red' : 'is-amber'}">${createInlineSvgMarkup(safeIcon, 18)}</span>
@@ -1201,7 +1274,6 @@ function openPhase3WarningModal(title, message, iconName = 'warn') {
         <button type="button" id="pmr-btn-close" class="pmr-modal-btn pmr-btn-amber">
           ${createInlineSvgMarkup(MODAL_SVG.info, 14)}
           <span>Tutup</span>
-          <span class="pmr-modal-kbd">ESC</span>
         </button>
       </div>
     </div>
@@ -1219,12 +1291,6 @@ function openPhase3WarningModal(title, message, iconName = 'warn') {
     };
 
     closeBtn.addEventListener('click', closeNow);
-    session.setKeyHandler((key) => {
-      if (key === 'Escape' || key === 'Enter') {
-        closeNow();
-      }
-    });
-    closeBtn.focus();
   });
 }
 
@@ -1261,6 +1327,7 @@ function renderPhase1Confirm(session, plan, sourceDisplayLabel, randSummary) {
 
     session.backdrop.innerHTML = `
       <div class="pmr-modal-card ${isOverwrite ? 'tone-overwrite' : ''}" role="dialog" aria-modal="true" aria-labelledby="pmr-modal-title">
+        <div class="pmr-modal-brand">${createBrandRobotSvgMarkup(15)}<span>DILOC Automator</span></div>
         <div class="pmr-modal-header">
           <div class="pmr-modal-title-wrap">
             <span class="pmr-modal-icon">${createInlineSvgMarkup(MODAL_SVG.target, 18)}</span>
@@ -1295,12 +1362,10 @@ function renderPhase1Confirm(session, plan, sourceDisplayLabel, randSummary) {
           <button type="button" id="pmr-btn-cancel" class="pmr-modal-btn pmr-btn-soft-red">
             ${createInlineSvgMarkup(MODAL_SVG.x, 14)}
             <span>Batal</span>
-            <span class="pmr-modal-kbd">ESC</span>
           </button>
           <button type="button" id="pmr-btn-confirm" class="pmr-modal-btn ${isOverwrite ? 'pmr-btn-amber' : 'pmr-btn-green'}">
             ${ctaSvg}
             <span>${isOverwrite ? 'Timpa & Mulai' : 'Mulai Isi'}</span>
-            <span class="pmr-modal-kbd">Enter</span>
           </button>
         </div>
       </div>
@@ -1318,12 +1383,6 @@ function renderPhase1Confirm(session, plan, sourceDisplayLabel, randSummary) {
 
     cancelBtn.addEventListener('click', () => settle(false));
     confirmBtn.addEventListener('click', () => settle(true));
-    session.setKeyHandler((key) => {
-      if (key === 'Escape') settle(false);
-      else if (key === 'Enter') settle(true);
-    });
-
-    confirmBtn.focus();
   });
 }
 
@@ -1331,9 +1390,10 @@ function renderPhase2Progress(session, initialTimeLabel, totalRowsPlanned, onCan
   const cleanInit = cleanTimeText(initialTimeLabel) || 'Aktif';
   session.backdrop.innerHTML = `
     <div class="pmr-modal-card tone-progress" role="dialog" aria-modal="true" aria-labelledby="pmr-modal-title">
+      <div class="pmr-modal-brand">${createBrandRobotSvgMarkup(15)}<span>DILOC Automator</span></div>
       <div class="pmr-modal-header">
         <div class="pmr-modal-title-wrap">
-          <span class="pmr-modal-icon">${createInlineSvgMarkup(MODAL_SVG.zap, 18)}</span>
+          <span class="pmr-modal-icon">${createInlineSvgMarkup(MODAL_SVG.keyboard, 18)}</span>
           <h3 id="pmr-modal-title" class="pmr-modal-title">Mengisi Logsheet...</h3>
         </div>
         <span class="pmr-modal-badge">${totalRowsPlanned > 1 ? `${totalRowsPlanned} Baris` : '1 Baris'}</span>
@@ -1341,7 +1401,7 @@ function renderPhase2Progress(session, initialTimeLabel, totalRowsPlanned, onCan
       <div class="pmr-progress-wrap">
         <div class="pmr-progress-top">
           <div class="pmr-progress-live">
-            ${createInlineSvgMarkup(MODAL_SVG.zap, 15)}
+            ${createInlineSvgMarkup(MODAL_SVG.keyboard, 15)}
             <span id="pmr-progress-status">Menyiapkan pengisian baris jam ${escapeTextForHtml(cleanInit)}...</span>
           </div>
           <span id="pmr-progress-pct" class="pmr-progress-pct">0%</span>
@@ -1349,13 +1409,12 @@ function renderPhase2Progress(session, initialTimeLabel, totalRowsPlanned, onCan
         <div class="pmr-progress-track">
           <div id="pmr-progress-fill" class="pmr-progress-fill"></div>
         </div>
-        <div id="pmr-progress-sub" class="pmr-progress-sub">Tekan ESC atau tombol Batal untuk menghentikan proses</div>
+        <div id="pmr-progress-sub" class="pmr-progress-sub">Klik tombol Batal untuk menghentikan proses</div>
       </div>
       <div class="pmr-modal-actions">
         <button type="button" id="pmr-btn-abort" class="pmr-modal-btn pmr-btn-solid-red">
           ${createInlineSvgMarkup(MODAL_SVG.stop, 14)}
           <span>Batal</span>
-          <span class="pmr-modal-kbd">ESC</span>
         </button>
       </div>
     </div>
@@ -1374,13 +1433,6 @@ function renderPhase2Progress(session, initialTimeLabel, totalRowsPlanned, onCan
     onCancelClick('Pengisian dibatalkan');
   });
 
-  session.setKeyHandler((key) => {
-    if (key === 'Escape') {
-      onCancelClick('Pengisian dihentikan (ESC)');
-    }
-  });
-
-  refs.abortBtn.focus();
   return refs;
 }
 
@@ -1413,6 +1465,7 @@ function renderPhase3Summary(session, summary) {
 
     session.backdrop.innerHTML = `
       <div class="pmr-modal-card ${isAbortedOrWarn ? 'tone-warn' : 'tone-success'}" role="dialog" aria-modal="true" aria-labelledby="pmr-modal-title">
+        <div class="pmr-modal-brand">${createBrandRobotSvgMarkup(15)}<span>DILOC Automator</span></div>
         <div class="pmr-modal-header">
           <div class="pmr-modal-title-wrap">
             <span class="pmr-modal-icon ${isAbortedOrWarn ? 'is-amber' : 'is-green'}">${createInlineSvgMarkup(isAbortedOrWarn ? MODAL_SVG.warn : MODAL_SVG.checkCircle, 18)}</span>
@@ -1437,7 +1490,6 @@ function renderPhase3Summary(session, summary) {
           <button type="button" id="pmr-btn-close" class="pmr-modal-btn ${isAbortedOrWarn ? 'pmr-btn-amber' : 'pmr-btn-green'}">
             ${closeBtnSvg}
             <span>Tutup</span>
-            <span class="pmr-modal-kbd">Enter</span>
           </button>
         </div>
       </div>
@@ -1453,12 +1505,6 @@ function renderPhase3Summary(session, summary) {
     };
 
     closeBtn.addEventListener('click', closeNow);
-    session.setKeyHandler((key) => {
-      if (key === 'Escape' || key === 'Enter') {
-        closeNow();
-      }
-    });
-    closeBtn.focus();
   });
 }
 
@@ -1683,10 +1729,7 @@ function selectLiveValidOptionByOrder(selectEl, order) {
     if (opt.disabled) return false;
     const val = String(opt.value ?? '').trim();
     const txt = String(opt.textContent ?? '').trim();
-    if (val === '' && (txt === '' || txt === '-' || /^(--|pilih\b|select\b)/i.test(txt))) {
-      return false;
-    }
-    if (txt === '-' || /^(--|pilih\b|select\b)/i.test(txt)) {
+    if (val === '' || isPlaceholderOptionText(txt)) {
       return false;
     }
     return true;
@@ -1696,6 +1739,7 @@ function selectLiveValidOptionByOrder(selectEl, order) {
   const targetIdx = Math.min(validOptions.length - 1, Math.max(0, order - 1));
   const picked = validOptions[targetIdx];
   selectEl.value = picked.value;
+  selectEl.selectedIndex = options.indexOf(picked);
 }
 
 function setNativeValue(el, value) {
@@ -1782,6 +1826,9 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}, se
     : null;
 
   for (let r = 0; r < totalRows; r++) {
+    while (r > 0 && currentRow && isRowNonNormalStatus(currentRow) && !isRowOutsideShift(currentRow)) {
+      currentRow = getNextDataRow(currentRow);
+    }
     if (!isRunning || abortedByUser || !currentRow) break;
 
     const rowInputs = getRowDataCellInputs(currentRow);

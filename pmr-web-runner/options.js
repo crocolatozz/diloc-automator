@@ -346,6 +346,31 @@ async function applyBuiltInPreset(presetKey, silent = false) {
   }
 }
 
+function renderStatsBadges(randomizableCount, lockedTotal, zeroCount, textCount, validSelectedCount) {
+  if (!statsBadges) return;
+
+  const existingBlue = statsBadges.querySelector('.badge.blue .count');
+  const existingAmberCount = statsBadges.querySelector('.badge.amber .count');
+  const existingAmberZero = statsBadges.querySelector('.badge.amber .count-zero');
+  const existingAmberText = statsBadges.querySelector('.badge.amber .count-text');
+  const existingGreen = statsBadges.querySelector('.badge.green .count');
+
+  if (existingBlue && existingAmberCount && existingAmberZero && existingAmberText && existingGreen) {
+    existingBlue.textContent = String(randomizableCount);
+    existingAmberCount.textContent = String(lockedTotal);
+    existingAmberZero.textContent = String(zeroCount);
+    existingAmberText.textContent = String(textCount);
+    existingGreen.textContent = String(validSelectedCount);
+    return;
+  }
+
+  statsBadges.innerHTML = `
+    <span class="badge blue">${renderIcon('shuffle', { size: 13 })}<span>Bisa Diacak: <span class="count">${randomizableCount}</span></span></span>
+    <span class="badge amber">${renderIcon('lock', { size: 13 })}<span>Dikunci: <span class="count">${lockedTotal}</span> (<span class="count-zero">${zeroCount}</span> nilai nol, <span class="count-text">${textCount}</span> teks/dropdown)</span></span>
+    <span class="badge green">${renderIcon('checkSquare', { size: 13 })}<span>Dicentang: <span class="count">${validSelectedCount}</span></span></span>
+  `;
+}
+
 function renderAll() {
   syncToolbarState();
 
@@ -377,9 +402,7 @@ function renderAll() {
   const validSelectedCount = Array.from(selectedSet).filter(idx => idx >= 0 && idx < cells.length).length;
   const lockedTotal = zeroCount + textCount;
 
-  statsBadges.innerHTML = `
-    <span class="badge">Aktif: ${randomizableCount} &bull; Terkunci: ${lockedTotal} (${zeroCount} nol, ${textCount} teks/dropdown) &bull; Dipilih: ${validSelectedCount}</span>
-  `;
+  renderStatsBadges(randomizableCount, lockedTotal, zeroCount, textCount, validSelectedCount);
 
   const effectivePreviewRange = sanitizeRandomRange(randomRange, false);
   const previewResults = evaluateCellsWithMode(cells, randomMode, Array.from(selectedSet), headerMeta, effectivePreviewRange);
