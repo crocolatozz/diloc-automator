@@ -1,6 +1,7 @@
 let loadedSequence = [];
 let loadedFileName = "";
 let randomMode = "off";
+let randomRange = 1;
 let selectedSet = new Set();
 let selectedCellsByPreset = {};
 let headerMeta = [];
@@ -11,9 +12,9 @@ let lastCells = [];
 let lastPreviewResults = [];
 
 const PRESET_NAMES = {
-  operator1: "Operator 1 (167 param)",
-  operator2: "Operator 2 (51 param)",
-  operator3: "Operator 3 (45 param)"
+  operator1: "Operator 1 (167 parameter)",
+  operator2: "Operator 2 (51 parameter)",
+  operator3: "Operator 3 (45 parameter)"
 };
 
 const activeFilePill = document.getElementById('activeFilePill');
@@ -166,13 +167,53 @@ function renderMismatchBanner(totalCells) {
   presetMismatchBanner.hidden = false;
 }
 
-function applyTableColumnFilter() {
+function renderEmptyTableCell(wrapper, reasonType) {
+  const tableEl = wrapper.querySelector('table.excel-table');
+  if (tableEl) tableEl.classList.add('is-empty');
+
+  const trIndex = wrapper.querySelector('tr.row-index');
+  if (!trIndex) return;
+  let emptyCell = trIndex.querySelector('td.empty-table-cell');
+  if (!emptyCell) {
+    emptyCell = document.createElement('td');
+    emptyCell.rowSpan = 7;
+    emptyCell.className = 'empty-table-cell';
+    trIndex.appendChild(emptyCell);
+  }
+
+  let title = 'Belum Ada Sel Terpilih';
+  let subHtml = 'Klik tab <b>Semua</b> lalu centang sel secara manual, atau gunakan tombol <b>Pilih Semua</b> untuk memilih seluruh sel angka.';
+
+  if (reasonType === 'changed') {
+    title = 'Belum Ada Sel yang Berubah';
+    subHtml = 'Aktifkan mode <b>All</b> atau <b>Selected</b> terlebih dahulu untuk melihat simulasi perubahan nilai.';
+  } else if (reasonType === 'search') {
+    title = 'Kolom Tidak Ditemukan';
+    subHtml = 'Tidak ada kolom yang cocok dengan kata kunci pencarian. Hapus kata kunci atau cek tab <b>Semua</b>.';
+  }
+
+  emptyCell.innerHTML = `
+    <div class="empty-table-inner">
+      ${renderIcon('filter', { size: 24, className: 'empty-filter-icon' })}
+      <div class="empty-table-title">${title}</div>
+      <div class="empty-table-sub">${subHtml}</div>
+    </div>
+  `;
+}
+
+function clearEmptyTableCell(wrapper) {
+  const tableEl = wrapper.querySelector('table.excel-table');
+  if (tableEl) tableEl.classList.remove('is-empty');
+
+  const emptyCell = wrapper.querySelector('td.empty-table-cell');
+  if (emptyCell) emptyCell.remove();
+}
+
+function applyTableColumnFilter(searchMatchedSet = null) {
   const wrapper = tableContainer.querySelector('.table-wrapper');
   if (!wrapper) return;
 
-  const existingNote = wrapper.querySelector('.filter-empty-note');
-  if (existingNote) existingNote.remove();
-
+  const hasSearchQuery = Boolean(searchInput && searchInput.value.trim());
   let visibleCount = 0;
 
   lastCells.forEach((cell, idx) => {
@@ -185,6 +226,10 @@ function applyTableColumnFilter() {
       visible = Boolean(prev && prev.changed);
     }
 
+    if (visible && hasSearchQuery && searchMatchedSet instanceof Set && searchMatchedSet.size === 0) {
+      visible = false;
+    }
+
     if (visible) visibleCount += 1;
 
     wrapper.querySelectorAll(`[data-col-idx="${idx}"]`).forEach(el => {
@@ -193,12 +238,12 @@ function applyTableColumnFilter() {
   });
 
   if (visibleCount === 0 && lastCells.length > 0) {
-    const note = document.createElement('div');
-    note.className = 'filter-empty-note';
-    note.textContent = activeTableFilter === 'selected'
-      ? "Belum ada sel yang dicentang untuk filter 'Terpilih'. Klik filter 'Semua' lalu centang sel atau gunakan 'Pilih Semua Angka'."
-      : "Belum ada sel yang berubah untuk filter 'Berubah'. Aktifkan mode Randomize All / Selected Cells terlebih dahulu.";
-    wrapper.appendChild(note);
+    const reason = (hasSearchQuery && searchMatchedSet instanceof Set && searchMatchedSet.size === 0)
+      ? 'search'
+      : activeTableFilter;
+    renderEmptyTableCell(wrapper, reason);
+  } else {
+    clearEmptyTableCell(wrapper);
   }
 }
 
@@ -235,7 +280,7 @@ function renderAll() {
   if (!loadedSequence || loadedSequence.length === 0) {
     lastCells = [];
     lastPreviewResults = [];
-    setPillContent(renderIcon('warn', { className: 'icon-amber-light', size: 15 }), "Belum ada file .pmr dimuat");
+    setPillContent(renderIcon('warn', { className: 'icon-amber-light', size: 15 }), "Belum ada file .pmr / .json dimuat");
     renderMismatchBanner(0);
     statsBadges.innerHTML = "";
     tableContainer.innerHTML = `
@@ -256,60 +301,52 @@ function renderAll() {
   setPillContent(renderIcon('file', { className: 'icon-sky-light', size: 15 }), `${loadedFileName} (${cells.length} Sel)`);
   renderMismatchBanner(cells.length);
 
-  const presetBadgeHtml = activePreset && PRESET_NAMES[activePreset]
-    ? `<span class="badge blue">${renderIcon('userCheck', { size: 14 })}<span>${PRESET_NAMES[activePreset]}</span></span>`
-    : '';
-
   const validSelectedCount = Array.from(selectedSet).filter(idx => idx >= 0 && idx < cells.length).length;
+  const lockedTotal = zeroCount + textCount;
 
   statsBadges.innerHTML = `
-    ${presetBadgeHtml}
-    <span class="badge">Total: ${cells.length} sel</span>
-    <span class="badge green">Angka Aktif: ${randomizableCount} sel</span>
-    <span class="badge amber">Terkunci: ${zeroCount} nilai 0 • ${textCount} teks</span>
-    <span class="badge green">Dipilih (Selected): ${validSelectedCount} sel</span>
+    <span class="badge">Aktif: ${randomizableCount} &bull; Terkunci: ${lockedTotal} (${zeroCount} nol, ${textCount} teks) &bull; Dipilih: ${validSelectedCount}</span>
   `;
 
-  const previewResults = evaluateCellsWithMode(cells, randomMode, Array.from(selectedSet), headerMeta);
+  const previewResults = evaluateCellsWithMode(cells, randomMode, Array.from(selectedSet), headerMeta, randomRange);
   lastCells = cells;
   lastPreviewResults = previewResults;
 
   const table = document.createElement('table');
   table.className = 'excel-table';
 
-  const thead = document.createElement('thead');
   const tbody = document.createElement('tbody');
 
   const trIndex = document.createElement('tr');
   trIndex.className = 'row-index';
-  trIndex.innerHTML = `<th class="sticky-col">No. Sel</th>`;
+  trIndex.innerHTML = `<th class="sticky-col" scope="row">No. Sel</th>`;
 
   const trEquip = document.createElement('tr');
   trEquip.className = 'row-equip';
-  trEquip.innerHTML = `<td class="sticky-col">Equipment</td>`;
+  trEquip.innerHTML = `<th class="sticky-col" scope="row">Equipment</th>`;
 
   const trTag = document.createElement('tr');
   trTag.className = 'row-tag';
-  trTag.innerHTML = `<td class="sticky-col">Tag / Parameter</td>`;
+  trTag.innerHTML = `<th class="sticky-col" scope="row">Tag / Parameter</th>`;
 
   const trUnit = document.createElement('tr');
   trUnit.className = 'row-unit';
-  trUnit.innerHTML = `<td class="sticky-col">Satuan / Tipe</td>`;
+  trUnit.innerHTML = `<th class="sticky-col" scope="row">Satuan / Tipe</th>`;
 
   const trOrig = document.createElement('tr');
   trOrig.className = 'row-orig';
-  trOrig.innerHTML = `<td class="sticky-col">Nilai Asli (.pmr)</td>`;
+  trOrig.innerHTML = `<th class="sticky-col" scope="row">Nilai Asli (.pmr)</th>`;
 
   const trCheck = document.createElement('tr');
   trCheck.className = isSelectedMode ? 'row-check' : 'row-check dimmed-check-row';
   const checkStickyTitle = isSelectedMode
-    ? "Centang sel angka yang ingin di-randomize ±1"
-    : "Diredupkan karena mode Off / Randomize All (klik kotak centang untuk langsung beralih ke Selected Cells)";
-  trCheck.innerHTML = `<td class="sticky-col" title="${checkStickyTitle}">Randomize (±1)</td>`;
+    ? `Centang sel angka yang ingin di-randomize ±${randomRange}`
+    : "Diredupkan karena mode Off / All (klik kotak centang untuk langsung beralih ke Selected)";
+  trCheck.innerHTML = `<th class="sticky-col" scope="row" title="${checkStickyTitle}">Randomize (±${randomRange})</th>`;
 
   const trPreview = document.createElement('tr');
   trPreview.className = 'row-preview';
-  trPreview.innerHTML = `<td class="sticky-col">Simulasi Preview</td>`;
+  trPreview.innerHTML = `<th class="sticky-col" scope="row">Simulasi Preview</th>`;
 
   cells.forEach((cell, idx) => {
     const meta = headerMeta[idx] || null;
@@ -402,7 +439,7 @@ function renderAll() {
     trPreview.appendChild(tdPrev);
   });
 
-  thead.appendChild(trIndex);
+  tbody.appendChild(trIndex);
   tbody.appendChild(trEquip);
   tbody.appendChild(trTag);
   tbody.appendChild(trUnit);
@@ -410,7 +447,6 @@ function renderAll() {
   tbody.appendChild(trCheck);
   tbody.appendChild(trPreview);
 
-  table.appendChild(thead);
   table.appendChild(tbody);
 
   const prevScrollLeft = tableContainer.querySelector('.table-wrapper')?.scrollLeft || 0;
@@ -420,11 +456,12 @@ function renderAll() {
 
   tableContainer.innerHTML = '';
   tableContainer.appendChild(wrapper);
-  applyTableColumnFilter();
-  wrapper.scrollLeft = prevScrollLeft;
   if (searchInput && searchInput.value.trim()) {
     applySearchHighlight(false);
+  } else {
+    applyTableColumnFilter();
   }
+  wrapper.scrollLeft = prevScrollLeft;
 }
 
 async function toggleCellSelection(idx, rerender, explicitState) {
@@ -542,7 +579,11 @@ filterButtons.forEach(btn => {
   btn.addEventListener('click', () => {
     activeTableFilter = btn.dataset.filter || 'all';
     syncToolbarState();
-    applyTableColumnFilter();
+    if (searchInput && searchInput.value.trim()) {
+      applySearchHighlight(false);
+    } else {
+      applyTableColumnFilter();
+    }
   });
 });
 
@@ -575,7 +616,10 @@ function applySearchHighlight(shouldScroll = true) {
   if (!wrapper) return;
 
   wrapper.querySelectorAll('.col-search-match').forEach(el => el.classList.remove('col-search-match'));
-  if (!query) return;
+  if (!query) {
+    applyTableColumnFilter();
+    return;
+  }
 
   const cells = lastCells && lastCells.length > 0 ? lastCells : groupSequenceIntoCells(loadedSequence);
   const matchedIndices = [];
@@ -590,6 +634,9 @@ function applySearchHighlight(shouldScroll = true) {
       matchedIndices.push(idx);
     }
   });
+
+  const matchedSet = new Set(matchedIndices);
+  applyTableColumnFilter(matchedSet);
 
   if (matchedIndices.length === 0) return;
 
@@ -606,7 +653,7 @@ function applySearchHighlight(shouldScroll = true) {
 
   if (typeof firstVisibleIdx === 'number') {
     const targetCell =
-      wrapper.querySelector(`thead th[data-col-idx="${firstVisibleIdx}"]`) ||
+      wrapper.querySelector(`tr.row-index th[data-col-idx="${firstVisibleIdx}"]`) ||
       wrapper.querySelector(`[data-col-idx="${firstVisibleIdx}"]`);
     if (targetCell) {
       const stickyCol = wrapper.querySelector('.sticky-col');
@@ -649,6 +696,10 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     randomMode = changes.randomMode.newValue || 'off';
     dirty = true;
   }
+  if (changes.randomRange) {
+    randomRange = sanitizeRandomRange(changes.randomRange.newValue);
+    dirty = true;
+  }
   if (changes.activePreset) {
     activePreset = changes.activePreset.newValue || '';
     dirty = true;
@@ -684,6 +735,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const data = await chrome.storage.local.get([
     'savedMacro',
     'randomMode',
+    'randomRange',
     'selectedCellIndices',
     'selectedCellsByPreset',
     'headerMeta',
@@ -707,6 +759,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadedFileName = data.savedMacro.fileName || 'macro.pmr';
   }
   randomMode = data.randomMode || 'off';
+  randomRange = sanitizeRandomRange(data.randomRange);
   headerMeta = Array.isArray(data.headerMeta) ? data.headerMeta : [];
   activePreset = data.activePreset || '';
   selectedCellsByPreset = (data.selectedCellsByPreset && typeof data.selectedCellsByPreset === 'object')

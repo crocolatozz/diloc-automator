@@ -77,26 +77,26 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 14px;
-      padding: 10px 18px;
+      gap: 10px;
+      padding: 8px 14px;
       background-color: var(--bg-surface);
       border-bottom: 1px solid var(--border-subtle);
       flex-shrink: 0;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
     }
 
     .brand-group {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       min-width: 0;
-      flex-shrink: 0;
-      flex-wrap: wrap;
+      flex-shrink: 1;
+      flex-wrap: nowrap;
     }
 
     .brand-title {
       margin: 0;
-      font-size: 15.5px;
+      font-size: 14.5px;
       font-weight: 700;
       letter-spacing: -0.01em;
       color: var(--text-primary);
@@ -107,24 +107,25 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      height: 26px;
-      padding: 0 10px;
+      height: 24px;
+      padding: 0 9px;
       border-radius: 99px;
       background-color: var(--bg-inset);
       border: 1px solid var(--border-strong);
       font-family: var(--font-mono);
-      font-size: 11.5px;
+      font-size: 11px;
       color: #93c5fd;
       white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .manifest-meta {
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--text-secondary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 240px;
+      max-width: 190px;
       font-variant-numeric: tabular-nums;
     }
 
@@ -135,10 +136,19 @@
     .toolbar-controls {
       display: flex;
       align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      flex: 1;
+      gap: 8px;
+      flex-wrap: nowrap;
+      flex-shrink: 0;
       justify-content: flex-end;
+    }
+
+    @media (max-width: 1120px) {
+      .toolbar {
+        flex-wrap: wrap;
+      }
+      .toolbar-controls {
+        flex-wrap: wrap;
+      }
     }
 
     .dummy-group {
@@ -197,17 +207,6 @@
     .btn-primary:hover {
       background-color: var(--accent-hover);
       border-color: var(--accent-hover);
-    }
-
-    .btn-amber {
-      background-color: var(--warning-soft);
-      border-color: rgba(245, 158, 11, 0.35);
-      color: #fcd34d;
-    }
-
-    .btn-amber:hover {
-      background-color: rgba(245, 158, 11, 0.24);
-      border-color: rgba(245, 158, 11, 0.6);
     }
 
     .btn-danger {
@@ -278,6 +277,9 @@
     /* Main Workspace */
     .workspace {
       flex: 1;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
       min-height: 0;
       display: flex;
       flex-direction: column;
@@ -286,7 +288,11 @@
 
     .view-panel {
       flex: 1;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
       min-height: 0;
+      overflow: hidden;
       display: none;
     }
 
@@ -566,10 +572,9 @@
     .log-entry {
       padding: 9px 14px;
       border-bottom: 1px solid var(--border-subtle);
-      display: grid;
-      grid-template-columns: 74px 104px minmax(0, 1fr);
-      gap: 12px;
-      align-items: start;
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
       font-size: 12px;
     }
 
@@ -578,12 +583,16 @@
     }
 
     .log-time {
+      flex-shrink: 0;
+      width: 64px;
       font-family: var(--font-mono);
       font-variant-numeric: tabular-nums;
       color: var(--text-muted);
     }
 
     .log-level {
+      flex-shrink: 0;
+      min-width: 118px;
       font-family: var(--font-mono);
       font-weight: 600;
       white-space: nowrap;
@@ -596,6 +605,7 @@
     .log-level.level-error { color: #f87171; }
 
     .log-content {
+      flex: 1;
       min-width: 0;
     }
 
@@ -684,6 +694,7 @@
     .options-stage {
       flex: 1;
       width: 100%;
+      max-width: 100%;
       height: 100%;
       min-width: 0;
       display: flex;
@@ -714,6 +725,7 @@
       position: relative;
       flex: 1;
       width: 100%;
+      max-width: 100%;
       min-width: 0;
       min-height: 0;
       display: flex;
@@ -723,11 +735,13 @@
     .options-iframe {
       flex: 1;
       width: 100%;
+      max-width: 100%;
       min-width: 0;
       height: 100%;
       min-height: 520px;
       border: 0;
       display: block;
+      overflow: hidden;
       background-color: #ffffff;
     }
 
@@ -776,6 +790,10 @@
         overflow: visible;
       }
 
+      #view-options.view-panel {
+        overflow: hidden;
+      }
+
       .split-layout {
         grid-template-columns: 1fr;
         height: auto;
@@ -792,7 +810,10 @@
       }
 
       .options-iframe {
+        width: 100%;
+        max-width: 100%;
         min-height: 75vh;
+        overflow: hidden;
       }
     }
 
@@ -818,20 +839,6 @@
           <span class="dummy-label">Inject Dummy .pmr:</span>
           <button id="inject-dummy-167" type="button" class="btn btn-sm">Dummy 167 Sel</button>
           <button id="inject-dummy-51" type="button" class="btn btn-sm">Dummy 51 Sel</button>
-          <button id="inject-dummy-edge" type="button" class="btn btn-sm btn-amber">Dummy Edge-Case 100% &amp; 0 + Selisih</button>
-        </div>
-
-        <div class="dummy-group" role="group" aria-label="Quick-Test UI Ekstensi dan Grid">
-          <span class="dummy-label">Quick-Test:</span>
-          <select id="quick-hud-mode" class="select-sm" aria-label="Mode Preview Toast dan Progress HUD">
-            <option value="warn">Toast Amber</option>
-            <option value="hud-running">HUD: Berjalan</option>
-            <option value="hud-done">HUD: Selesai</option>
-            <option value="hud-abort">HUD: Abort (ESC)</option>
-          </select>
-          <button id="quick-test-toast-hud" type="button" class="btn btn-sm btn-amber">Test Toast &amp; HUD</button>
-          <button id="quick-test-banners" type="button" class="btn btn-sm">Test Banner Error &amp; Non-Target</button>
-          <button id="quick-focus-cell-1" type="button" class="btn btn-sm">Fokus Sel [1,1]</button>
         </div>
 
         <button id="reload-btn" type="button" class="btn btn-primary btn-sm">Muat Ulang</button>
@@ -927,7 +934,7 @@
               </div>
 
               <div class="target-hint">
-                Klik salah satu sel input di baris Shift/Jam lalu tekan <b>Play</b> di popup (atau langsung tekan <b>Play</b> tanpa fokus sel untuk menguji Floating Toast amber non-blocking; tekan <b>ESC</b> di area grid untuk Stop).
+                Tekan langsung <b>Play</b> di popup untuk menguji <i>Smart Auto-Detect</i> pada baris kosong <code>.active-shift-time</code> (Jam 01–03 hingga rem otomatis di Jam 04 <code>title="Jam belum tiba"</code>), klik sel input manual untuk mulai/resume dari kolom tertentu, atau tekan <b>ESC</b> untuk berhenti.
               </div>
             </div>
 
@@ -1050,11 +1057,6 @@
 
       const elInjectDummy167 = document.getElementById('inject-dummy-167');
       const elInjectDummy51 = document.getElementById('inject-dummy-51');
-      const elInjectDummyEdge = document.getElementById('inject-dummy-edge');
-      const elQuickHudMode = document.getElementById('quick-hud-mode');
-      const elQuickTestToastHud = document.getElementById('quick-test-toast-hud');
-      const elQuickTestBanners = document.getElementById('quick-test-banners');
-      const elQuickFocusCell1 = document.getElementById('quick-focus-cell-1');
 
       const elPopupFrame = document.getElementById('popup-frame');
       const elOptionsFrame = document.getElementById('options-frame');
@@ -1516,7 +1518,7 @@
                 return state.manifest ? cloneVal(state.manifest) : {
                   manifest_version: 3,
                   name: folder,
-                  version: '1.5.4'
+                  version: '1.8.0'
                 };
               },
               openOptionsPage: function (callback) {
@@ -1675,17 +1677,51 @@
 
         let rowsHtml = '';
         for (let r = 1; r <= 4; r++) {
-          let tds = '<td class="row-label">Jam 0' + r + '</td>';
+          const isFutureRow = (r === 4);
+          const rowLabelClass = isFutureRow
+            ? 'row-label sticky-col col-waktu'
+            : 'row-label sticky-col col-waktu active-shift-time';
+          let tds = '<td class="' + rowLabelClass + '">Jam 0' + r + '</td>';
           for (let c = 0; c < columns.length; c++) {
+            const tdAttrs = isFutureRow ? ' class="data-cell cell-locked" title="Jam belum tiba"' : ' class="data-cell"';
+            const inputAttrs = isFutureRow ? ' disabled title="Jam belum tiba"' : '';
             tds +=
-              '<td>' +
-                '<input type="text" class="diloc-cell-input" data-row="' + r + '" data-col="' + (c + 1) + '" autocomplete="off" aria-label="Jam 0' + r + ' ' + escapeHtml(columns[c].tag) + '" />' +
+              '<td' + tdAttrs + '>' +
+                '<input type="text" class="cell-input diloc-cell-input"' + inputAttrs + ' data-row="' + r + '" data-col="' + (c + 1) + '" autocomplete="off" aria-label="Jam 0' + r + ' ' + escapeHtml(columns[c].tag) + '" />' +
               '</td>';
           }
           rowsHtml += '<tr>' + tds + '</tr>';
         }
 
         const shortOpLabel = String(operatorKey || '').replace(/^operator/i, 'OP ').toUpperCase();
+        const opNumMatch = String(operatorKey || '').match(/(\d+)/);
+        const opNum = opNumMatch ? opNumMatch[1] : '1';
+        const dilocHeadingText = 'E-LOGSHEET FIELD - Op. Lap ' + opNum;
+        const dilocAutosaveSimScript =
+          '(function(){' +
+            'var btn = document.getElementById("diloc-submit-btn");' +
+            'if(!btn) return;' +
+            'var debounceTimer = null;' +
+            'var saveTimer = null;' +
+            'function triggerAutosave(){' +
+              'clearTimeout(debounceTimer);' +
+              'clearTimeout(saveTimer);' +
+              'debounceTimer = setTimeout(function(){' +
+                'btn.disabled = true;' +
+                'btn.textContent = "Menyimpan...";' +
+                'saveTimer = setTimeout(function(){' +
+                  'btn.disabled = false;' +
+                  'btn.textContent = "Submit for Approval";' +
+                '}, 450);' +
+              '}, 950);' +
+            '}' +
+            'document.addEventListener("input", function(e){' +
+              'if(e.target && e.target.classList && e.target.classList.contains("diloc-cell-input")){ triggerAutosave(); }' +
+            '}, true);' +
+            'document.addEventListener("change", function(e){' +
+              'if(e.target && e.target.classList && e.target.classList.contains("diloc-cell-input")){ triggerAutosave(); }' +
+            '}, true);' +
+          '})();';
 
         return (
           '<!doctype html>' +
@@ -1697,27 +1733,39 @@
             '<style>' +
               '*{box-sizing:border-box;}' +
               'body{margin:0;padding:8px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f8fafc;color:#0f172a;font-size:11.5px;}' +
-              '.grid-wrap{width:100%;overflow:auto;max-height:234px;border:1px solid #cbd5e1;border-radius:6px;background:#ffffff;}' +
+              '.diloc-topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;padding:4px 8px;background:#ffffff;border:1px solid #cbd5e1;border-radius:6px;}' +
+              '.diloc-topbar h5.mb-1{margin:0;font-size:12px;font-weight:700;color:#0f172a;letter-spacing:0.01em;}' +
+              '.btn.btn-primary.btn-sm{padding:4px 10px;border-radius:5px;border:1px solid #2563eb;background:#2563eb;color:#ffffff;font-size:11px;font-weight:600;cursor:pointer;}' +
+              '.btn.btn-primary.btn-sm:disabled{opacity:0.65;cursor:not-allowed;background:#64748b;border-color:#64748b;}' +
+              '.grid-wrap{width:100%;overflow:auto;max-height:194px;border:1px solid #cbd5e1;border-radius:6px;background:#ffffff;}' +
               'table{border-collapse:collapse;width:max-content;}' +
               'th,td{border:1px solid #cbd5e1;padding:4px 6px;vertical-align:middle;}' +
               'thead th{position:sticky;top:0;z-index:2;background:#f1f5f9;text-align:left;min-width:96px;max-width:130px;}' +
               'thead th.sticky-corner{left:0;z-index:4;background:#0f172a;color:#ffffff;min-width:68px;max-width:68px;text-align:center;}' +
               'td.row-label{position:sticky;left:0;z-index:1;background:#f8fafc;font-weight:700;color:#334155;text-align:center;min-width:68px;border-right:2px solid #94a3b8;white-space:nowrap;}' +
+              'td.active-shift-time{background:#ecfdf5;color:#15803d;box-shadow:inset 3px 0 0 #16a34a;}' +
+              'td.cell-locked{background:#f1f5f9;}' +
               '.col-num{font-family:ui-monospace,monospace;font-size:10px;color:#64748b;}' +
               '.col-tag{font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
               '.col-eq{font-size:10px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
               '.u{background:#e2e8f0;color:#1e293b;padding:0 4px;border-radius:3px;font-weight:600;}' +
               '.diloc-cell-input{width:88px;height:28px;padding:0 6px;border:1px solid #cbd5e1;border-radius:4px;font-family:ui-monospace,monospace;font-size:12px;color:#0f172a;background:#ffffff;}' +
+              '.diloc-cell-input:disabled{background:#e2e8f0;color:#64748b;cursor:not-allowed;}' +
               '.diloc-cell-input:focus{outline:2px solid #2563eb;border-color:#2563eb;background:#eff6ff;}' +
             '</style>' +
           '</head>' +
           '<body>' +
+            '<div class="diloc-topbar">' +
+              '<h5 class="mb-1">' + escapeHtml(dilocHeadingText) + '</h5>' +
+              '<button type="button" id="diloc-submit-btn" class="btn btn-primary btn-sm">Submit for Approval</button>' +
+            '</div>' +
             '<div class="grid-wrap">' +
               '<table>' +
                 '<thead><tr><th class="sticky-corner">' + escapeHtml(shortOpLabel) + '</th>' + headerCells + '</tr></thead>' +
                 '<tbody>' + rowsHtml + '</tbody>' +
               '</table>' +
             '</div>' +
+            '<script>' + dilocAutosaveSimScript + '<\/script>' +
             '<script src="icons.js"><\/script>' +
             '<script src="content.js"><\/script>' +
           '</body>' +
@@ -1754,14 +1802,19 @@
             'var folder=' + JSON.stringify(folder) + ';' +
             'var ctx=' + JSON.stringify(contextType) + ';' +
             'var rootHref=' + JSON.stringify(rootHref) + ';' +
+            'var baseHref=' + JSON.stringify(baseHref) + ';' +
             'if(window.parent && window.parent.__CHROME_WORKBENCH__){' +
               'window.chrome = window.parent.__CHROME_WORKBENCH__.createChromeApi(folder, ctx, window);' +
             '}' +
             'var origFetch = window.fetch;' +
             'if(typeof origFetch === "function"){' +
               'window.fetch = function(input, init){' +
-                'if(typeof input === "string" && input.indexOf("./" + folder + "/") === 0){' +
-                  'input = new URL(input.slice(2), rootHref).href;' +
+                'if(typeof input === "string"){' +
+                  'if(input.indexOf("./" + folder + "/") === 0){' +
+                    'input = new URL(input.slice(2), rootHref).href;' +
+                  '} else if(!/^(?:[a-z][a-z0-9+.-]*:|\\/\\/|\\/)/i.test(input)){' +
+                    'input = new URL(input, baseHref).href;' +
+                  '}' +
                 '}' +
                 'return origFetch.call(this, input, init);' +
               '};' +
@@ -1776,17 +1829,18 @@
             '}, true);' +
           '})();';
 
+        const cleanedHtml = String(rawHtml || '').replace(/<base\b[^>]*>/gi, '');
         const injectionTags =
           '<base href="' + baseHref.replace(/"/g, '&quot;') + '">' +
           '<script>' + shimCode + '<\/script>';
 
-        if (/<head[^>]*>/i.test(rawHtml)) {
-          return rawHtml.replace(/<head([^>]*)>/i, '<head$1>' + injectionTags);
+        if (/<head[^>]*>/i.test(cleanedHtml)) {
+          return cleanedHtml.replace(/<head([^>]*)>/i, (_, attrs) => '<head' + attrs + '>' + injectionTags);
         }
-        if (/<html[^>]*>/i.test(rawHtml)) {
-          return rawHtml.replace(/<html([^>]*)>/i, '<html$1><head>' + injectionTags + '</head>');
+        if (/<html[^>]*>/i.test(cleanedHtml)) {
+          return cleanedHtml.replace(/<html([^>]*)>/i, (_, attrs) => '<html' + attrs + '><head>' + injectionTags + '</head>');
         }
-        return '<!doctype html><html><head>' + injectionTags + '</head><body>' + rawHtml + '</body></html>';
+        return '<!doctype html><html><head>' + injectionTags + '</head><body>' + cleanedHtml + '</body></html>';
       }
 
       async function loadManifest(folder) {
@@ -1883,52 +1937,21 @@
           presetKey = 'operator2';
           fileName = 'dummy_operator2_51.pmr';
           cellCount = 51;
-        } else if (modeType === 'edge') {
-          presetKey = 'operator3';
-          fileName = 'dummy_edge_case_100pct_0_mismatch_48sel.pmr';
-          cellCount = 48; // Sengaja selisih terhadap Operator 3 (45 param)
         }
 
         const columns = await fetchOperatorColumns(presetKey);
         const values = [];
 
-        if (modeType === 'edge') {
-          const edgeMap = {
-            0: '100',      // % unit di op3 -> wajib turun ke 99
-            1: 'A',        // teks
-            2: '0',        // pure zero terkunci
-            3: '1',        // non-negative batas bawah
-            4: '0.01',     // desimal kecil positif
-            5: '100.0',    // % unit -> wajib turun ke 99.9
-            6: '0.0',      // pure zero desimal terkunci
-            7: '-5',       // suhu °C negatif diizinkan
-            8: '100.00',   // % unit -> wajib turun ke 99.99
-            13: '-12',     // Diff. Vacuum
-            14: '-45',     // Vacuum
-            19: '99.9',    // % mendekati 100
-            20: '100',     // % tepat 100
-            21: '0.0'      // °C nol
-          };
-          for (let i = 0; i < cellCount; i++) {
-            if (Object.prototype.hasOwnProperty.call(edgeMap, i)) {
-              values.push(edgeMap[i]);
-            } else {
-              const col = columns[i];
-              values.push(col && col.type === 'text' ? 'ON' : String((25 + (i % 60)) + '.5'));
-            }
-          }
-        } else {
-          for (let i = 0; i < cellCount; i++) {
-            const col = columns[i];
-            if (col && col.type === 'text') {
-              values.push(i % 2 === 0 ? 'A' : 'ON');
-            } else if (col && col.unit === '%') {
-              values.push(i % 9 === 0 ? '100' : String(45 + (i % 50)) + '.0');
-            } else if (i % 13 === 0) {
-              values.push('0');
-            } else {
-              values.push(String(12 + (i % 75)) + '.' + String(i % 10));
-            }
+        for (let i = 0; i < cellCount; i++) {
+          const col = columns[i];
+          if (col && col.type === 'text') {
+            values.push(i % 2 === 0 ? 'A' : 'ON');
+          } else if (col && col.unit === '%') {
+            values.push(i % 9 === 0 ? '100' : String(45 + (i % 50)) + '.0');
+          } else if (i % 13 === 0) {
+            values.push('0');
+          } else {
+            values.push(String(12 + (i % 75)) + '.' + String(i % 10));
           }
         }
 
@@ -1973,100 +1996,12 @@
         injectDummyPreset('51');
       });
 
-      elInjectDummyEdge.addEventListener('click', function () {
-        injectDummyPreset('edge');
-      });
-
-      elQuickTestToastHud.addEventListener('click', function () {
-        setActiveView('popup');
-        const mode = elQuickHudMode ? elQuickHudMode.value : 'warn';
+      elTargetFrame.addEventListener('load', function () {
         try {
-          const targetWin = elTargetFrame.contentWindow;
-          const targetDoc = elTargetFrame.contentDocument;
-          if (!targetWin || !targetDoc || typeof targetWin.showToast !== 'function') {
-            addLog('warn', 'quick-test.hud', 'Target DILOC belum siap menerima pesan content.js.');
-            return;
+          if (elPopupFrame && elPopupFrame.contentWindow) {
+            elPopupFrame.contentWindow.dispatchEvent(new Event('focus'));
           }
-
-          if (mode === 'hud-running') {
-            targetWin.showToast('play', 'Mengetik (24/167) — Tekan ESC / klik ini untuk Stop', '#0284c7', true);
-          } else if (mode === 'hud-done') {
-            targetWin.showToast('success', 'Pengisian logsheet selesai!', '#16a34a', false);
-          } else if (mode === 'hud-abort') {
-            if (typeof targetWin.stopMacroExecution === 'function') {
-              targetWin.stopMacroExecution('Macro dihentikan (ESC)!');
-            } else {
-              targetWin.showToast('stop', 'Macro dihentikan (ESC)!', '#dc2626', false);
-            }
-          } else {
-            targetWin.showToast('warn', 'Klik dulu kolom/sel input pertama di logsheet sebelum menekan Play!', '#d97706', false);
-          }
-
-          flashTargetHighlight();
-          const toastCount = targetDoc.querySelectorAll('#pmr-runner-toast').length;
-          addLog('tabs', 'quick-test.hud', 'Preview ' + mode + ' dipicu di #target-frame (jumlah elemen #pmr-runner-toast: ' + toastCount + ')');
-        } catch (err) {
-          addLog('error', 'quick-test.hud', 'Gagal memicu preview HUD: ' + err.message);
-        }
-      });
-
-      elQuickTestBanners.addEventListener('click', function () {
-        try {
-          const popupWin = elPopupFrame.contentWindow;
-          if (popupWin && typeof popupWin.showPopupInlineAlert === 'function') {
-            popupWin.showPopupInlineAlert('Pindah dulu ke tab web logsheet (bukan halaman chrome:// atau extension), klik sel input pertama, lalu tekan Play!', 'warn');
-          }
-
-          const optionsWin = elOptionsFrame.contentWindow;
-          const optionsDoc = elOptionsFrame.contentDocument;
-          let simulatedFileUpload = false;
-          if (optionsWin && optionsDoc) {
-            const fileInputEl = optionsDoc.getElementById('macroFileOptions');
-            if (fileInputEl && typeof DataTransfer === 'function') {
-              const dt = new DataTransfer();
-              dt.items.add(new File(['{corrupt_pmr_json'], 'corrupt_test.pmr', { type: 'application/json' }));
-              fileInputEl.files = dt.files;
-              fileInputEl.dispatchEvent(new Event('change', { bubbles: true }));
-              simulatedFileUpload = true;
-            } else if (typeof optionsWin.showOptionsAlert === 'function') {
-              optionsWin.showOptionsAlert('Format file .pmr / .json tidak valid atau rusak. Pastikan file berisi keystroke yang sesuai.', 'error');
-              if (typeof optionsWin.notifySaved === 'function') {
-                optionsWin.notifySaved('Format file .pmr / .json tidak valid!', 'xCircle', 'error');
-              }
-            }
-          }
-
-          addLog(
-            'warn',
-            'quick-test.banner',
-            'Simulasi banner non-target (chrome://) di Popup & error upload .pmr rusak di Options (' + (simulatedFileUpload ? 'FileReader change' : 'direct banner') + ')'
-          );
-        } catch (err) {
-          addLog('error', 'quick-test.banner', 'Gagal mensimulasikan banner error: ' + err.message);
-        }
-      });
-
-      elQuickFocusCell1.addEventListener('click', function () {
-        setActiveView('popup');
-        try {
-          const targetDoc = elTargetFrame.contentDocument;
-          if (!targetDoc) return;
-          const gridWrap = targetDoc.querySelector('.grid-wrap');
-          if (gridWrap) {
-            gridWrap.scrollLeft = 0;
-            gridWrap.scrollTop = 0;
-          }
-          const firstInput = targetDoc.querySelector('.diloc-cell-input[data-row="1"][data-col="1"]') || targetDoc.querySelector('.diloc-cell-input');
-          if (!firstInput) return;
-          firstInput.focus();
-          if (typeof firstInput.select === 'function') {
-            firstInput.select();
-          }
-          flashTargetHighlight();
-          addLog('tabs', 'target.focus', 'Fokus kursor dipindahkan ke sel [1,1] pada grid DILOC (' + state.targetOperator + ')');
-        } catch (err) {
-          addLog('error', 'target.focus', 'Gagal memindahkan fokus sel [1,1]: ' + err.message);
-        }
+        } catch (err) {}
       });
 
       elTargetOperatorSelect.addEventListener('change', function () {

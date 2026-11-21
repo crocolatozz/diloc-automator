@@ -1,50 +1,706 @@
 let isRunning = false;
 let currentTargetEl = null;
 let lastFocusedInput = null;
+let lastLockedClickCell = null;
+let lastFilledInput = null;
+
+const PRESET_SHORT_LABELS = {
+  operator1: 'Op. Lap 1',
+  operator2: 'Op. Lap 2',
+  operator3: 'Op. Lap 3'
+};
+
+async function migrateSpeedStorageIfNeeded() {
+  try {
+    const data = await chrome.storage.local.get(['typingSpeedMs']);
+    if (data && data.typingSpeedMs !== undefined) {
+      const raw = Number(data.typingSpeedMs);
+      if (Number.isFinite(raw) && raw < 200) {
+        const migrated = Math.max(200, raw);
+        await chrome.storage.local.set({ typingSpeedMs: migrated });
+      }
+    }
+  } catch (e) {}
+}
+migrateSpeedStorageIfNeeded();
+
+function detectOperatorFromUrl(url) {
+  const raw = String(url || '');
+  const match = raw.match(/\/elogsheet\/(160|161|162)(?:[/?#]|$)/i);
+  if (!match) return '';
+  if (match[1] === '160') return 'operator1';
+  if (match[1] === '161') return 'operator2';
+  if (match[1] === '162') return 'operator3';
+  return '';
+}
+
+function detectOperatorFromH5() {
+  const headings = Array.from(document.querySelectorAll('h5'));
+  for (const h5 of headings) {
+    const text = String(h5.textContent || '');
+    const match = text.match(/op\.\s*lap\s*([123])\b/i);
+    if (match) {
+      return `operator${match[1]}`;
+    }
+  }
+  return '';
+}
+
+function getTableColumnCount() {
+  const rows = Array.from(document.querySelectorAll('tbody tr, table tr'));
+  for (const tr of rows) {
+    const inputs = getRowDataCellInputs(tr);
+    if (inputs.length > 0) {
+      return inputs.length;
+    }
+  }
+  return 0;
+}
+
+function inspectDilocPageContext() {
+  const urlOperator = detectOperatorFromUrl(window.location.href);
+  const h5Operator = detectOperatorFromH5();
+  const webOperator = urlOperator || h5Operator;
+  const tableColCount = getTableColumnCount();
+
+  return {
+    urlOperator,
+    h5Operator,
+    webOperator,
+    tableColCount,
+    pageUrl: window.location.href
+  };
+}
+
+function validatePageBeforeExecution(request, rowsPayload) {
+  const ctx = inspectDilocPageContext();
+  const requestedPreset = typeof request.activePreset === 'string' ? request.activePreset : '';
+  const isBuiltInPreset = Boolean(requestedPreset && PRESET_SHORT_LABELS[requestedPreset]);
+
+  if (isBuiltInPreset && ctx.webOperator && requestedPreset !== ctx.webOperator) {
+    return {
+      icon: 'shieldAlert',
+      color: '#dc2626',
+      message: `Web aktif ${PRESET_SHORT_LABELS[ctx.webOperator]}, preset masih ${PRESET_SHORT_LABELS[requestedPreset]}`
+    };
+  }
+
+  const fileColCount = Number(request.expectedCellCount) || (rowsPayload[0] ? rowsPayload[0].length : 0);
+  if (ctx.tableColCount > 0 && fileColCount > 0 && fileColCount !== ctx.tableColCount) {
+    return {
+      icon: 'warn',
+      color: '#dc2626',
+      message: `${fileColCount} sel ≠ ${ctx.tableColCount} kolom tabel web`
+    };
+  }
+
+  return null;
+}
+
+function isLogsheetInputElement(el) {
+  if (!el || el === document.body || el === document.documentElement) return false;
+  if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && el.tagName !== 'SELECT') return false;
+  if (el.tagName === 'INPUT' && String(el.type || '').toLowerCase() === 'hidden') return false;
+  return true;
+}
 
 function isEditableElement(el) {
-  if (!el || el === document.body || el === document.documentElement) return false;
+  if (!isLogsheetInputElement(el)) return false;
   if (el.disabled || el.readOnly) return false;
-  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return true;
-  if (el.isContentEditable) return true;
+  return true;
+}
+
+function inspectCellLock(inputEl) {
+  if (!inputEl || !document.contains(inputEl)) {
+    return { locked: true, notArrived: false, reason: 'missing' };
+  }
+
+  const td = inputEl.closest('td.data-cell') || inputEl.closest('td, th');
+  const tdTitle = td ? String(td.getAttribute('title') || '').toLowerCase() : '';
+  const elTitle = String(inputEl.getAttribute('title') || '').toLowerCase();
+  const notArrived = tdTitle.includes('jam belum tiba') || elTitle.includes('jam belum tiba');
+
+  const hasLockedClass = Boolean(
+    (td && (td.classList.contains('cell-locked') || td.classList.contains('permission-locked'))) ||
+    inputEl.classList.contains('cell-locked') ||
+    inputEl.classList.contains('permission-locked')
+  );
+
+  const isDisabledOrReadOnly = Boolean(inputEl.disabled || inputEl.readOnly);
+
+  return {
+    locked: notArrived || hasLockedClass || isDisabledOrReadOnly,
+    notArrived
+  };
+}
+
+function isLockedDomNode(node) {
+  if (!node) return false;
+  const td = node.closest ? (node.closest('td.data-cell') || node.closest('td, th')) : null;
+  if (td) {
+    const tdTitle = String(td.getAttribute('title') || '').toLowerCase();
+    if (td.classList.contains('cell-locked') || td.classList.contains('permission-locked') || tdTitle.includes('jam belum tiba')) {
+      return true;
+    }
+    const innerInput = td.querySelector('input.cell-input, input:not([type="hidden"]), textarea, select');
+    if (innerInput && (innerInput.disabled || innerInput.readOnly)) {
+      return true;
+    }
+  }
+  if (isLogsheetInputElement(node)) {
+    return inspectCellLock(node).locked;
+  }
   return false;
 }
 
+document.addEventListener('pointerdown', (e) => {
+  const target = e.target;
+  if (!target || !target.closest) return;
+  const td = target.closest('td.data-cell, td');
+  if (td && isLockedDomNode(target)) {
+    lastLockedClickCell = td;
+    lastFocusedInput = null;
+  } else if (isEditableElement(target)) {
+    lastLockedClickCell = null;
+  }
+}, true);
+
 document.addEventListener('focusin', (e) => {
-  if (isEditableElement(e.target)) {
+  if (isEditableElement(e.target) && !inspectCellLock(e.target).locked) {
     lastFocusedInput = e.target;
+    lastLockedClickCell = null;
   }
 }, true);
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && isRunning) {
-    stopMacroExecution("Macro dihentikan (ESC)!");
+    stopMacroExecution("Pengisian dihentikan (ESC)");
   }
 }, true);
 
+function getRowDataCellInputs(tr) {
+  if (!tr) return [];
+  const dilocInputs = Array.from(tr.querySelectorAll('td.data-cell input.cell-input, td.data-cell input:not([type="hidden"])'));
+  if (dilocInputs.length > 0) {
+    return dilocInputs.filter(el => el.offsetParent !== null);
+  }
+
+  return Array.from(tr.querySelectorAll('td input:not([type="hidden"]), td textarea, td select'))
+    .filter(el => {
+      if (el.offsetParent === null) return false;
+      const td = el.closest('td');
+      if (!td) return false;
+      if (td.classList.contains('sticky-col') || td.classList.contains('col-waktu') || td.classList.contains('row-label')) {
+        return false;
+      }
+      return true;
+    });
+}
+
+function getRowTimeLabel(tr) {
+  if (!tr) return '';
+  const timeCell = tr.querySelector('td.sticky-col.col-waktu, td.col-waktu, td.row-label, td.sticky-col');
+  if (timeCell) {
+    return String(timeCell.textContent || '').trim();
+  }
+  const firstTd = tr.querySelector('td');
+  return firstTd ? String(firstTd.textContent || '').trim() : '';
+}
+
+function getNextDataRow(tr) {
+  let cursor = tr ? tr.nextElementSibling : null;
+  while (cursor) {
+    if (cursor.tagName === 'TR' && getRowDataCellInputs(cursor).length > 0) {
+      return cursor;
+    }
+    cursor = cursor.nextElementSibling;
+  }
+  return null;
+}
+
+function findFirstOpenEmptyRow(rows) {
+  for (const tr of rows) {
+    const inputs = getRowDataCellInputs(tr);
+    const firstInput = inputs[0];
+    if (!firstInput) continue;
+    const lock = inspectCellLock(firstInput);
+    if (lock.locked) continue;
+    if (String(firstInput.value ?? '').trim() === '') {
+      return { row: tr, colIdx: 0 };
+    }
+  }
+  return null;
+}
+
+function findAutoDetectStartLocation() {
+  // Lapis 1 (Prioritas Utama): baris zona shift aktif (.active-shift-time) yang sel pertamanya terbuka & kosong
+  const activeShiftRows = Array.from(document.querySelectorAll('tr'))
+    .filter(tr => tr.querySelector('.active-shift-time') && getRowDataCellInputs(tr).length > 0);
+
+  const layer1Match = findFirstOpenEmptyRow(activeShiftRows);
+  if (layer1Match) {
+    return layer1Match;
+  }
+
+  // Lapis 2 (Fallback Universal): scan semua baris tabel dari atas ke bawah
+  const allDataRows = Array.from(document.querySelectorAll('tbody tr, table tr'))
+    .filter(tr => getRowDataCellInputs(tr).length > 0);
+
+  const layer2Match = findFirstOpenEmptyRow(allDataRows);
+  if (layer2Match) {
+    return layer2Match;
+  }
+
+  return {
+    error: "Semua baris shift aktif sudah terisi / jam belum tiba",
+    icon: "clock"
+  };
+}
+
+function resolveStartLocation() {
+  // Prioritas 1: Cek apakah user mengklik sel terkunci secara eksplisit
+  if (lastLockedClickCell && document.contains(lastLockedClickCell)) {
+    const row = lastLockedClickCell.closest('tr');
+    const rowTime = getRowTimeLabel(row);
+    const title = String(lastLockedClickCell.getAttribute('title') || '').toLowerCase();
+    const isFuture = title.includes('jam belum tiba');
+    const msg = isFuture
+      ? `Sel ${rowTime ? rowTime + ' ' : ''}belum tiba — pengisian dibatalkan aman.`
+      : `Sel ${rowTime ? rowTime + ' ' : ''}terkunci — klik sel yang terbuka untuk memulai.`;
+    lastLockedClickCell = null;
+    return { error: msg, icon: isFuture ? 'clock' : 'warn' };
+  }
+
+  // Prioritas 1: Kursor manual yang fokus di sel terbuka
+  const activeEl = document.activeElement;
+  const manualEl = isLogsheetInputElement(activeEl)
+    ? activeEl
+    : (lastFocusedInput && document.contains(lastFocusedInput) ? lastFocusedInput : null);
+
+  if (manualEl) {
+    const lock = inspectCellLock(manualEl);
+    const tr = manualEl.closest('tr');
+    if (lock.locked) {
+      const rowTime = getRowTimeLabel(tr);
+      const msg = lock.notArrived
+        ? `Sel ${rowTime ? rowTime + ' ' : ''}belum tiba — pengisian dibatalkan aman.`
+        : `Sel ${rowTime ? rowTime + ' ' : ''}terkunci — tidak bisa diisi.`;
+      return { error: msg, icon: lock.notArrived ? 'clock' : 'warn' };
+    }
+
+    if (tr) {
+      const rowInputs = getRowDataCellInputs(tr);
+      const colIdx = rowInputs.indexOf(manualEl);
+      if (colIdx >= 0) {
+        return { row: tr, colIdx };
+      }
+    }
+    return { singleElement: manualEl };
+  }
+
+  // Prioritas 2: Auto-detect baris kosong pertama di zona shift aktif
+  return findAutoDetectStartLocation();
+}
+
+function preScanTargetCells(rowsPayload, startLoc) {
+  if (!startLoc) return { filledCount: 0, startRowTime: '', startColNumber: 1 };
+
+  if (!startLoc.row && startLoc.singleElement) {
+    const el = startLoc.singleElement;
+    const lock = inspectCellLock(el);
+    const hasVal = !lock.locked && String(el.value ?? '').trim() !== '';
+    return {
+      filledCount: hasVal ? 1 : 0,
+      startRowTime: '',
+      startColNumber: 1
+    };
+  }
+
+  const totalRows = Math.min(4, rowsPayload.length);
+  const startColNumber = (startLoc.colIdx || 0) + 1;
+  const startRowTime = getRowTimeLabel(startLoc.row);
+  let currentRow = startLoc.row;
+  let filledCount = 0;
+
+  for (let r = 0; r < totalRows; r++) {
+    if (!currentRow) break;
+    const rowInputs = getRowDataCellInputs(currentRow);
+    const rowValues = rowsPayload[r] || [];
+    const startAbsCol = (r === 0) ? (startLoc.colIdx || 0) : 0;
+
+    if (rowInputs.length === 0 || startAbsCol >= rowInputs.length) break;
+
+    if (r > 0 && inspectCellLock(rowInputs[0]).locked) {
+      break;
+    }
+
+    const colLimit = Math.min(rowInputs.length, rowValues.length);
+    let hitLock = false;
+    for (let absColIdx = startAbsCol; absColIdx < colLimit; absColIdx++) {
+      const targetInput = rowInputs[absColIdx];
+      if (inspectCellLock(targetInput).locked) {
+        hitLock = true;
+        break;
+      }
+      if (String(targetInput.value ?? '').trim() !== '') {
+        filledCount += 1;
+      }
+    }
+
+    if (hitLock) break;
+    if (r < totalRows - 1) {
+      currentRow = getNextDataRow(currentRow);
+    }
+  }
+
+  return { filledCount, startRowTime, startColNumber };
+}
+
+function createInlineSvgMarkup(pathsMarkup, size = 14) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pathsMarkup}</svg>`;
+}
+
+function confirmOverwriteShadowModal(filledCount, startRowTime) {
+  return new Promise((resolve) => {
+    const existingHost = document.getElementById('pmr-confirm-modal-host');
+    if (existingHost) existingHost.remove();
+
+    const host = document.createElement('div');
+    host.id = 'pmr-confirm-modal-host';
+    host.style.position = 'fixed';
+    host.style.inset = '0';
+    host.style.zIndex = '2147483647';
+
+    const shadow = host.attachShadow({ mode: 'open' });
+    const rowDesc = startRowTime ? `mulai ${startRowTime}` : 'pada baris target';
+
+    const warnSvg = createInlineSvgMarkup(
+      '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+      18
+    );
+    const xSvg = createInlineSvgMarkup(
+      '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+      14
+    );
+    const overwriteSvg = createInlineSvgMarkup(
+      '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+      14
+    );
+
+    shadow.innerHTML = `
+      <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        .backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(2, 6, 23, 0.72);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .modal {
+          width: 100%;
+          max-width: 400px;
+          background: #0f172a;
+          color: #f1f5f9;
+          border: 1px solid rgba(245, 158, 11, 0.45);
+          border-radius: 12px;
+          box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55);
+          padding: 18px 20px;
+        }
+        .header {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 10px;
+        }
+        .icon-badge {
+          width: 34px;
+          height: 34px;
+          border-radius: 8px;
+          background: rgba(245, 158, 11, 0.16);
+          border: 1px solid rgba(251, 191, 36, 0.4);
+          color: #fbbf24;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .title {
+          margin: 0;
+          font-size: 15px;
+          font-weight: 700;
+          color: #f8fafc;
+        }
+        .message {
+          margin: 0 0 16px 0;
+          font-size: 13px;
+          line-height: 1.5;
+          color: #cbd5e1;
+        }
+        .message strong {
+          color: #fbbf24;
+        }
+        .actions {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 8px;
+        }
+        button {
+          font-family: inherit;
+          font-size: 12.5px;
+          font-weight: 600;
+          padding: 8px 14px;
+          border-radius: 8px;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          transition: filter 0.15s ease, background-color 0.15s ease;
+        }
+        button:focus-visible {
+          outline: 2px solid #38bdf8;
+          outline-offset: 2px;
+        }
+        .btn-cancel {
+          background: rgba(30, 41, 59, 0.85);
+          color: #cbd5e1;
+          border: 1px solid rgba(148, 163, 184, 0.35);
+        }
+        .btn-cancel:hover {
+          background: #1e293b;
+          color: #ffffff;
+        }
+        .btn-confirm {
+          background: #d97706;
+          color: #ffffff;
+          border: 1px solid #f59e0b;
+        }
+        .btn-confirm:hover {
+          background: #b45309;
+        }
+        .kbd {
+          font-size: 10px;
+          opacity: 0.78;
+          padding: 1px 5px;
+          border-radius: 4px;
+          background: rgba(0, 0, 0, 0.28);
+        }
+      </style>
+      <div class="backdrop" part="backdrop">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pmr-modal-title">
+          <div class="header">
+            <span class="icon-badge">${warnSvg}</span>
+            <h3 id="pmr-modal-title" class="title">Konfirmasi Timpa Sel Terisi</h3>
+          </div>
+          <p class="message">Ditemukan <strong>${filledCount} sel</strong> sudah terisi ${escapeTextForHtml(rowDesc)}. Tetap timpa angka lama?</p>
+          <div class="actions">
+            <button type="button" id="pmr-btn-cancel" class="btn-cancel">
+              ${xSvg}
+              <span>Batal</span>
+              <span class="kbd">ESC</span>
+            </button>
+            <button type="button" id="pmr-btn-confirm" class="btn-confirm">
+              ${overwriteSvg}
+              <span>Tetap Timpa</span>
+              <span class="kbd">Enter</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const cancelBtn = shadow.getElementById('pmr-btn-cancel');
+    const confirmBtn = shadow.getElementById('pmr-btn-confirm');
+    const backdrop = shadow.querySelector('.backdrop');
+
+    let settled = false;
+    const cleanupAndResolve = (result) => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener('keydown', onKeyDown, true);
+      host.remove();
+      resolve(result);
+    };
+
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        cleanupAndResolve(false);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        cleanupAndResolve(true);
+      }
+    };
+
+    cancelBtn.addEventListener('click', () => cleanupAndResolve(false));
+    confirmBtn.addEventListener('click', () => cleanupAndResolve(true));
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) cleanupAndResolve(false);
+    });
+
+    document.addEventListener('keydown', onKeyDown, true);
+    document.body.appendChild(host);
+    confirmBtn.focus();
+  });
+}
+
+function escapeTextForHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function findDilocSubmitButton() {
+  const candidates = Array.from(document.querySelectorAll('button.btn.btn-primary.btn-sm'));
+  return candidates.find(btn => {
+    const txt = String(btn.textContent || '').toLowerCase();
+    return txt.includes('menyimpan') || txt.includes('submit for approval');
+  }) || null;
+}
+
+async function interruptibleSleep(ms) {
+  const step = 100;
+  let elapsed = 0;
+  while (elapsed < ms) {
+    if (!isRunning) return false;
+    const chunk = Math.min(step, ms - elapsed);
+    await sleep(chunk);
+    elapsed += chunk;
+  }
+  return isRunning;
+}
+
+async function waitForDilocAutosaveSync() {
+  const stillRunning = await interruptibleSleep(1150);
+  if (!stillRunning) return;
+
+  const submitBtn = findDilocSubmitButton();
+  if (!submitBtn) return;
+
+  const isCurrentlySaving = () => {
+    const txt = String(submitBtn.textContent || '').toLowerCase();
+    return Boolean(submitBtn.disabled || txt.includes('menyimpan'));
+  };
+
+  if (!isCurrentlySaving()) return;
+
+  showToast("loader", "Menunggu autosave server...", "#0284c7", true);
+  const startedAt = Date.now();
+  while (isRunning && (Date.now() - startedAt) < 6000) {
+    if (!isCurrentlySaving()) break;
+    await sleep(100);
+  }
+}
+
+function extractRowsPayload(request) {
+  if (Array.isArray(request.rows) && request.rows.length > 0) {
+    return request.rows.map(rowArr => (Array.isArray(rowArr) ? rowArr.map(v => String(v ?? '')) : []));
+  }
+
+  // Fallback jika pesan hanya mengirim sequence langkah keystroke
+  const seq = Array.isArray(request.sequence) ? request.sequence : [];
+  if (seq.length === 0) return [];
+
+  const navKeys = new Set(['key.tab', 'tab', 'key.right', 'arrowright', 'key.enter', 'enter', 'return', 'key.down', 'arrowdown', 'key.left', 'arrowleft']);
+  const values = [];
+  let buf = [];
+  for (const step of seq) {
+    const lk = String(step.key || '').trim().toLowerCase();
+    if (navKeys.has(lk)) {
+      values.push(buf.join(''));
+      buf = [];
+    } else if (lk === 'key.backspace' || lk === 'backspace') {
+      buf.pop();
+    } else if (step.key && String(step.key).length === 1) {
+      buf.push(step.key === ',' ? '.' : step.key);
+    }
+  }
+  if (buf.length > 0) {
+    values.push(buf.join(''));
+  }
+
+  const count = Math.max(1, Math.min(4, Number(request.rowCount) || 1));
+  const rows = [];
+  for (let i = 0; i < count; i++) {
+    rows.push(values.slice());
+  }
+  return rows;
+}
+
+async function handleStartMacro(request) {
+  if (isRunning) return;
+
+  await migrateSpeedStorageIfNeeded();
+
+  const rowsPayload = extractRowsPayload(request);
+  if (rowsPayload.length === 0) {
+    syncRunningState(false);
+    return;
+  }
+
+  const validationError = validatePageBeforeExecution(request, rowsPayload);
+  if (validationError) {
+    if (window === window.top || window.__PMR_SIMULATOR_TOP__ === true) {
+      showToast(validationError.icon, validationError.message, validationError.color, false);
+      syncRunningState(false);
+    }
+    return;
+  }
+
+  const startLoc = resolveStartLocation();
+  if (startLoc.error) {
+    if (window === window.top || window.__PMR_SIMULATOR_TOP__ === true) {
+      showToast(startLoc.icon || "warn", startLoc.error, "#d97706", false);
+      syncRunningState(false);
+    }
+    return;
+  }
+
+  const preScan = preScanTargetCells(rowsPayload, startLoc);
+  if (preScan.filledCount >= 1) {
+    const confirmed = await confirmOverwriteShadowModal(preScan.filledCount, preScan.startRowTime);
+    if (!confirmed) {
+      syncRunningState(false);
+      return;
+    }
+  }
+
+  const speedMs = Math.max(200, Number(request.speedMs) || 400);
+  const runMeta = {
+    randomMode: request.randomMode || 'off',
+    selectedSet: Array.isArray(request.selectedIndices) ? new Set(request.selectedIndices) : null
+  };
+  runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta);
+}
+
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "GET_STATUS") {
-    sendResponse({ isRunning });
+    const ctx = inspectDilocPageContext();
+    sendResponse({
+      isRunning,
+      webOperator: ctx.webOperator,
+      urlOperator: ctx.urlOperator,
+      h5Operator: ctx.h5Operator,
+      tableColCount: ctx.tableColCount,
+      pageUrl: ctx.pageUrl
+    });
     return true;
   }
 
-  if (request.action === "START_MACRO" && request.sequence) {
-    const active = isEditableElement(document.activeElement)
-      ? document.activeElement
-      : (lastFocusedInput && document.contains(lastFocusedInput) ? lastFocusedInput : null);
-
-    if (!active) {
-      if (window === window.top || window.__PMR_SIMULATOR_TOP__ === true) {
-        showToast("warn", "Klik dulu kolom/sel input pertama di logsheet sebelum menekan Play!", "#d97706", false);
-        syncRunningState(false);
-      }
-      return;
-    }
-    if (isRunning) return;
-    runMacro(request.sequence, active);
+  if (request.action === "START_MACRO" && (request.rows || request.sequence)) {
+    handleStartMacro(request);
   } else if (request.action === "STOP_MACRO") {
     if (isRunning) {
-      stopMacroExecution("Macro dihentikan!");
+      stopMacroExecution("Pengisian dihentikan (ESC)");
     }
   }
 });
@@ -61,68 +717,18 @@ function syncRunningState(running) {
   } catch (e) {}
 }
 
-function resetCellBuffer(el) {
-  if (!el) return;
-  el._pmrBuffer = "";
-  el._pmrReplaceAll = true;
-}
-
-async function runMacro(sequence, firstTarget) {
-  isRunning = true;
-  currentTargetEl = firstTarget;
-  resetCellBuffer(currentTargetEl);
-  syncRunningState(true);
-
-  await sleep(90);
-  if (!isRunning) return;
-
-  currentTargetEl.focus();
-  try {
-    if (typeof currentTargetEl.select === 'function') {
-      currentTargetEl.select();
-    }
-  } catch (e) {}
-
-  showToast("play", `Mengetik (0/${sequence.length}) — Tekan ESC / klik ini untuk Stop`, "#0284c7", true);
-
-  for (let i = 0; i < sequence.length; i++) {
-    if (!isRunning) break;
-
-    const step = sequence[i];
-    await sleep(step.delay);
-
-    if (!isRunning) break;
-
-    const activeNow = document.activeElement;
-    if (isEditableElement(activeNow)) {
-      if (activeNow !== currentTargetEl) {
-        resetCellBuffer(activeNow);
-      }
-      currentTargetEl = activeNow;
-    } else if (currentTargetEl && document.contains(currentTargetEl)) {
-      currentTargetEl.focus();
-    }
-
-    if (currentTargetEl) {
-      simulateKey(currentTargetEl, step.key);
-    }
-
-    if ((i + 1) % 2 === 0 || i === sequence.length - 1) {
-      showToast("play", `Mengetik (${i + 1}/${sequence.length}) — Tekan ESC / klik ini untuk Stop`, "#0284c7", true);
-    }
-  }
-
-  if (isRunning) {
-    if (currentTargetEl) {
-      currentTargetEl.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    isRunning = false;
-    syncRunningState(false);
-    showToast("success", "Pengisian logsheet selesai!", "#16a34a", false);
-  }
-}
-
 function setNativeValue(el, value) {
+  if (!el) return;
+  if (el.tagName === 'SELECT') {
+    const options = Array.from(el.options);
+    const match = options.find(opt => opt.value === value)
+      || options.find(opt => opt.text.trim().toLowerCase() === String(value).trim().toLowerCase());
+    if (match) {
+      el.value = match.value;
+    }
+    return;
+  }
+
   const proto = el.tagName === 'TEXTAREA'
     ? window.HTMLTextAreaElement.prototype
     : window.HTMLInputElement.prototype;
@@ -134,287 +740,263 @@ function setNativeValue(el, value) {
   }
 }
 
-function isCompleteNumberString(str) {
-  return /^[+-]?(\d+(\.\d+)?|\.\d+)$/.test(str);
-}
+function injectCellValueVueReactive(inputEl, rawValue) {
+  let valueToSet = String(rawValue ?? '');
 
-function resolvePrintableChar(rawKey) {
-  let k = String(rawKey).trim();
-  while ((k.startsWith("'") && k.endsWith("'")) || (k.startsWith('"') && k.endsWith('"'))) {
-    if (k.length <= 2) break;
-    k = k.slice(1, -1);
-  }
-
-  const lower = k.toLowerCase();
-  if (lower === 'key.space' || lower === 'space') return ' ';
-
-  const vkMatch = k.match(/(?:vk=|keycode\(|<)(\d{2,3})(?:\)|>)/i);
-  if (vkMatch) {
-    const code = parseInt(vkMatch[1], 10);
-    if ((code >= 65 && code <= 90) || (code >= 48 && code <= 57)) {
-      return String.fromCharCode(code).toLowerCase();
-    }
-    if (code >= 96 && code <= 105) {
-      return String(code - 96);
-    }
-  }
-
-  if (lower.startsWith('key.')) return null;
-
-  if (k.length === 1) {
-    return k === ',' ? '.' : k;
-  }
-  return null;
-}
-
-function simulateKey(el, key) {
-  const lowerKey = String(key).trim().toLowerCase();
-
-  // 1. Navigasi pindah sel berikutnya (Tab atau Panah Kanan)
-  if (lowerKey === 'key.tab' || lowerKey === 'tab' || lowerKey === 'key.right' || lowerKey === 'arrowright') {
-    commitCellEvents(el);
-    moveFocusRelative(el, 1);
-    return;
-  }
-
-  // 2. Navigasi pindah sel sebelumnya (Panah Kiri)
-  if (lowerKey === 'key.left' || lowerKey === 'arrowleft') {
-    commitCellEvents(el);
-    moveFocusRelative(el, -1);
-    return;
-  }
-
-  // 3. Navigasi bawah / Enter
-  if (lowerKey === 'key.down' || lowerKey === 'arrowdown') {
-    commitCellEvents(el);
-    moveFocusDown(el);
-    return;
-  }
-
-  if (lowerKey === 'key.enter' || lowerKey === 'enter' || lowerKey === 'return') {
-    commitCellEvents(el);
-    el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-    el.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-    return;
-  }
-
-  // 4. Backspace
-  if (lowerKey === 'key.backspace' || lowerKey === 'backspace') {
-    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-      const base = (typeof el._pmrBuffer === 'string' && el._pmrBuffer.length > 0)
-        ? el._pmrBuffer
-        : String(el.value || '');
-      const sliced = base.slice(0, -1);
-      el._pmrBuffer = sliced;
-      if (el.type === 'number') {
-        if (sliced === '' || isCompleteNumberString(sliced)) {
-          setNativeValue(el, sliced);
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      } else {
-        setNativeValue(el, sliced);
-        el.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-    } else if (el.isContentEditable) {
-      el.textContent = (el.textContent || '').slice(0, -1);
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-    }
-    return;
-  }
-
-  // 5. Karakter huruf, angka, minus (-), desimal (.), spasi, simbol
-  const charToType = resolvePrintableChar(key);
-  if (!charToType) return;
-
-  if (el.tagName === 'SELECT') {
-    const query = ((el._pmrSelectSearch || '') + charToType).toLowerCase();
-    el._pmrSelectSearch = query;
-    clearTimeout(el._pmrSelectTimer);
-    el._pmrSelectTimer = setTimeout(() => { el._pmrSelectSearch = ''; }, 900);
-
-    const options = Array.from(el.options);
-    const match = options.find(opt => opt.text.trim().toLowerCase().startsWith(query))
-      || options.find(opt => opt.text.trim().toLowerCase().startsWith(charToType.toLowerCase()));
-    if (match) {
-      el.value = match.value;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-    return;
-  }
-
-  const isNumberInput = (el.tagName === 'INPUT' && el.type === 'number');
-
-  if (isNumberInput && /[a-zA-Z/]/.test(charToType)) {
+  if (inputEl.tagName === 'INPUT' && inputEl.type === 'number' && valueToSet !== '' && !/^[+-]?(\d+(\.\d+)?|\.\d+)$/.test(valueToSet)) {
     try {
-      const preservedVal = el._pmrReplaceAll ? "" : (el._pmrBuffer || el.value || "");
-      el.type = 'text';
-      if (preservedVal !== "") {
-        setNativeValue(el, preservedVal);
-      }
+      inputEl.type = 'text';
     } catch (e) {}
   }
 
-  const stillNumberInput = (el.tagName === 'INPUT' && el.type === 'number');
+  inputEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  inputEl.focus();
+  setNativeValue(inputEl, valueToSet);
+  inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+  inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+  // Pemicu wajib autosave DILOC sebelum pindah ke sel berikutnya
+  inputEl.blur();
+  inputEl.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+}
 
-  const keyCodeNum = charToType.toUpperCase().charCodeAt(0);
-  el.dispatchEvent(new KeyboardEvent('keydown', { key: charToType, keyCode: keyCodeNum, which: keyCodeNum, bubbles: true }));
-  el.dispatchEvent(new KeyboardEvent('keypress', { key: charToType, charCode: charToType.charCodeAt(0), keyCode: charToType.charCodeAt(0), which: charToType.charCodeAt(0), bubbles: true }));
+async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
+  isRunning = true;
+  lastFilledInput = null;
+  syncRunningState(true);
 
-  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-    if (stillNumberInput) {
-      const prevBuffer = el._pmrReplaceAll ? "" : (el._pmrBuffer ?? String(el.value || ''));
-      el._pmrReplaceAll = false;
-      const nextBuffer = prevBuffer + charToType;
-      el._pmrBuffer = nextBuffer;
+  const totalRows = Math.min(4, rowsPayload.length);
+  const selectedColSet = runMeta.selectedSet instanceof Set ? runMeta.selectedSet : null;
+  const startColNumber = (startLoc.colIdx || 0) + 1;
+  let currentRow = startLoc.row || null;
+  let lastCompletedRowTime = '';
+  let stoppedByBrake = false;
+  let blockedTime = '';
+  let blockedNotArrived = false;
+  let filledRowsCount = 0;
+  let lastRowNeedsAutosaveSync = false;
 
-      if (isCompleteNumberString(nextBuffer)) {
-        setNativeValue(el, nextBuffer);
-        el.dispatchEvent(new InputEvent('input', { data: charToType, inputType: 'insertText', bubbles: true }));
-      }
-    } else {
-      const currentVal = el._pmrReplaceAll ? "" : String(el.value || '');
-      const wasReplaced = Boolean(el._pmrReplaceAll);
-      el._pmrReplaceAll = false;
-      let nextVal = currentVal + charToType;
-
-      try {
-        if (!wasReplaced && typeof el.selectionStart === 'number' && typeof el.selectionEnd === 'number') {
-          const start = el.selectionStart;
-          const end = el.selectionEnd;
-          nextVal = currentVal.substring(0, start) + charToType + currentVal.substring(end);
-          setNativeValue(el, nextVal);
-          el.selectionStart = el.selectionEnd = start + 1;
-        } else {
-          setNativeValue(el, nextVal);
-        }
-      } catch (e) {
-        setNativeValue(el, nextVal);
-      }
-
-      el._pmrBuffer = nextVal;
-      el.dispatchEvent(new InputEvent('input', { data: charToType, inputType: 'insertText', bubbles: true }));
+  // Fallback jika input bukan di dalam struktur <tr> tabel
+  if (!currentRow && startLoc.singleElement) {
+    const el = startLoc.singleElement;
+    const lock = inspectCellLock(el);
+    if (!lock.locked && rowsPayload[0] && rowsPayload[0].length > 0) {
+      showToast("play", `Mulai: Kol ${startColNumber}`, "#0284c7", true);
+      injectCellValueVueReactive(el, rowsPayload[0][0]);
+      lastFilledInput = el;
+      currentTargetEl = el;
+      lastFocusedInput = el;
+      await waitForDilocAutosaveSync();
     }
-  } else if (el.isContentEditable) {
-    const currentText = el._pmrReplaceAll ? "" : (el.textContent || '');
-    el._pmrReplaceAll = false;
-    el.textContent = currentText + charToType;
-    el.dispatchEvent(new InputEvent('input', { data: charToType, inputType: 'insertText', bubbles: true }));
+    if (!isRunning) return;
+    isRunning = false;
+    syncRunningState(false);
+    showToast("success", "Pengisian sel selesai!", "#16a34a", false);
+    return;
   }
 
-  el.dispatchEvent(new KeyboardEvent('keyup', { key: charToType, keyCode: keyCodeNum, which: keyCodeNum, bubbles: true }));
-}
+  const initialRowTime = getRowTimeLabel(currentRow);
+  showToast(
+    "play",
+    initialRowTime
+      ? `Mulai: ${initialRowTime} (Kol ${startColNumber})`
+      : `Mulai: Kol ${startColNumber}`,
+    "#0284c7",
+    true
+  );
 
-function commitCellEvents(el) {
-  if (!el) return;
-  el.dispatchEvent(new Event('change', { bubbles: true }));
-  el.dispatchEvent(new Event('blur', { bubbles: true }));
-}
+  for (let r = 0; r < totalRows; r++) {
+    if (!isRunning || !currentRow) break;
 
-function getAllEditableCells() {
-  return Array.from(
-    document.querySelectorAll('input:not([disabled]):not([readonly]):not([type="hidden"]), textarea:not([disabled]):not([readonly]), select:not([disabled]), [contenteditable="true"]')
-  ).filter(node => node.offsetParent !== null);
-}
+    const rowInputs = getRowDataCellInputs(currentRow);
+    const rowValues = rowsPayload[r] || [];
+    // Baris 1 mengikuti posisi kursor mulai, baris ke-2 dst selalu mulai dari kolom absolut 0
+    const startAbsCol = (r === 0) ? (startLoc.colIdx || 0) : 0;
+    const rowTimeLabel = getRowTimeLabel(currentRow);
 
-function moveFocusRelative(currentEl, step) {
-  const cells = getAllEditableCells();
-  const currentIndex = cells.indexOf(currentEl);
-  const nextIndex = currentIndex + step;
+    if (rowInputs.length === 0 || startAbsCol >= rowInputs.length) {
+      break;
+    }
 
-  if (currentIndex > -1 && nextIndex >= 0 && nextIndex < cells.length) {
-    const nextEl = cells[nextIndex];
-    resetCellBuffer(nextEl);
-    nextEl.focus();
-    currentTargetEl = nextEl;
-    lastFocusedInput = nextEl;
-    try {
-      if (typeof nextEl.select === 'function') {
-        nextEl.select();
+    // Jeda antarbaris 250ms agar horizontal scroll kembali ke kolom awal stabil sebelum baris baru dimulai
+    if (r > 0) {
+      const firstCellLock = inspectCellLock(rowInputs[0]);
+      if (firstCellLock.locked) {
+        stoppedByBrake = true;
+        blockedTime = rowTimeLabel;
+        blockedNotArrived = firstCellLock.notArrived;
+        break;
       }
-    } catch (e) {}
-  }
-}
+      rowInputs[0].scrollIntoView({ block: 'nearest', inline: 'start' });
+      await sleep(250);
+      if (!isRunning) break;
+    }
 
-function moveFocusDown(currentEl) {
-  const td = currentEl.closest('td, th');
-  const tr = currentEl.closest('tr');
-  if (td && tr && tr.parentElement) {
-    const colIndex = Array.from(tr.children).indexOf(td);
-    const rows = Array.from(tr.parentElement.children);
-    const rowIndex = rows.indexOf(tr);
-    for (let r = rowIndex + 1; r < rows.length; r++) {
-      const targetCell = rows[r].children[colIndex];
-      if (targetCell) {
-        const input = targetCell.querySelector('input:not([disabled]):not([readonly]):not([type="hidden"]), textarea:not([disabled]), [contenteditable="true"]');
-        if (input && input.offsetParent !== null) {
-          resetCellBuffer(input);
-          input.focus();
-          currentTargetEl = input;
-          lastFocusedInput = input;
-          try { if (typeof input.select === 'function') input.select(); } catch (e) {}
-          return;
-        }
+    const colLimit = Math.min(rowInputs.length, rowValues.length);
+    let rowTouchedAnyCell = false;
+
+    for (let absColIdx = startAbsCol; absColIdx < colLimit; absColIdx++) {
+      if (!isRunning) break;
+
+      const targetInput = rowInputs[absColIdx];
+
+      // Rem otomatis SEBELUM menyentuh elemen (.focus / .click / .value) — anti pop-up DILOC
+      const lockStatus = inspectCellLock(targetInput);
+      if (lockStatus.locked) {
+        stoppedByBrake = true;
+        blockedTime = rowTimeLabel;
+        blockedNotArrived = lockStatus.notArrived;
+        break;
+      }
+
+      // Gunakan indeks kolom absolut (0..N-1) untuk membaca rowValues & cek Selected Cells
+      const isColSelected = selectedColSet ? selectedColSet.has(absColIdx) : false;
+      const cellValue = rowValues[absColIdx];
+      if (runMeta.randomMode === 'selected' && selectedColSet && !isColSelected && rowsPayload[0] && absColIdx < rowsPayload[0].length && cellValue === undefined) {
+        continue;
+      }
+
+      injectCellValueVueReactive(targetInput, cellValue);
+      lastFilledInput = targetInput;
+      currentTargetEl = targetInput;
+      lastFocusedInput = targetInput;
+      rowTouchedAnyCell = true;
+
+      const isInitialFirstCell = (r === 0 && absColIdx === startAbsCol);
+      if (!isInitialFirstCell && ((absColIdx - startAbsCol) % 2 === 0 || absColIdx === colLimit - 1)) {
+        const prefix = totalRows > 1 ? `Baris ${r + 1}/${totalRows} • ` : '';
+        const timePart = rowTimeLabel ? `${rowTimeLabel} • ` : '';
+        showToast("play", `${prefix}${timePart}Mengisi (${absColIdx + 1}/${colLimit}) — ESC untuk Stop`, "#0284c7", true);
+      }
+
+      if (absColIdx < colLimit - 1) {
+        await sleep(speedMs);
       }
     }
+
+    if (rowTouchedAnyCell) {
+      filledRowsCount += 1;
+      lastRowNeedsAutosaveSync = true;
+      if (rowTimeLabel) {
+        lastCompletedRowTime = rowTimeLabel;
+      }
+    }
+
+    if (!isRunning || stoppedByBrake) break;
+
+    if (r < totalRows - 1) {
+      if (rowTouchedAnyCell) {
+        await waitForDilocAutosaveSync();
+        lastRowNeedsAutosaveSync = false;
+        if (!isRunning) break;
+      }
+
+      const nextRow = getNextDataRow(currentRow);
+      if (!nextRow) {
+        break;
+      }
+      currentRow = nextRow;
+    }
   }
-  moveFocusRelative(currentEl, 1);
+
+  // Biarkan kursor tetap diam di sel terakhir yang berhasil diisi
+  if (lastFilledInput && document.contains(lastFilledInput) && !inspectCellLock(lastFilledInput).locked) {
+    lastFocusedInput = lastFilledInput;
+    currentTargetEl = lastFilledInput;
+  }
+
+  if (!isRunning) {
+    // Sudah ditangani oleh stopMacroExecution (ESC / STOP_MACRO)
+    return;
+  }
+
+  if (lastRowNeedsAutosaveSync) {
+    await waitForDilocAutosaveSync();
+    if (!isRunning) return;
+  }
+
+  isRunning = false;
+  syncRunningState(false);
+
+  if (stoppedByBrake) {
+    const reasonText = blockedNotArrived ? 'belum tiba' : 'terkunci';
+    let msg = 'Berhenti: sel target terkunci / belum tiba';
+    if (lastCompletedRowTime && blockedTime) {
+      msg = `Selesai s/d ${lastCompletedRowTime} • ${blockedTime} ${reasonText}`;
+    } else if (blockedTime) {
+      msg = `Berhenti di ${blockedTime} (${reasonText})`;
+    }
+    showToast(blockedNotArrived ? "clock" : "warn", msg, "#d97706", false);
+  } else {
+    const msg = lastCompletedRowTime
+      ? `Selesai s/d ${lastCompletedRowTime} (${filledRowsCount} baris)`
+      : "Pengisian logsheet selesai!";
+    showToast("success", msg, "#16a34a", false);
+  }
 }
 
 function createToastSvgIcon(iconType) {
+  let svg = null;
   if (typeof createSvgElement === 'function') {
     const map = {
       play: 'play',
       stop: 'stop',
       warn: 'warn',
+      shieldAlert: 'shieldAlert',
+      clock: 'clock',
+      loader: 'loader',
       success: 'checkCircle'
     };
-    return createSvgElement(map[iconType] || 'checkCircle', { size: 15 });
+    svg = createSvgElement(map[iconType] || 'checkCircle', { size: 14 });
+  } else {
+    const ns = 'http://www.w3.org/2000/svg';
+    svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('width', '14');
+    svg.setAttribute('height', '14');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('fill', 'none');
+    svg.setAttribute('stroke', 'currentColor');
+    svg.setAttribute('stroke-width', '2');
+    svg.setAttribute('stroke-linecap', 'round');
+    svg.setAttribute('stroke-linejoin', 'round');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.style.flexShrink = '0';
+
+    const appendPath = (tag, attrs) => {
+      const node = document.createElementNS(ns, tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        node.setAttribute(k, v);
+      }
+      svg.appendChild(node);
+    };
+
+    if (iconType === 'play') {
+      appendPath('polygon', { points: '6 3 20 12 6 21 6 3' });
+    } else if (iconType === 'stop') {
+      appendPath('rect', { width: '14', height: '14', x: '5', y: '5', rx: '2' });
+    } else if (iconType === 'clock') {
+      appendPath('circle', { cx: '12', cy: '12', r: '10' });
+      appendPath('polyline', { points: '12 6 12 12 16 14' });
+    } else if (iconType === 'loader') {
+      appendPath('path', { d: 'M21 12a9 9 0 1 1-6.219-8.56' });
+    } else if (iconType === 'shieldAlert') {
+      appendPath('path', { d: 'M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z' });
+      appendPath('path', { d: 'M12 8v4' });
+      appendPath('path', { d: 'M12 16h.01' });
+    } else if (iconType === 'warn') {
+      appendPath('path', { d: 'm21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z' });
+      appendPath('path', { d: 'M12 9v4' });
+      appendPath('path', { d: 'M12 17h.01' });
+    } else {
+      appendPath('circle', { cx: '12', cy: '12', r: '10' });
+      appendPath('path', { d: 'm9 12 2 2 4-4' });
+    }
   }
 
-  const ns = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('width', '15');
-  svg.setAttribute('height', '15');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', 'currentColor');
-  svg.setAttribute('stroke-width', '2');
-  svg.setAttribute('stroke-linecap', 'round');
-  svg.setAttribute('stroke-linejoin', 'round');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.style.flexShrink = '0';
-
-  if (iconType === 'play') {
-    const poly = document.createElementNS(ns, 'polygon');
-    poly.setAttribute('points', '6 3 20 12 6 21 6 3');
-    svg.appendChild(poly);
-  } else if (iconType === 'stop') {
-    const rect = document.createElementNS(ns, 'rect');
-    rect.setAttribute('width', '14');
-    rect.setAttribute('height', '14');
-    rect.setAttribute('x', '5');
-    rect.setAttribute('y', '5');
-    rect.setAttribute('rx', '2');
-    svg.appendChild(rect);
-  } else if (iconType === 'warn') {
-    const path = document.createElementNS(ns, 'path');
-    path.setAttribute('d', 'm21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z');
-    const line1 = document.createElementNS(ns, 'path');
-    line1.setAttribute('d', 'M12 9v4');
-    const line2 = document.createElementNS(ns, 'path');
-    line2.setAttribute('d', 'M12 17h.01');
-    svg.appendChild(path);
-    svg.appendChild(line1);
-    svg.appendChild(line2);
-  } else {
-    const circle = document.createElementNS(ns, 'circle');
-    circle.setAttribute('cx', '12');
-    circle.setAttribute('cy', '12');
-    circle.setAttribute('r', '10');
-    const path = document.createElementNS(ns, 'path');
-    path.setAttribute('d', 'm9 12 2 2 4-4');
-    svg.appendChild(circle);
-    svg.appendChild(path);
+  if (svg && iconType === 'loader' && typeof svg.animate === 'function') {
+    svg.animate(
+      [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],
+      { duration: 900, iterations: Infinity }
+    );
   }
   return svg;
 }
@@ -450,7 +1032,7 @@ function showToast(iconType, message, bgColor, persistent) {
     });
     toast.addEventListener('click', () => {
       if (isRunning) {
-        stopMacroExecution("Macro dihentikan!");
+        stopMacroExecution("Pengisian dihentikan (ESC)");
       } else {
         clearTimeout(toast._hideTimer);
         toast.style.opacity = '0';

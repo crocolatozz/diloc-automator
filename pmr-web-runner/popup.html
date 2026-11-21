@@ -9,6 +9,12 @@
       --bg-body: #f8fafc;
       --bg-card: #ffffff;
       --bg-hover: #f1f5f9;
+      --bg-pill-track: rgba(241, 245, 249, 0.85);
+      --bg-pill-active: rgba(16, 185, 129, 0.14);
+      --border-pill-active: rgba(16, 185, 129, 0.55);
+      --text-pill-active: #047857;
+      --bg-opt-inactive: rgba(255, 255, 255, 0.72);
+      --border-opt-inactive: rgba(148, 163, 184, 0.35);
       --bg-upload-hover: #f0fdf4;
       --border-color: #cbd5e1;
       --border-soft: #e2e8f0;
@@ -21,20 +27,30 @@
       --text-status-ok: #15803d;
       --text-status-err: #dc2626;
       --link-color: #0284c7;
-      --preset-pill-bg: #e0f2fe;
+      --preset-pill-bg: rgba(14, 165, 233, 0.12);
       --preset-pill-text: #0369a1;
-      --preset-pill-border: #bae6fd;
-      --warn-pill-bg: #fef3c7;
-      --warn-pill-text: #b45309;
-      --warn-pill-border: #fcd34d;
+      --preset-pill-border: rgba(14, 165, 233, 0.45);
+      --warn-pill-bg: rgba(239, 68, 68, 0.12);
+      --warn-pill-text: #dc2626;
+      --warn-pill-border: rgba(239, 68, 68, 0.45);
       --alert-warn-bg: #fffbeb;
       --alert-warn-border: #f59e0b;
       --alert-warn-text: #92400e;
       --alert-err-bg: #fef2f2;
       --alert-err-border: #ef4444;
       --alert-err-text: #991b1b;
-      --rand-badge-bg: #dcfce7;
-      --rand-badge-text: #15803d;
+      --rand-badge-bg: rgba(16, 185, 129, 0.14);
+      --rand-badge-border: rgba(16, 185, 129, 0.55);
+      --rand-badge-text: #047857;
+      --speed-satset-bg: rgba(245, 158, 11, 0.14);
+      --speed-satset-border: rgba(245, 158, 11, 0.55);
+      --speed-satset-text: #b45309;
+      --speed-normal-bg: rgba(16, 185, 129, 0.14);
+      --speed-normal-border: rgba(16, 185, 129, 0.55);
+      --speed-normal-text: #047857;
+      --speed-santai-bg: rgba(14, 165, 233, 0.14);
+      --speed-santai-border: rgba(14, 165, 233, 0.55);
+      --speed-santai-text: #0369a1;
       --btn-disabled-bg: #cbd5e1;
       --btn-disabled-text: #64748b;
       --pill-track-bg: #fef3c7;
@@ -50,7 +66,13 @@
     :root[data-theme="dark"] {
       --bg-body: #0b1120;
       --bg-card: #111827;
-      --bg-hover: #1e293b;
+      --bg-hover: rgba(51, 65, 85, 0.55);
+      --bg-pill-track: rgba(15, 23, 42, 0.7);
+      --bg-pill-active: rgba(16, 185, 129, 0.16);
+      --border-pill-active: rgba(52, 211, 153, 0.55);
+      --text-pill-active: #34d399;
+      --bg-opt-inactive: rgba(30, 41, 59, 0.5);
+      --border-opt-inactive: rgba(148, 163, 184, 0.18);
       --bg-upload-hover: rgba(22, 163, 74, 0.14);
       --border-color: #273449;
       --border-soft: #1f2b3e;
@@ -63,20 +85,30 @@
       --text-status-ok: #4ade80;
       --text-status-err: #f87171;
       --link-color: #38bdf8;
-      --preset-pill-bg: rgba(2, 132, 199, 0.22);
-      --preset-pill-text: #7dd3fc;
-      --preset-pill-border: rgba(56, 189, 248, 0.38);
-      --warn-pill-bg: rgba(217, 119, 6, 0.22);
-      --warn-pill-text: #fcd34d;
-      --warn-pill-border: rgba(245, 158, 11, 0.45);
+      --preset-pill-bg: rgba(14, 165, 233, 0.16);
+      --preset-pill-text: #38bdf8;
+      --preset-pill-border: rgba(56, 189, 248, 0.5);
+      --warn-pill-bg: rgba(239, 68, 68, 0.16);
+      --warn-pill-text: #fca5a5;
+      --warn-pill-border: rgba(248, 113, 113, 0.55);
       --alert-warn-bg: rgba(217, 119, 6, 0.18);
       --alert-warn-border: #d97706;
       --alert-warn-text: #fde68a;
       --alert-err-bg: rgba(220, 38, 38, 0.2);
       --alert-err-border: #ef4444;
       --alert-err-text: #fecaca;
-      --rand-badge-bg: rgba(22, 163, 74, 0.22);
-      --rand-badge-text: #86efac;
+      --rand-badge-bg: rgba(16, 185, 129, 0.16);
+      --rand-badge-border: rgba(52, 211, 153, 0.55);
+      --rand-badge-text: #34d399;
+      --speed-satset-bg: rgba(245, 158, 11, 0.16);
+      --speed-satset-border: rgba(251, 191, 36, 0.55);
+      --speed-satset-text: #fbbf24;
+      --speed-normal-bg: rgba(16, 185, 129, 0.16);
+      --speed-normal-border: rgba(52, 211, 153, 0.55);
+      --speed-normal-text: #34d399;
+      --speed-santai-bg: rgba(14, 165, 233, 0.16);
+      --speed-santai-border: rgba(56, 189, 248, 0.55);
+      --speed-santai-text: #38bdf8;
       --btn-disabled-bg: #1e293b;
       --btn-disabled-text: #64748b;
       --pill-track-bg: #1e1b4b;
@@ -93,12 +125,19 @@
       box-sizing: border-box;
     }
 
+    html {
+      height: auto;
+      min-height: unset;
+    }
+
     body {
       width: 340px;
       min-width: 320px;
       max-width: 380px;
+      height: auto;
+      min-height: unset;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      padding: 14px 16px;
+      padding: 13px 15px;
       text-align: center;
       margin: 0 auto;
       background: var(--bg-body);
@@ -121,10 +160,10 @@
       justify-content: space-between;
       flex-wrap: nowrap;
       gap: 10px;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       padding-bottom: 8px;
       border-bottom: 1px solid var(--border-soft);
-      transition: border-color 0.28s ease;
+      transition: border-color 0.25s ease;
     }
 
     .popup-header h4 {
@@ -139,7 +178,7 @@
       text-overflow: ellipsis;
       min-width: 0;
       flex: 1;
-      transition: color 0.28s ease;
+      transition: color 0.25s ease;
     }
 
     /* Interactive Sliding Pill Toggle */
@@ -156,7 +195,7 @@
       justify-content: space-between;
       cursor: pointer;
       flex-shrink: 0;
-      transition: background-color 0.28s ease, border-color 0.28s ease, transform 0.12s ease;
+      transition: background-color 0.25s ease, border-color 0.25s ease, transform 0.12s ease;
     }
 
     .theme-pill-switch:hover {
@@ -176,7 +215,7 @@
       border-radius: 50%;
       background: var(--pill-thumb-bg);
       box-shadow: var(--pill-thumb-shadow);
-      transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.28s ease, width 0.14s ease;
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.25s ease, width 0.14s ease;
       z-index: 1;
     }
 
@@ -198,7 +237,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      transition: color 0.28s ease, opacity 0.28s ease, transform 0.28s ease;
+      transition: color 0.25s ease, opacity 0.25s ease, transform 0.25s ease;
     }
 
     .theme-pill-sun {
@@ -233,20 +272,32 @@
 
     .icon-emerald { color: #16a34a; }
     .icon-sky { color: var(--link-color); }
+    .icon-cyan { color: #0891b2; }
+    .icon-indigo { color: #4f46e5; }
     .icon-amber { color: #d97706; }
+    .icon-orange { color: #fb923c; }
     .icon-rose { color: #e11d48; }
     .icon-slate { color: var(--text-muted); }
+    .speed-icon-satset { color: #d97706; }
+    .speed-icon-normal { color: #16a34a; }
+    .speed-icon-santai { color: #0284c7; }
 
-    :root[data-theme="dark"] .icon-emerald { color: #4ade80; }
+    :root[data-theme="dark"] .icon-emerald { color: #34d399; }
+    :root[data-theme="dark"] .icon-cyan { color: #22d3ee; }
+    :root[data-theme="dark"] .icon-indigo { color: #818cf8; }
     :root[data-theme="dark"] .icon-amber { color: #fbbf24; }
+    :root[data-theme="dark"] .icon-orange { color: #fb923c; }
     :root[data-theme="dark"] .icon-rose { color: #fb7185; }
+    :root[data-theme="dark"] .speed-icon-satset { color: #fbbf24; }
+    :root[data-theme="dark"] .speed-icon-normal { color: #34d399; }
+    :root[data-theme="dark"] .speed-icon-santai { color: #38bdf8; }
 
     .custom-file-upload {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 7px;
-      padding: 9px 12px;
+      padding: 8px 12px;
       cursor: pointer;
       background: var(--bg-card);
       border: 1.5px dashed var(--border-upload);
@@ -254,7 +305,7 @@
       font-weight: 600;
       font-size: 12px;
       color: var(--text-secondary);
-      transition: background-color 0.28s ease, border-color 0.28s ease, color 0.28s ease;
+      transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
     }
 
     .custom-file-upload:hover {
@@ -276,14 +327,14 @@
       align-items: center;
       justify-content: center;
       gap: 5px;
-      margin-top: 8px;
+      margin-top: 7px;
       padding: 2px 4px;
       border-radius: 4px;
       font-size: 11px;
       font-weight: 600;
       color: var(--link-color);
       text-decoration: none;
-      transition: color 0.28s ease;
+      transition: color 0.25s ease;
     }
 
     .editor-link:hover {
@@ -291,7 +342,7 @@
     }
 
     .status {
-      margin: 8px 0 4px 0;
+      margin: 7px 0 4px 0;
       font-size: 11px;
       color: var(--text-muted);
       word-break: break-word;
@@ -301,7 +352,7 @@
       align-items: center;
       justify-content: center;
       gap: 5px;
-      transition: color 0.28s ease;
+      transition: color 0.25s ease;
     }
 
     .status.is-ok {
@@ -314,11 +365,11 @@
 
     .preset-badge-wrap {
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 5px;
-      margin: 2px 0 10px 0;
+      gap: 4px;
+      margin: 2px 0 9px 0;
     }
 
     .preset-badge-wrap[hidden] {
@@ -336,13 +387,13 @@
       background: var(--preset-pill-bg);
       color: var(--preset-pill-text);
       border: 1px solid var(--preset-pill-border);
-      transition: background-color 0.28s ease, color 0.28s ease, border-color 0.28s ease;
+      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
     }
 
     .preset-warn-pill {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 5px;
       padding: 2px 8px;
       border-radius: 99px;
       font-size: 10px;
@@ -350,20 +401,24 @@
       background: var(--warn-pill-bg);
       color: var(--warn-pill-text);
       border: 1px solid var(--warn-pill-border);
-      transition: background-color 0.28s ease, color 0.28s ease, border-color 0.28s ease;
+      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
     }
 
-    .rand-card {
+    .preset-warn-pill .svg-icon {
+      flex-shrink: 0;
+    }
+
+    .ctrl-card {
       background: var(--bg-card);
       border: 1px solid var(--border-soft);
       border-radius: 8px;
-      padding: 9px 10px;
-      margin-bottom: 10px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
       text-align: left;
-      transition: background-color 0.28s ease, border-color 0.28s ease;
+      transition: background-color 0.25s ease, border-color 0.25s ease;
     }
 
-    .rand-title {
+    .ctrl-header {
       font-size: 11px;
       font-weight: 700;
       color: var(--text-secondary);
@@ -371,51 +426,188 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      transition: color 0.28s ease;
+      transition: color 0.25s ease;
     }
 
-    .rand-title-left {
+    .ctrl-title-left {
       display: inline-flex;
       align-items: center;
       gap: 5px;
     }
 
-    .rand-badge {
-      font-size: 10px;
-      background: var(--rand-badge-bg);
-      color: var(--rand-badge-text);
-      padding: 1px 6px;
+    .range-pill-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px;
       border-radius: 99px;
-      font-weight: 700;
-      transition: background-color 0.28s ease, color 0.28s ease;
+      background: var(--bg-pill-track);
+      border: 1px solid var(--border-soft);
+      transition: background-color 0.25s ease, border-color 0.25s ease;
     }
 
-    .radio-group {
+    .range-option {
+      border: 1px solid transparent;
+      border-radius: 99px;
+      padding: 1px 6px;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.35;
+      cursor: pointer;
+      transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    }
+
+    .range-option:hover:not(.active) {
+      background: var(--bg-hover);
+      color: var(--text-title);
+    }
+
+    .range-option.active {
+      background: var(--rand-badge-bg);
+      border-color: var(--rand-badge-border);
+      color: var(--rand-badge-text);
+    }
+
+    .segmented-pill {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 4px;
+      padding: 3px;
+      border-radius: 7px;
+      background: var(--bg-pill-track);
+      border: 1px solid var(--border-soft);
+      transition: background-color 0.25s ease, border-color 0.25s ease;
+    }
+
+    .seg-option {
+      border: 1px solid var(--border-opt-inactive);
+      border-radius: 5px;
+      padding: 5px 3px;
+      background: var(--bg-opt-inactive);
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: center;
+      transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    }
+
+    .seg-option:hover:not(.active) {
+      background: var(--bg-hover);
+      color: var(--text-title);
+    }
+
+    .seg-option.active {
+      background: var(--bg-pill-active);
+      border-color: var(--border-pill-active);
+      color: var(--text-pill-active);
+    }
+
+    .seg-option[data-speed="200"].active {
+      background: var(--speed-satset-bg);
+      border-color: var(--speed-satset-border);
+      color: var(--speed-satset-text);
+    }
+
+    .seg-option[data-speed="400"].active {
+      background: var(--speed-normal-bg);
+      border-color: var(--speed-normal-border);
+      color: var(--speed-normal-text);
+    }
+
+    .seg-option[data-speed="600"].active {
+      background: var(--speed-santai-bg);
+      border-color: var(--speed-santai-border);
+      color: var(--speed-santai-text);
+    }
+
+    .stepper-row {
       display: flex;
-      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-soft);
+      border-radius: 8px;
+      padding: 7px 10px;
+      margin-bottom: 9px;
+      transition: background-color 0.25s ease, border-color 0.25s ease;
+    }
+
+    .stepper-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: color 0.25s ease;
+    }
+
+    .stepper-control {
+      display: inline-flex;
+      align-items: center;
       gap: 4px;
     }
 
-    .radio-item {
-      display: flex;
+    .stepper-btn {
+      width: 26px;
+      height: 24px;
+      padding: 0;
+      border: 1px solid var(--border-opt-inactive);
+      border-radius: 6px;
+      background: var(--bg-opt-inactive);
+      color: var(--text-title);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
       align-items: center;
-      gap: 7px;
-      font-size: 11.5px;
-      color: var(--text-secondary);
-      cursor: pointer;
-      padding: 4px 5px;
-      border-radius: 5px;
-      transition: background-color 0.2s ease, color 0.28s ease;
+      justify-content: center;
+      transition: background-color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
     }
 
-    .radio-item:hover {
+    .stepper-btn:hover:not(:disabled) {
       background: var(--bg-hover);
+      border-color: var(--border-upload);
     }
 
-    .radio-item input[type="radio"] {
-      accent-color: #16a34a;
+    .stepper-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .stepper-input {
+      width: 34px;
+      height: 24px;
+      padding: 0;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-body);
+      color: var(--text-title);
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      appearance: textfield;
+      -moz-appearance: textfield;
+      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+    }
+
+    .stepper-input::-webkit-outer-spin-button,
+    .stepper-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
       margin: 0;
-      cursor: pointer;
     }
 
     .inline-alert {
@@ -424,7 +616,7 @@
       gap: 7px;
       text-align: left;
       padding: 8px 10px;
-      margin-bottom: 10px;
+      margin-bottom: 9px;
       border-radius: 8px;
       font-size: 11px;
       font-weight: 600;
@@ -432,7 +624,7 @@
       background: var(--alert-warn-bg);
       border: 1px solid var(--alert-warn-border);
       color: var(--alert-warn-text);
-      transition: background-color 0.28s ease, border-color 0.28s ease, color 0.28s ease;
+      transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
     }
 
     .inline-alert.is-error {
@@ -451,7 +643,7 @@
 
     #toggleBtn {
       width: 100%;
-      padding: 11px 12px;
+      padding: 10px 12px;
       border: none;
       border-radius: 8px;
       font-weight: 700;
@@ -488,10 +680,10 @@
 
     .btn-setting {
       width: 100%;
-      margin-top: 8px;
+      margin-top: 7px;
       padding: 8px 10px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
+      background: var(--bg-opt-inactive);
+      border: 1px solid var(--border-opt-inactive);
       border-radius: 8px;
       font-size: 11.5px;
       font-weight: 600;
@@ -501,20 +693,12 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
-      transition: background-color 0.28s ease, border-color 0.28s ease, color 0.28s ease;
+      transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
     }
 
     .btn-setting:hover {
       background: var(--bg-hover);
       border-color: var(--border-upload);
-    }
-
-    .hint {
-      margin-top: 8px;
-      font-size: 10px;
-      color: var(--text-muted);
-      line-height: 1.4;
-      transition: color 0.28s ease;
     }
 
     .footer-credit {
@@ -524,7 +708,7 @@
       font-size: 10px;
       color: var(--text-footer);
       letter-spacing: 0.2px;
-      transition: border-color 0.28s ease, color 0.28s ease;
+      transition: border-color 0.25s ease, color 0.25s ease;
     }
   </style>
 </head>
@@ -561,27 +745,57 @@
   <div id="fileStatus" class="status">Belum ada file dimuat</div>
   <div id="presetBadgeWrap" class="preset-badge-wrap" hidden></div>
 
-  <div class="rand-card">
-    <div class="rand-title">
-      <span class="rand-title-left">
-        <span data-icon="dice" data-icon-class="icon-amber" data-icon-size="15"></span>
-        <span>Randomize Digit Terakhir</span>
+  <div class="ctrl-card">
+    <div class="ctrl-header">
+      <span class="ctrl-title-left">
+        <span data-icon="dice" data-icon-class="icon-orange" data-icon-size="14"></span>
+        <span>Randomize</span>
       </span>
-      <span class="rand-badge">±1</span>
+      <div class="range-pill-group" role="radiogroup" aria-label="Range Randomize">
+        <button type="button" class="range-option active" data-rand-range="1" role="radio" aria-checked="true">±1</button>
+        <button type="button" class="range-option" data-rand-range="2" role="radio" aria-checked="false">±2</button>
+        <button type="button" class="range-option" data-rand-range="3" role="radio" aria-checked="false">±3</button>
+      </div>
     </div>
-    <div class="radio-group">
-      <label class="radio-item">
-        <input type="radio" name="randMode" value="off" checked>
-        <span>Off (Nilai Asli)</span>
-      </label>
-      <label class="radio-item">
-        <input type="radio" name="randMode" value="all">
-        <span>Randomize All (Acak Berselang)</span>
-      </label>
-      <label class="radio-item">
-        <input type="radio" name="randMode" value="selected">
-        <span id="selectedModeLabel">Selected Cells (0 sel)</span>
-      </label>
+    <div class="segmented-pill" role="radiogroup" aria-label="Mode Randomize">
+      <button type="button" class="seg-option active" data-rand-mode="off" role="radio" aria-checked="true">Off</button>
+      <button type="button" class="seg-option" data-rand-mode="all" role="radio" aria-checked="false">All</button>
+      <button type="button" id="selectedModeBtn" class="seg-option" data-rand-mode="selected" role="radio" aria-checked="false">Selected (0)</button>
+    </div>
+  </div>
+
+  <div class="ctrl-card">
+    <div class="ctrl-header">
+      <span class="ctrl-title-left">
+        <span data-icon="gauge" data-icon-class="icon-cyan" data-icon-size="14"></span>
+        <span>Kecepatan</span>
+      </span>
+    </div>
+    <div class="segmented-pill" role="radiogroup" aria-label="Kecepatan Pengisian">
+      <button type="button" class="seg-option" data-speed="600" role="radio" aria-checked="false">
+        <span data-icon="coffee" data-icon-class="speed-icon-santai" data-icon-size="13"></span>
+        <span>Santai</span>
+      </button>
+      <button type="button" class="seg-option active" data-speed="400" role="radio" aria-checked="true">
+        <span data-icon="timer" data-icon-class="speed-icon-normal" data-icon-size="13"></span>
+        <span>Normal</span>
+      </button>
+      <button type="button" class="seg-option" data-speed="200" role="radio" aria-checked="false">
+        <span data-icon="zap" data-icon-class="speed-icon-satset" data-icon-size="13"></span>
+        <span>Satset</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="stepper-row">
+    <label for="rowCountInput" class="stepper-label">
+      <span data-icon="layers" data-icon-class="icon-indigo" data-icon-size="14"></span>
+      <span>Jumlah Baris</span>
+    </label>
+    <div class="stepper-control">
+      <button type="button" id="rowDecBtn" class="stepper-btn" aria-label="Kurangi jumlah baris">-</button>
+      <input type="number" id="rowCountInput" class="stepper-input" min="1" max="4" value="1" aria-label="Jumlah Baris">
+      <button type="button" id="rowIncBtn" class="stepper-btn" aria-label="Tambah jumlah baris">+</button>
     </div>
   </div>
 
@@ -593,11 +807,9 @@
   </button>
 
   <button id="openSettingsBtn" class="btn-setting">
-    <span data-icon="settings" data-icon-class="icon-slate" data-icon-size="15"></span>
+    <span data-icon="settings" data-icon-class="icon-sky" data-icon-size="14"></span>
     <span>Setting Sel &amp; Preset Operator</span>
   </button>
-
-  <div id="hintText" class="hint">Klik sel input pertama di logsheet web lalu tekan Play (popup otomatis menutup).</div>
 
   <div class="footer-credit">© 2026 — Developed by FIKRI</div>
 

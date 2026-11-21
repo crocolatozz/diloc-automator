@@ -49,10 +49,21 @@
       --badge-amber-text: #b45309;
       --badge-blue-bg: #e0f2fe;
       --badge-blue-text: #0369a1;
-      --btn-bg: #ffffff;
+      --btn-bg: rgba(255, 255, 255, 0.78);
       --btn-hover-bg: #f1f5f9;
       --btn-hover-border: #94a3b8;
-      --btn-mode-bg: #f8fafc;
+      --btn-mode-bg: rgba(241, 245, 249, 0.8);
+      --btn-mode-border: rgba(148, 163, 184, 0.4);
+      --mode-active-bg: rgba(16, 185, 129, 0.14);
+      --mode-active-border: rgba(16, 185, 129, 0.55);
+      --mode-active-text: #047857;
+      --preset-active-bg: rgba(14, 165, 233, 0.14);
+      --preset-active-border: rgba(14, 165, 233, 0.55);
+      --preset-active-text: #0369a1;
+      --filter-active-bg: rgba(16, 185, 129, 0.14);
+      --filter-active-border: rgba(16, 185, 129, 0.55);
+      --filter-active-text: #047857;
+      --empty-title-color: #1e293b;
       --btn-green-bg: #f0fdf4;
       --btn-green-border: #86efac;
       --btn-green-text: #15803d;
@@ -133,10 +144,21 @@
       --badge-amber-text: #fcd34d;
       --badge-blue-bg: rgba(2, 132, 199, 0.22);
       --badge-blue-text: #7dd3fc;
-      --btn-bg: #162033;
-      --btn-hover-bg: #1e293b;
-      --btn-hover-border: #475569;
-      --btn-mode-bg: #162033;
+      --btn-bg: rgba(30, 41, 59, 0.5);
+      --btn-hover-bg: rgba(51, 65, 85, 0.65);
+      --btn-hover-border: rgba(148, 163, 184, 0.45);
+      --btn-mode-bg: rgba(30, 41, 59, 0.5);
+      --btn-mode-border: rgba(148, 163, 184, 0.22);
+      --mode-active-bg: rgba(16, 185, 129, 0.16);
+      --mode-active-border: rgba(52, 211, 153, 0.55);
+      --mode-active-text: #34d399;
+      --preset-active-bg: rgba(14, 165, 233, 0.16);
+      --preset-active-border: rgba(56, 189, 248, 0.55);
+      --preset-active-text: #38bdf8;
+      --filter-active-bg: rgba(16, 185, 129, 0.16);
+      --filter-active-border: rgba(52, 211, 153, 0.55);
+      --filter-active-text: #34d399;
+      --empty-title-color: #e2e8f0;
       --btn-green-bg: rgba(22, 163, 74, 0.16);
       --btn-green-border: rgba(74, 222, 128, 0.4);
       --btn-green-text: #86efac;
@@ -206,6 +228,7 @@
     .icon-sky { color: #0284c7; }
     .icon-amber { color: #d97706; }
     .icon-amber-light { color: #fbbf24; }
+    .icon-orange { color: #fb923c; }
     .icon-sky-light { color: #38bdf8; }
     .icon-rose { color: #e11d48; }
 
@@ -420,12 +443,15 @@
       font-weight: 700;
       color: var(--text-secondary);
       margin-right: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .mode-btn, .preset-btn {
       padding: 7px 12px;
       border-radius: 6px;
-      border: 1.5px solid var(--border-color);
+      border: 1px solid var(--btn-mode-border);
       background: var(--btn-mode-bg);
       color: var(--text-secondary);
       font-size: 12px;
@@ -438,13 +464,13 @@
     }
 
     .mode-btn:hover {
-      border-color: #16a34a;
+      border-color: var(--mode-active-border);
     }
 
     .mode-btn.active {
-      background: #16a34a;
-      border-color: #16a34a;
-      color: #ffffff;
+      background: var(--mode-active-bg);
+      border-color: var(--mode-active-border);
+      color: var(--mode-active-text);
     }
 
     .preset-btn .preset-icon {
@@ -452,18 +478,18 @@
     }
 
     .preset-btn:hover {
-      border-color: #0284c7;
+      border-color: var(--preset-active-border);
       background: var(--preset-hover-bg);
     }
 
     .preset-btn.active {
-      background: #0284c7;
-      border-color: #0284c7;
-      color: #ffffff;
+      background: var(--preset-active-bg);
+      border-color: var(--preset-active-border);
+      color: var(--preset-active-text);
     }
 
     .preset-btn.active .preset-icon {
-      color: #ffffff;
+      color: var(--preset-active-text);
     }
 
     .toolbar-actions {
@@ -629,22 +655,25 @@
       border-radius: 7px;
       background: var(--bg-surface);
       border: 1px solid var(--border-color);
-      gap: 2px;
+      gap: 3px;
       flex-shrink: 0;
       transition: background-color 0.25s ease, border-color 0.25s ease;
     }
 
     .filter-btn {
       padding: 4px 10px;
-      border: none;
+      border: 1px solid transparent;
       border-radius: 5px;
       background: transparent;
       color: var(--text-muted);
       font-size: 11.5px;
       font-weight: 600;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
       white-space: nowrap;
-      transition: background-color 0.2s ease, color 0.2s ease;
+      transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     }
 
     .filter-btn:hover {
@@ -653,8 +682,9 @@
     }
 
     .filter-btn.active {
-      background: #16a34a;
-      color: #ffffff;
+      background: var(--filter-active-bg);
+      border-color: var(--filter-active-border);
+      color: var(--filter-active-text);
     }
 
     .search-wrap {
@@ -717,7 +747,13 @@
     table.excel-table {
       border-collapse: collapse;
       width: max-content;
+      table-layout: fixed;
       font-size: 12px;
+    }
+
+    table.excel-table.is-empty {
+      width: 100%;
+      table-layout: auto;
     }
 
     table.excel-table th,
@@ -725,8 +761,10 @@
       border: 1px solid var(--border-color);
       padding: 7px 10px;
       text-align: center;
-      min-width: 82px;
+      width: 145px;
+      min-width: 145px;
       max-width: 145px;
+      box-sizing: border-box;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -736,20 +774,22 @@
       display: none;
     }
 
-    /* Kunci jenis font, ukuran, dan ketebalan kolom pertama agar 100% seragam di semua baris */
-    table.excel-table tr th.sticky-col,
-    table.excel-table tr td.sticky-col {
+    /* Kunci jenis font, ukuran, ketebalan, lebar 165px, dan tinggi 38px kolom pertama di seluruh 7 baris */
+    table.excel-table tr th.sticky-col {
       position: sticky;
       left: 0;
       z-index: 3;
+      width: 165px;
+      min-width: 165px;
+      max-width: 165px;
+      height: 38px;
+      box-sizing: border-box;
       background: var(--sticky-bg);
       text-align: left;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       font-size: 12px;
       font-weight: 700;
       color: var(--text-primary);
-      min-width: 155px;
-      max-width: 155px;
       border-right: 2px solid var(--sticky-border);
     }
 
@@ -852,7 +892,7 @@
       color: var(--text-locked) !important;
     }
 
-    table.excel-table thead th.col-search-match {
+    table.excel-table tr.row-index th.col-search-match {
       background-color: var(--highlight-header-bg) !important;
       color: #ffffff !important;
       box-shadow:
@@ -901,13 +941,42 @@
       color: var(--text-primary);
     }
 
-    .filter-empty-note {
-      padding: 14px 16px;
-      font-size: 12px;
+    table.excel-table td.empty-table-cell {
+      width: 100%;
+      min-width: 320px;
+      max-width: none;
+      white-space: normal;
+      text-align: center;
+      vertical-align: middle;
+      padding: 32px 20px;
+      background: var(--bg-surface);
       color: var(--text-muted);
-      background: var(--bg-surface-muted);
-      border-top: 1px solid var(--border-color);
-      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+    }
+
+    .empty-table-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .empty-filter-icon {
+      color: #64748b;
+      margin-bottom: 10px;
+    }
+
+    .empty-table-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--empty-title-color);
+    }
+
+    .empty-table-sub {
+      font-size: 12.5px;
+      color: #94a3b8;
+      line-height: 1.5;
+      max-width: 420px;
+      margin: 6px auto 0;
     }
 
     .inline-pill {
@@ -963,8 +1032,7 @@
     <div class="topbar-title">
       <img src="icon48.png" alt="Logo">
       <div>
-        <h1>PMR Web Runner — Setting Randomize Sel (±1)</h1>
-        <span>Preset Header Operator 1, 2, 3 sudah tertanam — pengaturan otomatis tersimpan</span>
+        <h1>PMR Web Runner</h1>
       </div>
     </div>
     <div class="topbar-right">
@@ -994,48 +1062,54 @@
     <div class="control-panel">
       <div class="panel-row">
         <div class="mode-switcher">
-          <span class="mode-switcher-label">Mode Randomize:</span>
-          <button class="mode-btn" data-mode="off">Off (Nilai Asli)</button>
-          <button class="mode-btn" data-mode="all">Randomize All (Acak Berselang)</button>
-          <button class="mode-btn" data-mode="selected">Selected Cells</button>
+          <span class="mode-switcher-label">
+            <span data-icon="dice" data-icon-class="icon-orange" data-icon-size="14"></span>
+            <span>Mode Randomize:</span>
+          </span>
+          <button class="mode-btn" data-mode="off">Off</button>
+          <button class="mode-btn" data-mode="all">All</button>
+          <button class="mode-btn" data-mode="selected">Selected</button>
         </div>
 
         <div class="toolbar-actions">
           <button id="selectAllNumBtn" class="btn btn-green">
-            <span data-icon="checkSquare" data-icon-size="15"></span>
-            <span>Pilih Semua Angka</span>
+            <span data-icon="checkSquare" data-icon-size="14"></span>
+            <span>Pilih Semua</span>
           </button>
           <button id="clearAllBtn" class="btn btn-rose">
-            <span data-icon="reset" data-icon-size="15"></span>
-            <span>Reset Pilihan</span>
+            <span data-icon="reset" data-icon-size="14"></span>
+            <span>Reset</span>
           </button>
           <button id="rerollPreviewBtn" class="btn btn-blue">
-            <span data-icon="dice" data-icon-size="15"></span>
-            <span>Simulasi Acak Preview</span>
+            <span data-icon="dice" data-icon-size="14"></span>
+            <span>Simulasi Acak</span>
           </button>
         </div>
       </div>
 
       <div class="panel-row panel-row-divider">
         <div class="mode-switcher">
-          <span class="mode-switcher-label">Preset Header Logsheet:</span>
+          <span class="mode-switcher-label">
+            <span data-icon="userCheck" data-icon-class="icon-sky" data-icon-size="14"></span>
+            <span>Preset Logsheet:</span>
+          </span>
           <button class="preset-btn" data-preset="operator1">
-            <span data-icon="userCheck" data-icon-class="preset-icon" data-icon-size="15"></span>
+            <span data-icon="userCheck" data-icon-class="preset-icon" data-icon-size="14"></span>
             <span>Operator 1 (167)</span>
           </button>
           <button class="preset-btn" data-preset="operator2">
-            <span data-icon="userCheck" data-icon-class="preset-icon" data-icon-size="15"></span>
+            <span data-icon="userCheck" data-icon-class="preset-icon" data-icon-size="14"></span>
             <span>Operator 2 (51)</span>
           </button>
           <button class="preset-btn" data-preset="operator3">
-            <span data-icon="userCheck" data-icon-class="preset-icon" data-icon-size="15"></span>
+            <span data-icon="userCheck" data-icon-class="preset-icon" data-icon-size="14"></span>
             <span>Operator 3 (45)</span>
           </button>
         </div>
 
         <div class="toolbar-actions">
           <a href="https://crocolatozz.github.io/pmr-editor/" target="_blank" rel="noopener noreferrer" class="btn btn-editor">
-            <span data-icon="edit" data-icon-size="15"></span>
+            <span data-icon="edit" data-icon-size="14"></span>
             <span>Buka PMR Editor</span>
             <span data-icon="externalLink" data-icon-size="13"></span>
           </a>
@@ -1050,13 +1124,22 @@
       <div class="stats-badges" id="statsBadges"></div>
       <div class="stats-tools">
         <div class="filter-group" role="group" aria-label="Filter Kolom Tabel">
-          <button type="button" class="filter-btn active" data-filter="all">Semua</button>
-          <button type="button" class="filter-btn" data-filter="selected">Terpilih</button>
-          <button type="button" class="filter-btn" data-filter="changed">Berubah</button>
+          <button type="button" class="filter-btn active" data-filter="all">
+            <span data-icon="filter" data-icon-size="13"></span>
+            <span>Semua</span>
+          </button>
+          <button type="button" class="filter-btn" data-filter="selected">
+            <span data-icon="checkSquare" data-icon-size="13"></span>
+            <span>Terpilih</span>
+          </button>
+          <button type="button" class="filter-btn" data-filter="changed">
+            <span data-icon="dice" data-icon-size="13"></span>
+            <span>Berubah</span>
+          </button>
         </div>
         <div class="search-wrap">
           <span data-icon="search" data-icon-class="search-icon" data-icon-size="15"></span>
-          <input type="text" id="searchInput" class="search-box" placeholder="Cari No. Sel / Equipment / Tag / Nilai...">
+          <input type="text" id="searchInput" class="search-box" placeholder="Cari sel, equipment, tag, nilai...">
         </div>
       </div>
     </div>
@@ -1064,7 +1147,7 @@
     <div id="tableContainer"></div>
 
     <footer class="page-footer">
-      <span>PMR Web Runner v1.5.4</span>
+      <span>PMR Web Runner v1.8.0</span>
       <span>© 2026 — Developed by FIKRI</span>
     </footer>
   </div>

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "PMR Web Runner",
-  "version": "1.5.4",
-  "description": "Menjalankan file macro keyboard (.pmr / .json) ke form web logsheet dengan randomize ±1 & preset header Operator 1, 2, 3.",
+  "version": "1.8.0",
+  "description": "Otomatisasi pengisian logsheet DILOC multi-baris dari file .pmr / .json dengan fitur randomize (±1 s/d ±3) dan kontrol kecepatan.",
   "icons": {
     "16": "icon16.png",
     "48": "icon48.png",

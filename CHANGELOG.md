@@ -2,6 +2,64 @@
 
 Semua perubahan penting pada proyek **PMR Web Runner** dicatat dalam file ini.
 
+## [1.8.0] - 2026-11-20
+
+### Added
+- Pengaman lintas operator DILOC (`/elogsheet/160`–`162` & `<h5> Op. Lap 1–3`) di `popup.js` & `content.js`: hard-lock (`disabled`) tombol `Play` serta badge peringatan merah dengan ikon SVG (`shieldAlert` / `warn`) jika preset atau jumlah kolom tabel halaman aktif tidak cocok.
+- *Pre-scan* sel terisi di `pmr-web-runner/content.js` sebelum eksekusi dimulai, lengkap dengan modal konfirmasi timpa terisolasi berbasis Shadow DOM (tema dark slate `#0f172a`, ikon SVG peringatan Amber `18px`, tombol `Batal` [ESC] & `Tetap Timpa` [Enter]).
+- *Smart Autosave Sync* di `pmr-web-runner/content.js`: jeda debounce Vue `1150ms` antarbaris & akhir eksekusi serta pemantauan tombol `button.btn.btn-primary.btn-sm` (`Menyimpan...` -> `Submit for Approval`, batas waktu maksimal `6000ms`) dengan ikon SVG spinner berputar di HUD.
+- Sinkronisasi sandbox `index.html`: elemen `<h5 class="mb-1">E-LOGSHEET FIELD - Op. Lap 1..3</h5>` dan simulasi tombol `Submit for Approval` dengan transisi `Menyimpan...`.
+
+### Changed
+- Kalibrasi ulang urutan & preset kecepatan di `popup.html`, `popup.js`, `randomizer.js`, dan `content.js`: **Santai (`600ms`)**, **Normal (`400ms`, default)**, **Satset (`200ms`)**, menghapus teks satuan `ms` dari tombol pil, serta migrasi otomatis storage `< 200ms` ke `>= 200ms`.
+- Penukaran ikon baris **Kecepatan** ke **Speedometer (`gauge`)** sementara pil **Normal** memakai **Stopwatch (`timer`)**, serta perubahan warna ikon dadu **Randomize** / **Mode Randomize** menjadi **Oranye (`#fb923c`)** di `popup.html` & `options.html`.
+- Penguncian lebar kolom tabel `options.html` & `options.js` (`165px` kolom pertama, `145px` kolom data, `width: max-content; table-layout: fixed;` saat kolom tampil `>= 1`, dan `.is-empty` selebar penuh saat `0` kolom).
+- Pembaruan HUD `content.js` dengan info jam baris & nomor kolom awal (`Mulai: ... (Kol X)`) serta ikon SVG kontekstual `14px` untuk setiap kondisi status.
+
+## [1.7.1] - 2026-11-20
+
+### Fixed
+- Perbaikan tinggi `popup.html` (`height: auto; min-height: unset;`) agar popup melar mulus tanpa scrollbar atau memotong footer saat badge peringatan merah *mismatch* muncul.
+- Pembaruan *Smart Auto-Detect* 2 lapis di `pmr-web-runner/content.js` (Lapis 1: baris `.active-shift-time` kosong & terbuka; Lapis 2: fallback universal scan semua baris tabel dari atas ke bawah) serta info jam target di HUD (`Mulai mengisi: ...`).
+- Pemicu `input.blur()` dan `FocusEvent('focusout', { bubbles: true })` di `pmr-web-runner/content.js` setiap selesai mengisi sel untuk memastikan autosave DILOC berjalan konsisten.
+- Pengetatan batas `Jumlah Baris` (`min="1" max="4"`) di `popup.html`, `popup.js`, dan `content.js` dengan auto-clamping nilai lama dari `chrome.storage.local` serta auto-disable tombol `-` / `+`.
+- Perbaikan *empty state* tabel di `pmr-web-runner/options.html` & `pmr-web-runner/options.js` dengan `<td rowspan="7" class="empty-table-cell">` di dalam tabel serta penguncian tinggi `<th>` kolom pertama (`height: 38px`).
+
+### Changed
+- Kalibrasi preset kecepatan aman autosave di `popup.html`, `popup.js`, `randomizer.js`, dan `content.js`: **Satset (`80ms`)**, **Normal (`130ms`, default)**, **Santai (`200ms`)**, migrasi otomatis nilai storage `< 80ms`, dan jeda antarbaris `250ms`.
+- Penyeragaman hierarki 2 kasta tombol (solid hanya untuk tombol utama `Play`/`Stop` & `Load File .PMR / .JSON`; transparan berwarna untuk opsi & filter) serta penambahan ikon SVG berwarna kontekstual di `popup.html` & `options.html`.
+- Sinkronisasi tabel dummy DILOC di `index.html` dengan class `.active-shift-time` pada `Jam 01`–`Jam 03` serta pembaruan `.target-hint`.
+- Pembersihan 5 sisa copywriting pada `manifest.json`, `options.js`, `popup.html`, `content.js`, dan `index.html`.
+
+## [1.7.0] - 2026-11-20
+
+### Added
+- Selector pilihan range **Randomize** (`±1` · `±2` · `±3`) di `pmr-web-runner/popup.html` & `pmr-web-runner/popup.js` yang tersimpan di `chrome.storage.local` (`randomRange`, default `1`) dan tersinkron real-time ke label baris tabel serta `Simulasi Preview` di `options.html` / `options.js`.
+- Badge peringatan mismatch berwarna merah non-blocking di bawah badge preset pada `popup.html` / `popup.js` (contoh: `⚠ 51 sel ≠ 167 parameter`) tanpa menonaktifkan tombol `Play`.
+
+### Changed
+- Pembaruan `randomizeLastDigit()` di `pmr-web-runner/randomizer.js` untuk mendukung range variasi `±1` s/d `±3`, penguncian presisi desimal berbasis `toFixed(jumlahDesimalAsli)`, dan pencegahan angka positif kecil berubah menjadi nilai nol/negatif.
+- Perapihan `pmr-web-runner/options.html`: judul utama diringkas menjadi `PMR Web Runner`, label `Preset Logsheet:`, tombol `All`, dan pembaruan footer ke `PMR Web Runner v1.7.0`.
+- Perapihan Dev Workbench `index.html`: toolbar header dipadatkan menjadi 1 baris ringkas, grup Quick-Test & Dummy Edge-Case dihapus, sel baris `Jam 04` pada grid dummy DILOC diberi atribut `title="Jam belum tiba"`, dan tata letak `Console Log` diperbaiki (`flex-shrink: 0` + `gap`) agar tag tidak menabrak teks log.
+
+### Fixed
+- Verifikasi urutan pemuatan skrip di `pmr-web-runner/popup.html` (`randomizer.js` sebelum `popup.js`) agar parsing file `.pmr`/`.json` berjalan tanpa `ReferenceError`.
+- Fallback HUD amber Smart Auto-Detect di `pmr-web-runner/content.js` ketika `.active-shift-time` tidak ditemukan (`"Klik sel awal di tabel dulu"`) atau seluruh baris shift aktif sudah terisi/terkunci/jam belum tiba (`"Semua baris shift aktif sudah terisi / jam belum tiba"`).
+- Penguncian indeks kolom absolut (`0` s/d `N-1`) pada eksekusi multi-baris di `pmr-web-runner/content.js` agar baris ke-2 dan seterusnya selalu membaca daftar `Selected Cells` berdasarkan indeks kolom tabel yang sebenarnya.
+
+## [1.6.0] - 2026-11-20
+
+### Added
+- Kontrol baru di `pmr-web-runner/popup.html` & `pmr-web-runner/popup.js`: *segmented pill* **Kecepatan** (`Santai (80ms)`, `Normal (40ms)`, `Satset (15ms)`) dan stepper **Jumlah Baris** (`1`–`12`) yang tersimpan otomatis di `chrome.storage.local`.
+- Mesin eksekusi multi-baris di `pmr-web-runner/content.js` dengan pengacakan ulang per baris, jeda transisi baris `~80ms`, *speed override* (`>= 15ms`) dengan reaktivitas `input` & `change` Vue.js, serta kursor akhir tetap diam di sel terakhir yang diisi.
+- Smart Auto-Detect sel mulai di `pmr-web-runner/content.js` (Prioritas 1: kursor manual / resume tengah baris; Prioritas 2: otomatis mendeteksi baris zona shift aktif `active-shift-time` pertama yang kolom awalnya terbuka & kosong).
+- Rem otomatis anti-pop-up Vue DILOC di `pmr-web-runner/content.js` yang mengecek `title*="Jam belum tiba"`, `cell-locked`, `permission-locked`, `disabled`, dan `readonly` sebelum menyentuh elemen, serta menampilkan info jam terakhir pada HUD.
+
+### Changed
+- Porting penuh parser PMR Editor & PyMacroRecord terpadu di `pmr-web-runner/randomizer.js` (digunakan bersama oleh `popup.js` & `options.js`) dengan dukungan dual-format `.json`/`.pmr`, filter `action === "press" | "down"`, normalisasi numpad (`num0`–`num9`, `<96>`–`<105>`, `num_decimal`) & koma ke titik, serta simulasi buffer `Backspace` dan sanitasi karakter.
+- Pembaruan UI `pmr-web-runner/popup.html`: kontrol Randomize diringkas menjadi 1 baris *segmented pill* (`Off` · `All` · `Selected (0)`), penamaan badge preset `parameter`, dan penghapusan teks bantuan bawah.
+- Pembersihan UI `pmr-web-runner/options.html` & `pmr-web-runner/options.js`: penghapusan subjudul header & chip duplikat, penyederhanaan label tombol, ringkasan 1 baris dinamis di atas tabel, placeholder pencarian ringkas, dan pembaruan badge versi ke `v1.6.0`.
+
 ## [1.5.4] - 2026-11-18
 
 ### Changed
