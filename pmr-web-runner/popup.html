@@ -318,106 +318,51 @@
       display: none;
     }
 
-    .editor-link {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 5px;
-      margin-top: 8px;
-      padding: 3px 6px;
-      border-radius: 5px;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--link-color);
-      text-decoration: none;
-      transition: color 0.25s ease, background-color 0.2s ease;
-    }
-
-    .editor-link:hover {
-      text-decoration: underline;
-    }
-
     .status-card {
       margin: 8px 0 9px 0;
+      padding: 7px 10px;
       border-radius: 8px;
       border: 1px solid var(--border-soft);
       background: var(--bg-card);
-      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: left;
       transition: background-color 0.25s ease, border-color 0.25s ease;
     }
 
-    .status-card-main {
-      padding: 7px 10px;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      word-break: break-word;
-      text-align: center;
-      min-height: 30px;
-      transition: color 0.25s ease;
-    }
-
-    .status-card-main.is-preset {
-      color: var(--text-status-ok);
-    }
-
-    .status-card-main.is-custom {
-      color: var(--text-title);
-    }
-
-    .status-card-main.is-error {
-      color: var(--text-status-err);
-    }
-
-    .status-card-warn {
-      padding: 6px 9px;
-      border-top: 1px solid var(--warn-pill-border);
-      background: var(--warn-pill-bg);
-      color: var(--warn-pill-text);
-      font-size: 10px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 5px;
-      text-align: center;
-      transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
-    }
-
-    .status-card-warn[hidden] {
+    .status-card[hidden] {
       display: none;
     }
 
-    .status-card-warn .svg-icon {
-      flex-shrink: 0;
-    }
-
-    .quick-switch-btn {
-      border: 1px solid currentColor;
-      background: rgba(239, 68, 68, 0.16);
-      color: inherit;
-      font-size: 9.5px;
-      font-weight: 700;
-      padding: 2px 7px;
-      border-radius: 99px;
-      cursor: pointer;
-      display: inline-flex;
+    .status-line {
+      display: flex;
       align-items: center;
-      gap: 4px;
-      transition: background-color 0.15s ease, transform 0.12s ease;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.35;
+      min-width: 0;
     }
 
-    .quick-switch-btn:hover {
-      background: rgba(239, 68, 68, 0.28);
+    .status-line-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+      flex: 1;
     }
 
-    .quick-switch-btn:active {
-      transform: scale(0.97);
+    .status-line-file {
+      color: var(--text-title);
+    }
+
+    .status-line-op.is-match {
+      color: var(--text-status-ok);
+    }
+
+    .status-line-op.is-mismatch {
+      color: var(--speed-satset-text);
     }
 
     .ctrl-card {
@@ -747,9 +692,9 @@
     <span>Load File .PMR / .JSON</span>
   </div>
 
-  <div id="statusCard" class="status-card">
-    <div id="statusCardMain" class="status-card-main">Belum ada file dimuat</div>
-    <div id="statusCardWarn" class="status-card-warn" hidden></div>
+  <div id="statusCard" class="status-card" hidden>
+    <div id="statusLineFile" class="status-line status-line-file"></div>
+    <div id="statusLineOp" class="status-line status-line-op"></div>
   </div>
 
   <div class="ctrl-card">
@@ -818,15 +763,10 @@
     <span>Setting Sel &amp; Preset Operator</span>
   </button>
 
-  <a href="https://crocolatozz.github.io/pmr-editor/" target="_blank" rel="noopener noreferrer" class="editor-link">
-    <span data-icon="edit" data-icon-class="icon-sky" data-icon-size="14"></span>
-    <span>Buka PMR Editor</span>
-    <span data-icon="externalLink" data-icon-class="icon-sky" data-icon-size="12"></span>
-  </a>
-
   <div class="footer-credit">© 2026 — Developed by FIKRI</div>
 
   <script src="icons.js"></script>
+  <script src="parser.js"></script>
   <script src="randomizer.js"></script>
   <script src="popup.js"></script>
 </body>

@@ -1644,7 +1644,7 @@
                 return state.manifest ? cloneVal(state.manifest) : {
                   manifest_version: 3,
                   name: folder,
-                  version: '1.10.0'
+                  version: '1.11.0'
                 };
               },
               openOptionsPage: function (callback) {
@@ -2273,14 +2273,14 @@
           fileName: fileName,
           sequence: sequence,
           totalCells: cellCount,
-          sourceType: 'preset',
+          operatorKey: presetKey,
           updatedAt: Date.now()
         };
 
         const nextItems = {
-          savedMacro: { fileName: fileName, sequence: sequence },
+          savedMacro: { fileName: fileName, sequence: sequence, totalCells: cellCount, operatorKey: presetKey },
           macrosByPreset: existingMacrosByPreset,
-          fileSourceType: 'preset',
+          operatorStandardCounts: { operator1: 167, operator2: 51, operator3: 44 },
           headerMeta: headerMeta,
           activePreset: presetKey,
           selectedCellsByPreset: existingByPreset,
@@ -2293,11 +2293,15 @@
           changes[k] = { oldValue: store[k], newValue: nextItems[k] };
           store[k] = nextItems[k];
         }
+        if (Object.prototype.hasOwnProperty.call(store, 'fileSourceType')) {
+          changes.fileSourceType = { oldValue: store.fileSourceType };
+          delete store.fileSourceType;
+        }
 
         writeStorageMap(FIXED_FOLDER, store);
         broadcastStorageChange(FIXED_FOLDER, changes, 'local');
         await loadTargetDilocGrid(presetKey);
-        addLog('storage', 'dummy.inject', 'Menyuntikkan ' + fileName + ' (' + cellCount + ' sel, preset: ' + presetKey + ')');
+        addLog('storage', 'dummy.inject', 'Menyuntikkan ' + fileName + ' (' + cellCount + ' data, preset: ' + presetKey + ')');
       }
 
       // Event Listeners
@@ -2347,10 +2351,13 @@
           const doc = elTargetFrame.contentDocument;
           if (!doc) return;
           const inputs = doc.querySelectorAll('.diloc-cell-input');
+          let clearedCount = 0;
           inputs.forEach((inp) => {
+            if (inp.dataset && inp.dataset.pmrStatusSelect === 'true') return;
             inp.value = '';
+            clearedCount += 1;
           });
-          addLog('tabs', 'target.clear', 'Membersihkan ' + inputs.length + ' input sel di grid DILOC (' + state.targetOperator + ')');
+          addLog('tabs', 'target.clear', 'Membersihkan ' + clearedCount + ' input sel di grid DILOC (' + state.targetOperator + ')');
         } catch (err) {}
       });
 

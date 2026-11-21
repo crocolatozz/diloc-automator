@@ -1,5 +1,5 @@
 ====================================================
-PMR WEB RUNNER v1.10.0 — BROWSER EXTENSION
+PMR WEB RUNNER v1.11.0 — BROWSER EXTENSION
 ====================================================
 
 Cara Install / Update (Load Unpacked):
@@ -10,10 +10,10 @@ Cara Install / Update (Load Unpacked):
 3. Aktifkan toggle "Developer mode" (Mode pengembang) di pojok kanan atas.
 4. Klik tombol "Load unpacked" (Muat yang belum dibuka kemasannya) dan pilih folder hasil ekstrak (atau klik ikon Reload jika menimpa folder lama).
 
-Pembaruan v1.10.0 (Minor Update):
-- Dukungan penuh mulai dari posisi kursor aktif (row & col) saat Play ditekan beserta pemetaan data 1-to-1 sesuai indeks kolom asli tanpa menggeser array ke kolom tengah, serta reset kursor otomatis jika klik di luar sel parameter.
-- Proteksi anti-timpa sel berstatus khusus klik kanan (<select> Plant Trouble, Plant Shutdown, Standby, Tidak Ada Mixing, Maintenance, Overhaul, Plant TA) agar dilewati otomatis tanpa mengubah keterangannya.
-- Modal konfirmasi terpadu Shadow DOM sebelum eksekusi dengan ringkasan Titik Mulai, Jangkauan, Sumber Data, status baris logsheet target, jumlah sel terisi beserta sampelnya, serta info sel berstatus khusus yang dilewati.
-- Wrapper aman safeSendTabMessage pada popup.js untuk mencegah unhandled promise rejection saat tab tujuan belum siap atau berada di halaman sistem browser.
+Pembaruan v1.11.0 (Minor Update):
+- Konversi otomatis tombol panah Excel dropdown (Key.down / Key.up) di parser.js menjadi slot data valid yang membaca opsi hidup <select> DILOC secara real-time (melewati placeholder "-", "Pilih...", kosong, atau disabled).
+- Penghapusan mode File Custom dengan validasi ketat terhadap standar Op. Lap 1, Op. Lap 2, dan Op. Lap 3 pada Mini Window Import & auto-bersih cache lama yang tidak valid.
+- Redesign Popup Status Card 2 baris (nama file & badge operator hijau/kuning tanpa auto-switch paksa), deteksi tab DILOC real-time untuk lock/unlock tombol Play, serta penghapusan link Buka PMR Editor di popup.
+- Migrasi total toast lama ke Modal Blur 3 Fase terpadu (Shadow DOM backdrop-filter blur, capture keyboard ESC/Enter, Progress Bar Fase 2 real-time dengan tombol Batal 3-arah, Ringkasan Hasil Fase 3, dan auto-reset pengaturan setelah eksekusi Fase 2).
 
 © 2026 — Developed by FIKRI

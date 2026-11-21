@@ -1,0 +1,569 @@
+const PRESET_EXPECTED_COUNTS = {
+  operator1: 167,
+  operator2: 51,
+  operator3: 44
+};
+
+const PRESET_SHORT_LABELS = {
+  operator1: 'Op. Lap 1',
+  operator2: 'Op. Lap 2',
+  operator3: 'Op. Lap 3'
+};
+
+const DROPDOWN_ARROW_PREFIX = '__PMR_ARROW_DOWN__:';
+
+const PMR_NAV_KEYS = new Set([
+  'key.right', 'arrowright',
+  'key.tab', 'tab',
+  'key.enter', 'enter', 'return'
+]);
+
+const PMR_CELL_COMMIT_MAP = {
+  'key.tab': 'Key.tab',
+  'tab': 'Key.tab',
+  '<9>': 'Key.tab',
+  'vk=9': 'Key.tab',
+  'key.right': 'Key.right',
+  'arrowright': 'Key.right',
+  'right': 'Key.right',
+  '<39>': 'Key.right',
+  'vk=39': 'Key.right',
+  'key.enter': 'Key.enter',
+  'key.return': 'Key.enter',
+  'enter': 'Key.enter',
+  'return': 'Key.enter',
+  'num_enter': 'Key.enter',
+  'numpad_enter': 'Key.enter',
+  'numpadenter': 'Key.enter',
+  '<13>': 'Key.enter',
+  'vk=13': 'Key.enter'
+};
+
+const PMR_ARROW_DOWN_KEYS = new Set([
+  'key.down',
+  'arrowdown',
+  'down',
+  '<40>',
+  'vk=40',
+  'keycode(40)'
+]);
+
+const PMR_ARROW_UP_KEYS = new Set([
+  'key.up',
+  'arrowup',
+  'up',
+  '<38>',
+  'vk=38',
+  'keycode(38)'
+]);
+
+const PMR_BACKSPACE_KEYS = new Set([
+  'key.backspace',
+  'backspace',
+  'back',
+  '<8>',
+  'vk=8',
+  'keycode(8)'
+]);
+
+const PMR_NUMPAD_CHAR_MAP = {
+  'num0': '0', 'num_0': '0', 'numpad0': '0', 'numpad_0': '0', 'key.num0': '0', 'key.num_0': '0', 'kp_0': '0', 'kp0': '0',
+  'num1': '1', 'num_1': '1', 'numpad1': '1', 'numpad_1': '1', 'key.num1': '1', 'key.num_1': '1', 'kp_1': '1', 'kp1': '1',
+  'num2': '2', 'num_2': '2', 'numpad2': '2', 'numpad_2': '2', 'key.num2': '2', 'key.num_2': '2', 'kp_2': '2', 'kp2': '2',
+  'num3': '3', 'num_3': '3', 'numpad3': '3', 'numpad_3': '3', 'key.num3': '3', 'key.num_3': '3', 'kp_3': '3', 'kp3': '3',
+  'num4': '4', 'num_4': '4', 'numpad4': '4', 'numpad_4': '4', 'key.num4': '4', 'key.num_4': '4', 'kp_4': '4', 'kp4': '4',
+  'num5': '5', 'num_5': '5', 'numpad5': '5', 'numpad_5': '5', 'key.num5': '5', 'key.num_5': '5', 'kp_5': '5', 'kp5': '5',
+  'num6': '6', 'num_6': '6', 'numpad6': '6', 'numpad_6': '6', 'key.num6': '6', 'key.num_6': '6', 'kp_6': '6', 'kp6': '6',
+  'num7': '7', 'num_7': '7', 'numpad7': '7', 'numpad_7': '7', 'key.num7': '7', 'key.num_7': '7', 'kp_7': '7', 'kp7': '7',
+  'num8': '8', 'num_8': '8', 'numpad8': '8', 'numpad_8': '8', 'key.num8': '8', 'key.num_8': '8', 'kp_8': '8', 'kp8': '8',
+  'num9': '9', 'num_9': '9', 'numpad9': '9', 'numpad_9': '9', 'key.num9': '9', 'key.num_9': '9', 'kp_9': '9', 'kp9': '9',
+  'num_decimal': '.', 'numpad_decimal': '.', 'numpaddecimal': '.', 'key.num_decimal': '.',
+  'num_dot': '.', 'num_period': '.', 'numdecimal': '.', 'decimal': '.', 'kp_decimal': '.',
+  'num_comma': '.', 'numpad_comma': '.', 'num_separator': '.', 'separator': '.',
+  'num_subtract': '-', 'numpad_subtract': '-', 'numpadsubtract': '-', 'subtract': '-', 'kp_subtract': '-',
+  'num_divide': '/', 'numpad_divide': '/', 'numpaddivide': '/', 'divide': '/', 'kp_divide': '/'
+};
+
+function encodeDropdownArrowToken(order) {
+  const n = Math.max(1, parseInt(order, 10) || 1);
+  return `${DROPDOWN_ARROW_PREFIX}${n}`;
+}
+
+function parseDropdownArrowToken(value) {
+  const str = String(value ?? '').trim();
+  const match = str.match(/^__PMR_ARROW_DOWN__:(\d+)$/);
+  if (!match) return null;
+  const n = parseInt(match[1], 10);
+  return Number.isFinite(n) && n >= 1 ? n : 1;
+}
+
+function stripSurroundingQuotes(str) {
+  let k = String(str ?? '').trim();
+  while ((k.startsWith("'") && k.endsWith("'")) || (k.startsWith('"') && k.endsWith('"'))) {
+    if (k.length <= 2) break;
+    k = k.slice(1, -1).trim();
+  }
+  return k;
+}
+
+function isKeyboardPressEvent(item) {
+  if (!item || typeof item !== 'object') return false;
+  if (item._comment && !item.key) return false;
+
+  const rawType = String(item.type || item.event_type || '').trim().toLowerCase();
+  if (rawType) {
+    if (/mouse|move|click|scroll|wheel|cursor|delay|sleep|wait/.test(rawType)) {
+      return false;
+    }
+    if (/up|release/.test(rawType)) {
+      return false;
+    }
+    if (!rawType.includes('key')) {
+      return false;
+    }
+  }
+
+  if (item.action !== undefined) {
+    const act = String(item.action).trim().toLowerCase();
+    if (act !== 'press' && act !== 'down' && act !== 'keydown' && act !== 'key_down') {
+      return false;
+    }
+  }
+
+  if (item.pressed === false || item.pressed === 'false') {
+    return false;
+  }
+
+  return Boolean(item.key !== undefined && item.key !== null && String(item.key).trim() !== '');
+}
+
+function normalizePmrKey(rawKey) {
+  const k = stripSurroundingQuotes(rawKey);
+  if (!k) return null;
+
+  const lower = k.toLowerCase();
+
+  if (PMR_CELL_COMMIT_MAP[lower]) {
+    return { kind: 'commit', navKey: PMR_CELL_COMMIT_MAP[lower] };
+  }
+
+  if (PMR_ARROW_DOWN_KEYS.has(lower)) {
+    return { kind: 'arrow', delta: 1 };
+  }
+
+  if (PMR_ARROW_UP_KEYS.has(lower)) {
+    return { kind: 'arrow', delta: -1 };
+  }
+
+  if (PMR_BACKSPACE_KEYS.has(lower)) {
+    return { kind: 'backspace' };
+  }
+
+  if (lower === 'key.space' || lower === 'space' || lower === '<32>' || lower === 'vk=32' || lower === 'keycode(32)') {
+    return { kind: 'char', char: ' ' };
+  }
+
+  if (PMR_NUMPAD_CHAR_MAP[lower]) {
+    return { kind: 'char', char: PMR_NUMPAD_CHAR_MAP[lower] };
+  }
+
+  const vkMatch = k.match(/^(?:vk=|keycode\(|<)(\d{1,3})(?:\)|>)?$/i);
+  if (vkMatch) {
+    const code = parseInt(vkMatch[1], 10);
+    if (code === 8) return { kind: 'backspace' };
+    if (code === 9) return { kind: 'commit', navKey: 'Key.tab' };
+    if (code === 13) return { kind: 'commit', navKey: 'Key.enter' };
+    if (code === 32) return { kind: 'char', char: ' ' };
+    if (code === 38) return { kind: 'arrow', delta: -1 };
+    if (code === 39) return { kind: 'commit', navKey: 'Key.right' };
+    if (code === 40) return { kind: 'arrow', delta: 1 };
+    if (code >= 48 && code <= 57) return { kind: 'char', char: String(code - 48) };
+    if (code >= 96 && code <= 105) return { kind: 'char', char: String(code - 96) };
+    if (code === 109 || code === 189) return { kind: 'char', char: '-' };
+    if (code === 110 || code === 188 || code === 190) return { kind: 'char', char: '.' };
+    if (code === 111 || code === 191) return { kind: 'char', char: '/' };
+    if (code >= 65 && code <= 90) return { kind: 'char', char: String.fromCharCode(code).toLowerCase() };
+    return null;
+  }
+
+  if (lower.startsWith('key.')) {
+    return null;
+  }
+
+  if (k.length === 1) {
+    if (k === ',') return { kind: 'char', char: '.' };
+    if (/^[a-zA-Z0-9.\-+/%:() ]$/.test(k)) {
+      return { kind: 'char', char: k };
+    }
+    return null;
+  }
+
+  return null;
+}
+
+function sanitizeCellBuffer(rawBuf) {
+  return String(rawBuf ?? '')
+    .replace(/,/g, '.')
+    .replace(/[^\x20-\x7E]/g, '')
+    .trim();
+}
+
+function appendSanitizedCellToSequence(sequence, cellValue, navKey, arrowSteps = 0) {
+  const arrowOrder = parseDropdownArrowToken(cellValue);
+  if (arrowOrder !== null) {
+    for (let a = 0; a < arrowOrder; a++) {
+      sequence.push({ key: 'Key.down', delay: 40 });
+    }
+  } else {
+    const clean = sanitizeCellBuffer(cellValue);
+    if (clean.length > 0) {
+      for (let i = 0; i < clean.length; i++) {
+        sequence.push({ key: clean[i], delay: 40 });
+      }
+    } else if (arrowSteps > 0) {
+      for (let a = 0; a < arrowSteps; a++) {
+        sequence.push({ key: 'Key.down', delay: 40 });
+      }
+    }
+  }
+
+  if (navKey) {
+    sequence.push({ key: navKey, delay: 40 });
+  }
+}
+
+function extractCleanCellListFromJson(data) {
+  let list = null;
+  if (Array.isArray(data)) {
+    list = data;
+  } else if (data && typeof data === 'object') {
+    if (Array.isArray(data.cells)) list = data.cells;
+    else if (Array.isArray(data.values)) list = data.values;
+    else if (Array.isArray(data.sequence) && data.sequence.every(x => typeof x === 'string' || typeof x === 'number')) {
+      list = data.sequence;
+    } else if (Array.isArray(data.data) && data.data.every(x => typeof x === 'string' || typeof x === 'number' || (x && typeof x === 'object' && ('value' in x || 'val' in x || 'arrowIndex' in x)))) {
+      list = data.data;
+    }
+  }
+
+  if (!Array.isArray(list) || list.length === 0) return null;
+
+  const isValidCellList = list.every(item => (
+    typeof item === 'string' ||
+    typeof item === 'number' ||
+    (item && typeof item === 'object' && ('value' in item || 'val' in item || 'arrowIndex' in item) && !('key' in item))
+  ));
+
+  if (!isValidCellList) return null;
+
+  return list.map(item => {
+    if (item && typeof item === 'object') {
+      if (typeof item.arrowIndex === 'number' && item.arrowIndex >= 1) {
+        return encodeDropdownArrowToken(item.arrowIndex);
+      }
+      const raw = item.value ?? item.val ?? '';
+      const arrowFromRaw = parseDropdownArrowToken(raw);
+      if (arrowFromRaw !== null) return encodeDropdownArrowToken(arrowFromRaw);
+      return sanitizeCellBuffer(String(raw));
+    }
+    const str = String(item);
+    const arrowFromRaw = parseDropdownArrowToken(str);
+    if (arrowFromRaw !== null) return encodeDropdownArrowToken(arrowFromRaw);
+    return sanitizeCellBuffer(str);
+  });
+}
+
+/**
+ * Parser terpadu untuk file .pmr (PyMacroRecord) & .json (PMR Editor):
+ * - Dual-format: deteksi otomatis array nilai sel bersih vs log event mentah .pmr
+ * - Konversi tombol panah dropdown (Key.down / Key.up) menjadi slot data valid urutan ke-N
+ * - Normalisasi numpad & koma (,) -> titik (.), simulasi Backspace, commit pada Tab/Right/Enter
+ */
+function parsePMRData(data) {
+  if (!data) return [];
+
+  const cleanCells = extractCleanCellListFromJson(data);
+  if (cleanCells && cleanCells.length > 0) {
+    const seq = [];
+    for (let i = 0; i < cleanCells.length; i++) {
+      const nav = i < cleanCells.length - 1 ? 'Key.tab' : null;
+      appendSanitizedCellToSequence(seq, cleanCells[i], nav);
+    }
+    return seq;
+  }
+
+  const events = Array.isArray(data)
+    ? data
+    : (data.events || data.actions || data.sequence || []);
+
+  if (!Array.isArray(events) || events.length === 0) return [];
+
+  const sanitizedSequence = [];
+  let buffer = '';
+  let arrowOffset = 0;
+  let hasArrowInput = false;
+  let hasTypedInput = false;
+
+  for (let i = 0; i < events.length; i++) {
+    const item = events[i];
+    if (!isKeyboardPressEvent(item)) continue;
+
+    const token = normalizePmrKey(item.key);
+    if (!token) continue;
+
+    if (token.kind === 'backspace') {
+      if (buffer.length > 0) {
+        buffer = buffer.slice(0, -1);
+      }
+      hasTypedInput = true;
+    } else if (token.kind === 'char') {
+      buffer += token.char;
+      hasTypedInput = true;
+    } else if (token.kind === 'arrow') {
+      arrowOffset += token.delta;
+      hasArrowInput = true;
+    } else if (token.kind === 'commit') {
+      const arrowSteps = (!hasTypedInput && buffer.length === 0 && hasArrowInput)
+        ? Math.max(1, arrowOffset)
+        : 0;
+      appendSanitizedCellToSequence(sanitizedSequence, buffer, token.navKey, arrowSteps);
+      buffer = '';
+      arrowOffset = 0;
+      hasArrowInput = false;
+      hasTypedInput = false;
+    }
+  }
+
+  if (buffer.length > 0 || hasTypedInput || hasArrowInput) {
+    const arrowSteps = (!hasTypedInput && buffer.length === 0 && hasArrowInput)
+      ? Math.max(1, arrowOffset)
+      : 0;
+    appendSanitizedCellToSequence(sanitizedSequence, buffer, null, arrowSteps);
+  }
+
+  return sanitizedSequence;
+}
+
+function isValidNumericString(str) {
+  if (!str || typeof str !== 'string') return false;
+  return /^[+-]?(\d+(\.\d+)?|\.\d+)$/.test(str.trim());
+}
+
+function groupSequenceIntoCells(sequence) {
+  if (!Array.isArray(sequence) || sequence.length === 0) return [];
+
+  const cells = [];
+  let currentSteps = [];
+
+  const finalizeCell = (steps, navStep) => {
+    const effectiveChars = [];
+    let arrowNet = 0;
+    let hasArrowSteps = false;
+
+    for (const s of steps) {
+      const lk = String(s.key || '').trim().toLowerCase();
+      if (lk === 'key.backspace' || lk === 'backspace') {
+        effectiveChars.pop();
+      } else if (PMR_ARROW_DOWN_KEYS.has(lk)) {
+        arrowNet += 1;
+        hasArrowSteps = true;
+      } else if (PMR_ARROW_UP_KEYS.has(lk)) {
+        arrowNet -= 1;
+        hasArrowSteps = true;
+      } else if (s.key && s.key.length === 1) {
+        effectiveChars.push(s.key === ',' ? '.' : s.key);
+      }
+    }
+
+    const typedRaw = sanitizeCellBuffer(effectiveChars.join(''));
+    const tokenArrow = parseDropdownArrowToken(typedRaw);
+    const isDropdownArrow = Boolean(
+      tokenArrow !== null || (typedRaw === '' && hasArrowSteps)
+    );
+    const arrowStepIndex = tokenArrow !== null
+      ? tokenArrow
+      : (isDropdownArrow ? Math.max(1, arrowNet) : 0);
+
+    const rawValue = isDropdownArrow ? encodeDropdownArrowToken(arrowStepIndex) : typedRaw;
+    const displayValue = isDropdownArrow ? `Dropdown #${arrowStepIndex}` : typedRaw;
+    const isNumeric = !isDropdownArrow && isValidNumericString(rawValue);
+    const numVal = isNumeric ? parseFloat(rawValue) : NaN;
+    const isPureZero = isNumeric && (numVal === 0);
+    const isRandomizable = isNumeric && !isPureZero;
+
+    cells.push({
+      index: cells.length,
+      rawValue,
+      displayValue,
+      isDropdownArrow,
+      arrowStepIndex,
+      isNumeric,
+      isPureZero,
+      isRandomizable,
+      steps,
+      navStep: navStep || null
+    });
+  };
+
+  for (const step of sequence) {
+    const lk = String(step.key || '').trim().toLowerCase();
+    if (PMR_NAV_KEYS.has(lk)) {
+      finalizeCell(currentSteps, step);
+      currentSteps = [];
+    } else {
+      currentSteps.push(step);
+    }
+  }
+
+  if (currentSteps.length > 0) {
+    finalizeCell(currentSteps, null);
+  }
+
+  return cells;
+}
+
+function sanitizeStandardCount(val, fallback) {
+  const n = parseInt(val, 10);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+}
+
+async function getStandardOperatorCountsFromStorage() {
+  const counts = {
+    operator1: PRESET_EXPECTED_COUNTS.operator1,
+    operator2: PRESET_EXPECTED_COUNTS.operator2,
+    operator3: PRESET_EXPECTED_COUNTS.operator3
+  };
+
+  try {
+    const data = await chrome.storage.local.get(['operatorStandardCounts', 'macrosByPreset']);
+    if (data && data.operatorStandardCounts && typeof data.operatorStandardCounts === 'object') {
+      for (const opKey of ['operator1', 'operator2', 'operator3']) {
+        counts[opKey] = sanitizeStandardCount(data.operatorStandardCounts[opKey], counts[opKey]);
+      }
+    } else if (data && data.macrosByPreset && typeof data.macrosByPreset === 'object') {
+      for (const opKey of ['operator1', 'operator2', 'operator3']) {
+        const entry = data.macrosByPreset[opKey];
+        if (entry && typeof entry.totalCells === 'number' && entry.totalCells > 0) {
+          counts[opKey] = sanitizeStandardCount(entry.totalCells, counts[opKey]);
+        }
+      }
+    }
+  } catch (e) {}
+
+  return counts;
+}
+
+function detectOperatorHintFromFileName(fileName) {
+  const lower = String(fileName || '').toLowerCase();
+  if (/operator[\s_-]*1|op[\s_-]*1/.test(lower)) return 'operator1';
+  if (/operator[\s_-]*2|op[\s_-]*2/.test(lower)) return 'operator2';
+  if (/operator[\s_-]*3|op[\s_-]*3/.test(lower)) return 'operator3';
+  return '';
+}
+
+function resolveStrictOperatorByCount(totalCells, standardCounts, fileName = '') {
+  if (!Number.isInteger(totalCells) || totalCells <= 0 || !standardCounts) return '';
+  const matches = ['operator1', 'operator2', 'operator3'].filter(
+    op => Number(standardCounts[op]) === totalCells
+  );
+  if (matches.length === 0) return '';
+  if (matches.length === 1) return matches[0];
+  const hint = detectOperatorHintFromFileName(fileName);
+  return matches.includes(hint) ? hint : matches[0];
+}
+
+function formatRejectedFileMessage(readCount, standardCounts) {
+  const a = Number(standardCounts && standardCounts.operator1) || PRESET_EXPECTED_COUNTS.operator1;
+  const b = Number(standardCounts && standardCounts.operator2) || PRESET_EXPECTED_COUNTS.operator2;
+  const c = Number(standardCounts && standardCounts.operator3) || PRESET_EXPECTED_COUNTS.operator3;
+  return `File ditolak (tidak termuat): terbaca ${readCount} data. Hanya mendukung standar Op. Lap 1 (${a} data), Op. Lap 2 (${b} data), atau Op. Lap 3 (${c} data).`;
+}
+
+function buildMacroRecord(fileName, sequence, operatorKey = '') {
+  const cells = groupSequenceIntoCells(sequence);
+  return {
+    fileName: String(fileName || 'macro.pmr'),
+    sequence: Array.isArray(sequence) ? sequence : [],
+    cellValues: cells.map(c => c.rawValue),
+    totalCells: cells.length,
+    operatorKey: operatorKey || ''
+  };
+}
+
+async function persistImportedMacroFile(fileName, rawData) {
+  const standardCounts = await getStandardOperatorCountsFromStorage();
+  const parsedSeq = parsePMRData(rawData);
+  const cells = groupSequenceIntoCells(parsedSeq);
+  const totalCells = cells.length;
+  const matchedOp = resolveStrictOperatorByCount(totalCells, standardCounts, fileName);
+
+  if (parsedSeq.length === 0 || totalCells === 0 || !matchedOp) {
+    const err = new Error(formatRejectedFileMessage(totalCells, standardCounts));
+    err.code = 'STRICT_OPERATOR_MISMATCH';
+    err.readCount = totalCells;
+    err.standardCounts = standardCounts;
+    throw err;
+  }
+
+  const existing = await chrome.storage.local.get([
+    'selectedCellsByPreset',
+    'selectedCellIndices',
+    'activePreset',
+    'macrosByPreset'
+  ]);
+
+  const existingByPreset = (existing.selectedCellsByPreset && typeof existing.selectedCellsByPreset === 'object')
+    ? { ...existing.selectedCellsByPreset }
+    : {};
+
+  if (
+    Object.keys(existingByPreset).length === 0 &&
+    Array.isArray(existing.selectedCellIndices) &&
+    existing.selectedCellIndices.length > 0 &&
+    existing.activePreset &&
+    PRESET_SHORT_LABELS[existing.activePreset]
+  ) {
+    existingByPreset[existing.activePreset] = existing.selectedCellIndices.slice();
+  }
+
+  const existingMacrosByPreset = (existing.macrosByPreset && typeof existing.macrosByPreset === 'object')
+    ? { ...existing.macrosByPreset }
+    : {};
+
+  let resolvedMeta = [];
+  if (typeof fetchBuiltInPreset === 'function') {
+    const meta = await fetchBuiltInPreset(matchedOp);
+    if (Array.isArray(meta) && meta.length > 0) {
+      resolvedMeta = meta;
+    }
+  }
+
+  const macroRecord = buildMacroRecord(fileName, parsedSeq, matchedOp);
+  existingMacrosByPreset[matchedOp] = macroRecord;
+
+  const restoredForPreset = Array.isArray(existingByPreset[matchedOp])
+    ? existingByPreset[matchedOp].filter(idx => idx >= 0 && idx < totalCells)
+    : [];
+
+  const storagePayload = {
+    savedMacro: macroRecord,
+    macrosByPreset: existingMacrosByPreset,
+    activePreset: matchedOp,
+    headerMeta: resolvedMeta,
+    selectedCellsByPreset: existingByPreset,
+    selectedCellIndices: restoredForPreset,
+    operatorStandardCounts: standardCounts,
+    macroRunning: false
+  };
+
+  await chrome.storage.local.set(storagePayload);
+  try {
+    await chrome.storage.local.remove('fileSourceType');
+  } catch (e) {}
+
+  return {
+    ...storagePayload,
+    operatorKey: matchedOp,
+    totalCells
+  };
+}

@@ -28,22 +28,29 @@ function handleSelectedFile(file) {
       setImportStatus(
         'checkCircle',
         'icon-emerald',
-        `${file.name} dimuat (${result.totalCells} sel). Menutup jendela...`,
+        `${file.name} dimuat (${result.totalCells} data). Menutup jendela...`,
         'ok'
       );
       setTimeout(() => {
         window.close();
       }, 160);
     } catch (err) {
-      setImportStatus(
-        'xCircle',
-        'icon-rose',
-        'Format file .pmr / .json tidak valid atau tidak berisi keystroke.',
-        'error'
-      );
+      let msg = err && err.code === 'STRICT_OPERATOR_MISMATCH' && err.message
+        ? err.message
+        : '';
+      if (!msg) {
+        const standardCounts = await getStandardOperatorCountsFromStorage();
+        msg = formatRejectedFileMessage(0, standardCounts);
+      }
+      setImportStatus('xCircle', 'icon-rose', msg, 'error');
     } finally {
       if (importFileInput) importFileInput.value = '';
     }
+  };
+  reader.onerror = async () => {
+    const standardCounts = await getStandardOperatorCountsFromStorage();
+    setImportStatus('xCircle', 'icon-rose', formatRejectedFileMessage(0, standardCounts), 'error');
+    if (importFileInput) importFileInput.value = '';
   };
   reader.readAsText(file);
 }

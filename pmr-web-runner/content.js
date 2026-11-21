@@ -1,8 +1,10 @@
 let isRunning = false;
+let isModalOpen = false;
 let currentTargetEl = null;
 let lastFocusedParamCell = null;
 let lastLockedClickCell = null;
 let lastFilledInput = null;
+let activeAbortCallback = null;
 
 const PRESET_SHORT_LABELS = {
   operator1: 'Op. Lap 1',
@@ -12,6 +14,14 @@ const PRESET_SHORT_LABELS = {
 
 const SPECIAL_STATUS_VALUE_RE = /\b(plant_trouble|plant_shutdown|standby_notrunning|tidak_ada_mixing|overhaul|plant_ta|not_running|maintenance|shutdown|trouble|standby)\b/i;
 const SPECIAL_STATUS_TEXT_RE = /\b(plant\s+trouble|plant\s+shutdown|standby(?:\s*\/\s*not\s*running)?|tidak\s+ada\s+mixing|overhaul|maintenance|plant\s+ta|not\s+running)\b/i;
+
+function parseDropdownArrowToken(value) {
+  const str = String(value ?? '').trim();
+  const match = str.match(/^__PMR_ARROW_DOWN__:(\d+)$/);
+  if (!match) return null;
+  const n = parseInt(match[1], 10);
+  return Number.isFinite(n) && n >= 1 ? n : 1;
+}
 
 async function migrateSpeedStorageIfNeeded() {
   try {
@@ -57,7 +67,7 @@ function isModalDomNode(node) {
     if (typeof node.getRootNode === 'function' && node.getRootNode() === host.shadowRoot) return true;
     if (node.closest && node.closest('#pmr-confirm-modal-host')) return true;
   }
-  if (node.closest && (node.closest('#pmr-runner-toast') || node.closest('[class*="pmr-confirm-"]'))) {
+  if (node.closest && node.closest('[class*="pmr-modal-"]')) {
     return true;
   }
   return false;
@@ -190,7 +200,6 @@ function getRowParamTds(tr) {
     return tds.filter(td => td.classList.contains('data-cell'));
   }
   if (tds.length > 5) {
-    // Struktur DILOC asli: lewati 5 kolom metadata paling kiri (td indeks 0..4)
     return tds.slice(5);
   }
   return tds.filter(td => (
@@ -204,7 +213,6 @@ function getRowDataCellInputs(tr) {
   const paramTds = getRowParamTds(tr);
   const controls = [];
   for (const td of paramTds) {
-    // Kumpulkan input & select; abaikan kolom display/rumus <span> non-form
     const ctrl = Array.from(td.querySelectorAll('input, select')).find(isVisibleFormControl);
     if (ctrl) {
       controls.push(ctrl);
@@ -271,12 +279,6 @@ document.addEventListener('focusin', (e) => {
   if (info && isEditableElement(target) && !inspectCellLock(target).locked) {
     lastFocusedParamCell = target;
     lastLockedClickCell = null;
-  }
-}, true);
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && isRunning) {
-    stopMacroExecution("Pengisian dihentikan (ESC)");
   }
 }, true);
 
@@ -388,7 +390,6 @@ function findFirstOpenEmptyRow(rows) {
     const inputs = getRowDataCellInputs(tr);
     if (inputs.length === 0) continue;
 
-    // Abaikan elemen disabled / readOnly / sel berstatus khusus saat mendeteksi baris kosong
     const activeInputs = inputs.filter(el => (
       !el.disabled &&
       !el.readOnly &&
@@ -405,7 +406,6 @@ function findFirstOpenEmptyRow(rows) {
 }
 
 function findAutoDetectStartLocation() {
-  // Lapis 1 (Prioritas Utama): baris zona shift aktif (.active-shift-time) yang sel aktif pertamanya terbuka & kosong
   const activeShiftRows = Array.from(document.querySelectorAll('tr'))
     .filter(tr => tr.querySelector('.active-shift-time') && getRowDataCellInputs(tr).length > 0);
 
@@ -414,7 +414,6 @@ function findAutoDetectStartLocation() {
     return { mode: 'auto', row: layer1Match.row, colIdx: layer1Match.colIdx };
   }
 
-  // Lapis 2 (Fallback Universal): scan semua baris tabel dari atas ke bawah
   const allDataRows = getAllDataRows();
   const layer2Match = findFirstOpenEmptyRow(allDataRows);
   if (layer2Match) {
@@ -422,26 +421,29 @@ function findAutoDetectStartLocation() {
   }
 
   return {
-    error: "Semua baris shift aktif sudah terisi / jam belum tiba",
+    title: "Tidak Ada Baris Kosong",
+    error: "Semua baris shift aktif sudah terisi atau jam logsheet belum tiba.",
     icon: "clock"
   };
 }
 
 function resolveStartLocation() {
-  // Prioritas 1a: Cek apakah user mengklik sel terkunci secara eksplisit
   if (lastLockedClickCell && document.body && document.body.contains(lastLockedClickCell)) {
     const row = lastLockedClickCell.closest('tr');
     const rowTime = getRowTimeLabel(row);
     const title = String(lastLockedClickCell.getAttribute('title') || '').toLowerCase();
     const isFuture = title.includes('jam belum tiba');
     const msg = isFuture
-      ? `Sel ${rowTime ? rowTime + ' ' : ''}belum tiba — pengisian dibatalkan aman.`
-      : `Sel ${rowTime ? rowTime + ' ' : ''}terkunci — klik sel yang terbuka untuk memulai.`;
+      ? `Sel pada ${formatBarisJamPhrase(rowTime)} belum tiba — pengisian dibatalkan aman.`
+      : `Sel pada ${formatBarisJamPhrase(rowTime)} terkunci — klik sel yang terbuka untuk memulai.`;
     lastLockedClickCell = null;
-    return { error: msg, icon: isFuture ? 'clock' : 'warn' };
+    return {
+      title: isFuture ? "Jam Logsheet Belum Tiba" : "Sel Target Terkunci",
+      error: msg,
+      icon: isFuture ? 'clock' : 'warn'
+    };
   }
 
-  // Prioritas 1b: Mode Kursor Aktif pada sel parameter DILOC (validasi anti-detached DOM)
   let candidate = null;
   if (document.activeElement && !isModalDomNode(document.activeElement) && getControlRowInfo(document.activeElement)) {
     candidate = document.activeElement;
@@ -457,9 +459,13 @@ function resolveStartLocation() {
     if (lock.locked) {
       const rowTime = info ? getRowTimeLabel(info.row) : '';
       const msg = lock.notArrived
-        ? `Sel ${rowTime ? rowTime + ' ' : ''}belum tiba — pengisian dibatalkan aman.`
-        : `Sel ${rowTime ? rowTime + ' ' : ''}terkunci — tidak bisa diisi.`;
-      return { error: msg, icon: lock.notArrived ? 'clock' : 'warn' };
+        ? `Sel pada ${formatBarisJamPhrase(rowTime)} belum tiba — pengisian dibatalkan aman.`
+        : `Sel pada ${formatBarisJamPhrase(rowTime)} terkunci — tidak bisa diisi.`;
+      return {
+        title: lock.notArrived ? "Jam Logsheet Belum Tiba" : "Sel Target Terkunci",
+        error: msg,
+        icon: lock.notArrived ? 'clock' : 'warn'
+      };
     }
 
     if (info) {
@@ -471,7 +477,6 @@ function resolveStartLocation() {
     }
   }
 
-  // Prioritas 2: Auto-detect baris kosong pertama di zona shift aktif
   return findAutoDetectStartLocation();
 }
 
@@ -521,15 +526,20 @@ function inspectDilocPageContext() {
 
 function validatePageBeforeExecution(request, rowsPayload) {
   const ctx = inspectDilocPageContext();
-  const requestedPreset = typeof request.activePreset === 'string' ? request.activePreset : '';
-  const isCustomSource = request.fileSourceType === 'custom';
-  const isBuiltInPreset = Boolean(!isCustomSource && requestedPreset && PRESET_SHORT_LABELS[requestedPreset]);
-
-  if (isBuiltInPreset && ctx.webOperator && requestedPreset !== ctx.webOperator) {
+  if (ctx.tableColCount === 0) {
     return {
-      icon: 'shieldAlert',
-      color: '#dc2626',
-      message: `Web aktif ${PRESET_SHORT_LABELS[ctx.webOperator]}, preset masih ${PRESET_SHORT_LABELS[requestedPreset]}`
+      title: "Tabel Logsheet Tidak Siap",
+      icon: "warn",
+      message: "Tabel input logsheet DILOC belum ditemukan atau belum selesai dimuat pada tab ini."
+    };
+  }
+
+  const requestedPreset = typeof request.activePreset === 'string' ? request.activePreset : '';
+  if (requestedPreset && PRESET_SHORT_LABELS[requestedPreset] && ctx.webOperator && requestedPreset !== ctx.webOperator) {
+    return {
+      title: "Operator Logsheet Tidak Cocok",
+      icon: "shieldAlert",
+      message: `Halaman aktif adalah ${PRESET_SHORT_LABELS[ctx.webOperator]}, sedangkan file yang dimuat untuk ${PRESET_SHORT_LABELS[requestedPreset]}.`
     };
   }
 
@@ -539,9 +549,9 @@ function validatePageBeforeExecution(request, rowsPayload) {
 
   if (ctx.tableColCount > 0 && fileColCount > 0 && !matchesTableTotal && !matchesTargetActive) {
     return {
-      icon: 'warn',
-      color: '#dc2626',
-      message: `${fileColCount} sel ≠ ${ctx.tableColCount} kolom tabel web`
+      title: "Jumlah Kolom Tidak Cocok",
+      icon: "warn",
+      message: `File berisi ${fileColCount} data, sedangkan tabel web aktif memiliki ${ctx.tableColCount} kolom parameter.`
     };
   }
 
@@ -685,6 +695,43 @@ function scanTargetExecutionPlan(rowsPayload, startLoc) {
   };
 }
 
+function escapeTextForHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function createInlineSvgMarkup(pathsMarkup, size = 14) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pathsMarkup}</svg>`;
+}
+
+const MODAL_SVG = {
+  target: '<circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/>',
+  warn: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  checkCircle: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  shieldAlert: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+  stop: '<rect width="14" height="14" x="5" y="5" rx="2"/>',
+  zap: '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>'
+};
+
+function cleanTimeText(rawTime) {
+  return String(rawTime || '').trim().replace(/^jam\s+/i, '');
+}
+
+function formatBarisJamPhrase(rawTime) {
+  const clean = cleanTimeText(rawTime);
+  if (clean) {
+    return `baris logsheet jam ${clean}`;
+  }
+  return 'baris logsheet aktif';
+}
+
 function formatPreScanSummaryDetail(filledCount, filledSamples) {
   const samples = Array.isArray(filledSamples) ? filledSamples.slice(0, 3) : [];
   if (samples.length === 0) return '';
@@ -697,21 +744,14 @@ function formatPreScanSummaryDetail(filledCount, filledSamples) {
   return ` (${sampleParts.join(', ')}${suffix})`;
 }
 
-function createInlineSvgMarkup(pathsMarkup, size = 14) {
-  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pathsMarkup}</svg>`;
-}
-
 function formatStartPointSummary(plan) {
-  const rawTime = String(plan.startTimeLabel || '').trim();
-  const timePart = rawTime
-    ? (/^jam\s+/i.test(rawTime) ? ` (${rawTime})` : ` (Jam ${rawTime})`)
-    : '';
-  return `Baris #${plan.startRowNumber}${timePart} • Kolom #${plan.startColNumber}`;
+  const startLabel = formatBarisJamPhrase(plan.startTimeLabel);
+  return `${startLabel} • Kolom #${plan.startColNumber}`;
 }
 
 function formatLogsheetRowStatusLabel(plan) {
-  const startT = String(plan.startTimeLabel || '').trim().replace(/^jam\s+/i, '');
-  const endT = String(plan.endTimeLabel || '').trim().replace(/^jam\s+/i, '');
+  const startT = cleanTimeText(plan.startTimeLabel);
+  const endT = cleanTimeText(plan.endTimeLabel);
   if (startT) {
     if (plan.plannedRowCount > 1 && endT && endT !== startT) {
       return `baris logsheet jam ${startT} – ${endT}`;
@@ -724,323 +764,702 @@ function formatLogsheetRowStatusLabel(plan) {
   return `baris #${plan.startRowNumber}`;
 }
 
-function showUnifiedConfirmModal(plan, sourceDisplayLabel) {
+function formatRandomizerSummary(request) {
+  const mode = String((request && request.randomMode) || 'off').toLowerCase();
+  const range = Math.max(1, parseInt(request && request.randomRange, 10) || 1);
+
+  if (mode === 'off') {
+    return { text: 'Off', title: 'Off' };
+  }
+  if (mode === 'all') {
+    const txt = `All (±${range})`;
+    return { text: txt, title: txt };
+  }
+  if (mode === 'selected') {
+    const indices = Array.isArray(request && request.selectedIndices)
+      ? request.selectedIndices
+          .map(i => Number(i) + 1)
+          .filter(n => Number.isInteger(n) && n >= 1)
+          .sort((a, b) => a - b)
+      : [];
+    if (indices.length === 0) {
+      return { text: `Selected (±${range}): 0 kolom`, title: `Selected (±${range}): 0 kolom` };
+    }
+    const fullList = indices.map(n => `#${n}`).join(', ');
+    const shown = indices.slice(0, 5).map(n => `#${n}`).join(', ');
+    const extra = indices.length > 5 ? ` (+${indices.length - 5} lainnya)` : '';
+    return {
+      text: `Selected (±${range}): ${shown}${extra}`,
+      title: `Selected (±${range}): ${fullList}`
+    };
+  }
+  return { text: 'Off', title: 'Off' };
+}
+
+async function autoResetSettingsAfterExecution() {
+  try {
+    await chrome.storage.local.set({
+      rowCount: 1,
+      randomMode: 'off',
+      randomRange: 0,
+      selectedCellIndices: [],
+      selectedCellsByPreset: {}
+    });
+  } catch (e) {}
+}
+
+function getModalSharedStyles() {
+  return `
+    *, *::before, *::after { box-sizing: border-box; }
+    @keyframes pmrShimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    .pmr-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.72);
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .pmr-modal-card {
+      width: 100%;
+      max-width: 452px;
+      background: #0f172a;
+      color: #f1f5f9;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 14px;
+      box-shadow: 0 24px 54px rgba(0, 0, 0, 0.65);
+      padding: 18px 20px;
+    }
+    .pmr-modal-card.tone-overwrite {
+      border-color: rgba(245, 158, 11, 0.5);
+    }
+    .pmr-modal-card.tone-success {
+      border-color: rgba(34, 197, 94, 0.5);
+    }
+    .pmr-modal-card.tone-warn {
+      border-color: rgba(245, 158, 11, 0.5);
+    }
+    .pmr-modal-card.tone-progress {
+      border-color: rgba(56, 189, 248, 0.45);
+    }
+    .pmr-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 13px;
+    }
+    .pmr-modal-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .pmr-modal-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      background: rgba(56, 189, 248, 0.14);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #38bdf8;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .pmr-modal-icon.is-green {
+      background: rgba(22, 163, 74, 0.18);
+      border-color: rgba(74, 222, 128, 0.45);
+      color: #4ade80;
+    }
+    .pmr-modal-icon.is-amber {
+      background: rgba(245, 158, 11, 0.18);
+      border-color: rgba(251, 191, 36, 0.45);
+      color: #fbbf24;
+    }
+    .pmr-modal-icon.is-red {
+      background: rgba(220, 38, 38, 0.18);
+      border-color: rgba(248, 113, 113, 0.45);
+      color: #f87171;
+    }
+    .pmr-modal-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      color: #f8fafc;
+      line-height: 1.25;
+    }
+    .pmr-modal-badge {
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      background: rgba(14, 165, 233, 0.16);
+      border: 1px solid rgba(56, 189, 248, 0.42);
+      color: #7dd3fc;
+    }
+    .pmr-modal-badge.is-auto {
+      background: rgba(16, 185, 129, 0.16);
+      border-color: rgba(52, 211, 153, 0.42);
+      color: #6ee7b7;
+    }
+    .pmr-modal-summary {
+      background: rgba(30, 41, 59, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 9px;
+      padding: 10px 12px;
+      display: grid;
+      gap: 7px;
+      margin-bottom: 11px;
+    }
+    .pmr-modal-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .pmr-modal-label {
+      color: #94a3b8;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .pmr-modal-value {
+      color: #f8fafc;
+      font-weight: 600;
+      text-align: right;
+      word-break: break-word;
+    }
+    .pmr-modal-status {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 9px;
+      font-size: 12.5px;
+      line-height: 1.48;
+      margin-bottom: 12px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(52, 211, 153, 0.34);
+      color: #d1fae5;
+    }
+    .pmr-modal-status.is-overwrite,
+    .pmr-modal-status.is-warn {
+      background: rgba(245, 158, 11, 0.13);
+      border-color: rgba(245, 158, 11, 0.4);
+      color: #fde68a;
+    }
+    .pmr-modal-status.is-error {
+      background: rgba(220, 38, 38, 0.16);
+      border-color: rgba(248, 113, 113, 0.45);
+      color: #fecaca;
+    }
+    .pmr-modal-status svg {
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .pmr-modal-status.is-ok svg { color: #34d399; }
+    .pmr-modal-status.is-overwrite svg,
+    .pmr-modal-status.is-warn svg { color: #fbbf24; }
+    .pmr-modal-status.is-error svg { color: #f87171; }
+    .pmr-modal-status strong { color: #ffffff; }
+    .pmr-modal-special {
+      display: flex;
+      align-items: flex-start;
+      gap: 7px;
+      padding: 8px 11px;
+      border-radius: 8px;
+      font-size: 11.5px;
+      line-height: 1.45;
+      margin-bottom: 14px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.28);
+      color: #bae6fd;
+    }
+    .pmr-modal-special svg {
+      flex-shrink: 0;
+      margin-top: 1px;
+      color: #38bdf8;
+    }
+    .pmr-progress-wrap {
+      background: rgba(30, 41, 59, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 10px;
+      padding: 13px 14px;
+      margin-bottom: 15px;
+    }
+    .pmr-progress-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 9px;
+    }
+    .pmr-progress-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #e2e8f0;
+      min-width: 0;
+    }
+    .pmr-progress-live svg {
+      color: #38bdf8;
+      flex-shrink: 0;
+    }
+    .pmr-progress-pct {
+      font-size: 13px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: #38bdf8;
+      flex-shrink: 0;
+    }
+    .pmr-progress-track {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      overflow: hidden;
+    }
+    .pmr-progress-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #0284c7, #38bdf8, #34d399, #0284c7);
+      background-size: 200% 100%;
+      animation: pmrShimmer 1.6s linear infinite;
+      transition: width 0.16s ease-out;
+    }
+    .pmr-progress-sub {
+      margin-top: 8px;
+      font-size: 11px;
+      color: #94a3b8;
+      text-align: center;
+      min-height: 16px;
+    }
+    .pmr-modal-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    .pmr-modal-btn {
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 700;
+      padding: 9px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-width: 118px;
+      transition: filter 0.15s ease, background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+    }
+    .pmr-modal-btn:active {
+      transform: scale(0.98);
+    }
+    .pmr-modal-btn:focus-visible {
+      outline: 2.5px solid #38bdf8;
+      outline-offset: 2px;
+    }
+    .pmr-btn-soft-red {
+      background: rgba(220, 38, 38, 0.14);
+      color: #f87171;
+      border: 1px solid rgba(248, 113, 113, 0.45);
+    }
+    .pmr-btn-soft-red:hover {
+      background: #dc2626;
+      border-color: #ef4444;
+      color: #ffffff;
+    }
+    .pmr-btn-solid-red {
+      background: #dc2626;
+      color: #ffffff;
+      border: 1px solid #ef4444;
+      min-width: 146px;
+    }
+    .pmr-btn-solid-red:hover {
+      background: #b91c1c;
+    }
+    .pmr-btn-green {
+      background: #16a34a;
+      color: #ffffff;
+      border: 1px solid #22c55e;
+    }
+    .pmr-btn-green:hover {
+      background: #15803d;
+    }
+    .pmr-btn-amber {
+      background: #f59e0b;
+      color: #0f172a;
+      border: 1px solid #fbbf24;
+    }
+    .pmr-btn-amber:hover {
+      background: #d97706;
+    }
+    .pmr-modal-kbd {
+      font-size: 10px;
+      opacity: 0.8;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .pmr-btn-amber .pmr-modal-kbd {
+      background: rgba(15, 23, 42, 0.14);
+    }
+  `;
+}
+
+function createModalHostSession() {
+  const existingHost = document.getElementById('pmr-confirm-modal-host');
+  if (existingHost) existingHost.remove();
+
+  const host = document.createElement('div');
+  host.id = 'pmr-confirm-modal-host';
+  host.style.position = 'fixed';
+  host.style.inset = '0';
+  host.style.zIndex = '2147483647';
+
+  const shadow = host.attachShadow({ mode: 'open' });
+  const styleEl = document.createElement('style');
+  styleEl.textContent = getModalSharedStyles();
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'pmr-modal-backdrop';
+  backdrop.setAttribute('part', 'backdrop');
+
+  shadow.appendChild(styleEl);
+  shadow.appendChild(backdrop);
+
+  isModalOpen = true;
+  let keyHandler = null;
+
+  const setKeyHandler = (fn) => {
+    keyHandler = fn;
+  };
+
+  const onGlobalKeyDown = (e) => {
+    if (!isModalOpen) return;
+    if (e.key === 'Escape' || e.key === 'Enter') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (typeof keyHandler === 'function') {
+        keyHandler(e.key);
+      }
+    }
+  };
+
+  document.addEventListener('keydown', onGlobalKeyDown, true);
+  (document.documentElement || document.body).appendChild(host);
+
+  const destroy = () => {
+    document.removeEventListener('keydown', onGlobalKeyDown, true);
+    host.remove();
+    isModalOpen = false;
+    activeAbortCallback = null;
+  };
+
+  return { host, shadow, backdrop, setKeyHandler, destroy };
+}
+
+function openPhase3WarningModal(title, message, iconName = 'warn') {
+  if (isModalOpen) return Promise.resolve();
+
+  const session = createModalHostSession();
+  const safeIcon = MODAL_SVG[iconName] || MODAL_SVG.warn;
+  const isShield = iconName === 'shieldAlert';
+
+  session.backdrop.innerHTML = `
+    <div class="pmr-modal-card tone-warn" role="dialog" aria-modal="true" aria-labelledby="pmr-modal-title">
+      <div class="pmr-modal-header">
+        <div class="pmr-modal-title-wrap">
+          <span class="pmr-modal-icon ${isShield ? 'is-red' : 'is-amber'}">${createInlineSvgMarkup(safeIcon, 18)}</span>
+          <h3 id="pmr-modal-title" class="pmr-modal-title">${escapeTextForHtml(title || 'Peringatan')}</h3>
+        </div>
+      </div>
+      <div class="pmr-modal-status ${isShield ? 'is-error' : 'is-warn'}">
+        ${createInlineSvgMarkup(safeIcon, 16)}
+        <span>${escapeTextForHtml(message)}</span>
+      </div>
+      <div class="pmr-modal-actions">
+        <button type="button" id="pmr-btn-close" class="pmr-modal-btn pmr-btn-amber">
+          ${createInlineSvgMarkup(MODAL_SVG.info, 14)}
+          <span>Tutup</span>
+          <span class="pmr-modal-kbd">ESC</span>
+        </button>
+      </div>
+    </div>
+  `;
+
+  const closeBtn = session.shadow.getElementById('pmr-btn-close');
+
   return new Promise((resolve) => {
-    const existingHost = document.getElementById('pmr-confirm-modal-host');
-    if (existingHost) existingHost.remove();
+    let closed = false;
+    const closeNow = () => {
+      if (closed) return;
+      closed = true;
+      session.destroy();
+      resolve();
+    };
 
-    const host = document.createElement('div');
-    host.id = 'pmr-confirm-modal-host';
-    host.style.position = 'fixed';
-    host.style.inset = '0';
-    host.style.zIndex = '2147483647';
+    closeBtn.addEventListener('click', closeNow);
+    session.setKeyHandler((key) => {
+      if (key === 'Escape' || key === 'Enter') {
+        closeNow();
+      }
+    });
+    closeBtn.focus();
+  });
+}
 
-    const shadow = host.attachShadow({ mode: 'open' });
+function renderPhase1Confirm(session, plan, sourceDisplayLabel, randSummary) {
+  return new Promise((resolve) => {
     const isOverwrite = plan.filledCount >= 1;
     const isCursorMode = plan.mode === 'cursor';
     const modeLabel = isCursorMode ? 'Kursor Aktif' : 'Auto-Detect';
     const startPointText = formatStartPointSummary(plan);
     const rangeText = plan.plannedRowCount > 1
-      ? `${plan.plannedRowCount} baris (Baris #${plan.startRowNumber} – #${plan.endRowNumber})`
+      ? `${plan.plannedRowCount} baris (${formatLogsheetRowStatusLabel(plan)})`
       : `1 baris (Kolom #${plan.startColNumber} s/d #${plan.endColNumber})`;
     const rowLabel = formatLogsheetRowStatusLabel(plan);
     const detailPart = formatPreScanSummaryDetail(plan.filledCount, plan.filledSamples);
 
     const statusMessageHtml = isOverwrite
-      ? `Ditemukan <strong>${plan.filledCount} sel</strong> sudah terisi pada <strong>${escapeTextForHtml(rowLabel)}</strong>${escapeTextForHtml(detailPart)}. Jika dilanjutkan, nilai lama pada sel tersebut akan ditimpa.`
-      : `Sel target pada <strong>${escapeTextForHtml(rowLabel)}</strong> masih kosong. Data siap dimasukkan tanpa menimpa angka lama.`;
+      ? `Ditemukan <strong>${plan.filledCount} sel</strong> sudah terisi pada <strong>${escapeTextForHtml(rowLabel)}</strong>${escapeTextForHtml(detailPart)}. Jika dilanjutkan, nilai lama akan ditimpa.`
+      : `Sel target pada <strong>${escapeTextForHtml(rowLabel)}</strong> masih kosong dan siap diisi.`;
 
     const specialSample = (plan.specialStatusSamples && plan.specialStatusSamples[0]) || 'Status Khusus';
     const specialNoteHtml = plan.specialStatusCount >= 1
-      ? `<div class="pmr-confirm-special">
-          ${createInlineSvgMarkup('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/>', 14)}
-          <span>Info: <strong>${plan.specialStatusCount} sel</strong> berstatus khusus (mis. ${escapeTextForHtml(specialSample)}) pada ${escapeTextForHtml(rowLabel)} akan dilewati otomatis agar keterangan tidak berubah.</span>
+      ? `<div class="pmr-modal-special">
+          ${createInlineSvgMarkup(MODAL_SVG.shieldAlert, 14)}
+          <span>Info: <strong>${plan.specialStatusCount} sel</strong> berstatus khusus (${escapeTextForHtml(specialSample)}) pada ${escapeTextForHtml(rowLabel)} dilewati otomatis.</span>
         </div>`
       : '';
 
-    const targetSvg = createInlineSvgMarkup(
-      '<circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/>',
-      18
-    );
     const statusSvg = isOverwrite
-      ? createInlineSvgMarkup('<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>', 16)
-      : createInlineSvgMarkup('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>', 16);
-    const xSvg = createInlineSvgMarkup('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', 14);
+      ? createInlineSvgMarkup(MODAL_SVG.warn, 16)
+      : createInlineSvgMarkup(MODAL_SVG.checkCircle, 16);
     const ctaSvg = isOverwrite
-      ? createInlineSvgMarkup('<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>', 14)
-      : createInlineSvgMarkup('<polygon points="6 3 20 12 6 21 6 3"/>', 14);
+      ? createInlineSvgMarkup(MODAL_SVG.warn, 14)
+      : createInlineSvgMarkup(MODAL_SVG.play, 14);
 
-    shadow.innerHTML = `
-      <style>
-        *, *::before, *::after { box-sizing: border-box; }
-        .pmr-confirm-backdrop {
-          position: fixed;
-          inset: 0;
-          background: rgba(2, 6, 23, 0.74);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 16px;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-        .pmr-confirm-card {
-          width: 100%;
-          max-width: 440px;
-          background: #0f172a;
-          color: #f1f5f9;
-          border: 1px solid ${isOverwrite ? 'rgba(245, 158, 11, 0.45)' : 'rgba(56, 189, 248, 0.35)'};
-          border-radius: 12px;
-          box-shadow: 0 24px 48px rgba(0, 0, 0, 0.58);
-          padding: 18px 20px;
-        }
-        .pmr-confirm-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-          margin-bottom: 12px;
-        }
-        .pmr-confirm-title-wrap {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          min-width: 0;
-        }
-        .pmr-confirm-icon {
-          width: 34px;
-          height: 34px;
-          border-radius: 8px;
-          background: rgba(56, 189, 248, 0.14);
-          border: 1px solid rgba(56, 189, 248, 0.35);
-          color: #38bdf8;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-        .pmr-confirm-title {
-          margin: 0;
-          font-size: 14.5px;
-          font-weight: 700;
-          color: #f8fafc;
-          line-height: 1.25;
-        }
-        .pmr-confirm-badge {
-          font-size: 10.5px;
-          font-weight: 700;
-          padding: 3px 8px;
-          border-radius: 6px;
-          white-space: nowrap;
-          flex-shrink: 0;
-          background: ${isCursorMode ? 'rgba(14, 165, 233, 0.16)' : 'rgba(16, 185, 129, 0.16)'};
-          border: 1px solid ${isCursorMode ? 'rgba(56, 189, 248, 0.42)' : 'rgba(52, 211, 153, 0.42)'};
-          color: ${isCursorMode ? '#7dd3fc' : '#6ee7b7'};
-        }
-        .pmr-confirm-summary {
-          background: rgba(30, 41, 59, 0.72);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 8px;
-          padding: 10px 12px;
-          display: grid;
-          gap: 6px;
-          margin-bottom: 11px;
-        }
-        .pmr-confirm-row {
-          display: flex;
-          align-items: baseline;
-          justify-content: space-between;
-          gap: 12px;
-          font-size: 12px;
-          line-height: 1.4;
-        }
-        .pmr-confirm-label {
-          color: #94a3b8;
-          font-weight: 600;
-          flex-shrink: 0;
-        }
-        .pmr-confirm-value {
-          color: #f8fafc;
-          font-weight: 600;
-          text-align: right;
-          word-break: break-word;
-        }
-        .pmr-confirm-status {
-          display: flex;
-          align-items: flex-start;
-          gap: 8px;
-          padding: 10px 12px;
-          border-radius: 8px;
-          font-size: 12.5px;
-          line-height: 1.48;
-          margin-bottom: ${plan.specialStatusCount >= 1 ? '8px' : '16px'};
-          background: ${isOverwrite ? 'rgba(245, 158, 11, 0.12)' : 'rgba(16, 185, 129, 0.1)'};
-          border: 1px solid ${isOverwrite ? 'rgba(245, 158, 11, 0.36)' : 'rgba(52, 211, 153, 0.3)'};
-          color: ${isOverwrite ? '#fde68a' : '#d1fae5'};
-        }
-        .pmr-confirm-status svg {
-          flex-shrink: 0;
-          margin-top: 2px;
-          color: ${isOverwrite ? '#fbbf24' : '#34d399'};
-        }
-        .pmr-confirm-status strong {
-          color: ${isOverwrite ? '#fbbf24' : '#6ee7b7'};
-        }
-        .pmr-confirm-special {
-          display: flex;
-          align-items: flex-start;
-          gap: 7px;
-          padding: 8px 11px;
-          border-radius: 8px;
-          font-size: 11.5px;
-          line-height: 1.45;
-          margin-bottom: 16px;
-          background: rgba(56, 189, 248, 0.1);
-          border: 1px solid rgba(56, 189, 248, 0.28);
-          color: #bae6fd;
-        }
-        .pmr-confirm-special svg {
-          flex-shrink: 0;
-          margin-top: 1px;
-          color: #38bdf8;
-        }
-        .pmr-confirm-special strong {
-          color: #e0f2fe;
-        }
-        .pmr-confirm-actions {
-          display: flex;
-          align-items: center;
-          justify-content: flex-end;
-          gap: 8px;
-        }
-        .pmr-confirm-btn {
-          font-family: inherit;
-          font-size: 12.5px;
-          font-weight: 600;
-          padding: 8px 14px;
-          border-radius: 8px;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          transition: filter 0.15s ease, background-color 0.15s ease;
-        }
-        .pmr-confirm-btn:focus-visible {
-          outline: 2px solid #38bdf8;
-          outline-offset: 2px;
-        }
-        .pmr-confirm-btn-cancel {
-          background: rgba(30, 41, 59, 0.85);
-          color: #cbd5e1;
-          border: 1px solid rgba(148, 163, 184, 0.35);
-        }
-        .pmr-confirm-btn-cancel:hover {
-          background: #1e293b;
-          color: #ffffff;
-        }
-        .pmr-confirm-btn-primary {
-          background: ${isOverwrite ? '#d97706' : '#0284c7'};
-          color: #ffffff;
-          border: 1px solid ${isOverwrite ? '#f59e0b' : '#38bdf8'};
-        }
-        .pmr-confirm-btn-primary:hover {
-          background: ${isOverwrite ? '#b45309' : '#0369a1'};
-        }
-        .pmr-confirm-kbd {
-          font-size: 10px;
-          opacity: 0.78;
-          padding: 1px 5px;
-          border-radius: 4px;
-          background: rgba(0, 0, 0, 0.28);
-        }
-      </style>
-      <div class="pmr-confirm-backdrop" part="backdrop">
-        <div class="pmr-confirm-card" role="dialog" aria-modal="true" aria-labelledby="pmr-confirm-title">
-          <div class="pmr-confirm-header">
-            <div class="pmr-confirm-title-wrap">
-              <span class="pmr-confirm-icon">${targetSvg}</span>
-              <h3 id="pmr-confirm-title" class="pmr-confirm-title">Konfirmasi Pengisian Logsheet</h3>
-            </div>
-            <span class="pmr-confirm-badge">${escapeTextForHtml(modeLabel)}</span>
+    session.backdrop.innerHTML = `
+      <div class="pmr-modal-card ${isOverwrite ? 'tone-overwrite' : ''}" role="dialog" aria-modal="true" aria-labelledby="pmr-modal-title">
+        <div class="pmr-modal-header">
+          <div class="pmr-modal-title-wrap">
+            <span class="pmr-modal-icon">${createInlineSvgMarkup(MODAL_SVG.target, 18)}</span>
+            <h3 id="pmr-modal-title" class="pmr-modal-title">Konfirmasi Pengisian Logsheet</h3>
           </div>
-          <div class="pmr-confirm-summary">
-            <div class="pmr-confirm-row">
-              <span class="pmr-confirm-label">Titik Mulai</span>
-              <span class="pmr-confirm-value">${escapeTextForHtml(startPointText)}</span>
-            </div>
-            <div class="pmr-confirm-row">
-              <span class="pmr-confirm-label">Jangkauan</span>
-              <span class="pmr-confirm-value">${escapeTextForHtml(rangeText)}</span>
-            </div>
-            <div class="pmr-confirm-row">
-              <span class="pmr-confirm-label">Sumber Data</span>
-              <span class="pmr-confirm-value">${escapeTextForHtml(sourceDisplayLabel)}</span>
-            </div>
+          <span class="pmr-modal-badge ${isCursorMode ? '' : 'is-auto'}">${escapeTextForHtml(modeLabel)}</span>
+        </div>
+        <div class="pmr-modal-summary">
+          <div class="pmr-modal-row">
+            <span class="pmr-modal-label">Titik Mulai</span>
+            <span class="pmr-modal-value">${escapeTextForHtml(startPointText)}</span>
           </div>
-          <div class="pmr-confirm-status">
-            ${statusSvg}
-            <span>${statusMessageHtml}</span>
+          <div class="pmr-modal-row">
+            <span class="pmr-modal-label">Jangkauan</span>
+            <span class="pmr-modal-value">${escapeTextForHtml(rangeText)}</span>
           </div>
-          ${specialNoteHtml}
-          <div class="pmr-confirm-actions">
-            <button type="button" id="pmr-btn-cancel" class="pmr-confirm-btn pmr-confirm-btn-cancel">
-              ${xSvg}
-              <span>Batal</span>
-              <span class="pmr-confirm-kbd">ESC</span>
-            </button>
-            <button type="button" id="pmr-btn-confirm" class="pmr-confirm-btn pmr-confirm-btn-primary">
-              ${ctaSvg}
-              <span>${isOverwrite ? 'Timpa & Mulai' : 'Mulai Isi'}</span>
-              <span class="pmr-confirm-kbd">Enter</span>
-            </button>
+          <div class="pmr-modal-row">
+            <span class="pmr-modal-label">Sumber Data</span>
+            <span class="pmr-modal-value">${escapeTextForHtml(sourceDisplayLabel)}</span>
           </div>
+          <div class="pmr-modal-row">
+            <span class="pmr-modal-label">Randomizer</span>
+            <span class="pmr-modal-value" title="${escapeTextForHtml(randSummary.title)}">${escapeTextForHtml(randSummary.text)}</span>
+          </div>
+        </div>
+        <div class="pmr-modal-status ${isOverwrite ? 'is-overwrite' : 'is-ok'}">
+          ${statusSvg}
+          <span>${statusMessageHtml}</span>
+        </div>
+        ${specialNoteHtml}
+        <div class="pmr-modal-actions">
+          <button type="button" id="pmr-btn-cancel" class="pmr-modal-btn pmr-btn-soft-red">
+            ${createInlineSvgMarkup(MODAL_SVG.x, 14)}
+            <span>Batal</span>
+            <span class="pmr-modal-kbd">ESC</span>
+          </button>
+          <button type="button" id="pmr-btn-confirm" class="pmr-modal-btn ${isOverwrite ? 'pmr-btn-amber' : 'pmr-btn-green'}">
+            ${ctaSvg}
+            <span>${isOverwrite ? 'Timpa & Mulai' : 'Mulai Isi'}</span>
+            <span class="pmr-modal-kbd">Enter</span>
+          </button>
         </div>
       </div>
     `;
 
-    const cancelBtn = shadow.getElementById('pmr-btn-cancel');
-    const confirmBtn = shadow.getElementById('pmr-btn-confirm');
-    const backdrop = shadow.querySelector('.pmr-confirm-backdrop');
+    const cancelBtn = session.shadow.getElementById('pmr-btn-cancel');
+    const confirmBtn = session.shadow.getElementById('pmr-btn-confirm');
 
     let settled = false;
-    const cleanupAndResolve = (result) => {
+    const settle = (ok) => {
       if (settled) return;
       settled = true;
-      document.removeEventListener('keydown', onKeyDown, true);
-      host.remove();
-      resolve(result);
+      resolve(ok);
     };
 
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        cleanupAndResolve(false);
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        e.stopPropagation();
-        cleanupAndResolve(true);
-      }
-    };
-
-    cancelBtn.addEventListener('click', () => cleanupAndResolve(false));
-    confirmBtn.addEventListener('click', () => cleanupAndResolve(true));
-    backdrop.addEventListener('click', (e) => {
-      if (e.target === backdrop) cleanupAndResolve(false);
+    cancelBtn.addEventListener('click', () => settle(false));
+    confirmBtn.addEventListener('click', () => settle(true));
+    session.setKeyHandler((key) => {
+      if (key === 'Escape') settle(false);
+      else if (key === 'Enter') settle(true);
     });
 
-    document.addEventListener('keydown', onKeyDown, true);
-    document.body.appendChild(host);
     confirmBtn.focus();
   });
 }
 
-function escapeTextForHtml(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+function renderPhase2Progress(session, initialTimeLabel, totalRowsPlanned, onCancelClick) {
+  const cleanInit = cleanTimeText(initialTimeLabel) || 'Aktif';
+  session.backdrop.innerHTML = `
+    <div class="pmr-modal-card tone-progress" role="dialog" aria-modal="true" aria-labelledby="pmr-modal-title">
+      <div class="pmr-modal-header">
+        <div class="pmr-modal-title-wrap">
+          <span class="pmr-modal-icon">${createInlineSvgMarkup(MODAL_SVG.zap, 18)}</span>
+          <h3 id="pmr-modal-title" class="pmr-modal-title">Mengisi Logsheet...</h3>
+        </div>
+        <span class="pmr-modal-badge">${totalRowsPlanned > 1 ? `${totalRowsPlanned} Baris` : '1 Baris'}</span>
+      </div>
+      <div class="pmr-progress-wrap">
+        <div class="pmr-progress-top">
+          <div class="pmr-progress-live">
+            ${createInlineSvgMarkup(MODAL_SVG.zap, 15)}
+            <span id="pmr-progress-status">Menyiapkan pengisian baris jam ${escapeTextForHtml(cleanInit)}...</span>
+          </div>
+          <span id="pmr-progress-pct" class="pmr-progress-pct">0%</span>
+        </div>
+        <div class="pmr-progress-track">
+          <div id="pmr-progress-fill" class="pmr-progress-fill"></div>
+        </div>
+        <div id="pmr-progress-sub" class="pmr-progress-sub">Tekan ESC atau tombol Batal untuk menghentikan proses</div>
+      </div>
+      <div class="pmr-modal-actions">
+        <button type="button" id="pmr-btn-abort" class="pmr-modal-btn pmr-btn-solid-red">
+          ${createInlineSvgMarkup(MODAL_SVG.stop, 14)}
+          <span>Batal</span>
+          <span class="pmr-modal-kbd">ESC</span>
+        </button>
+      </div>
+    </div>
+  `;
+
+  // Cache seluruh referensi elemen Phase 2 sekali saja sebelum loop berjalan
+  const refs = {
+    statusEl: session.shadow.getElementById('pmr-progress-status'),
+    pctEl: session.shadow.getElementById('pmr-progress-pct'),
+    fillEl: session.shadow.getElementById('pmr-progress-fill'),
+    subEl: session.shadow.getElementById('pmr-progress-sub'),
+    abortBtn: session.shadow.getElementById('pmr-btn-abort')
+  };
+
+  refs.abortBtn.addEventListener('click', () => {
+    onCancelClick('Pengisian dibatalkan');
+  });
+
+  session.setKeyHandler((key) => {
+    if (key === 'Escape') {
+      onCancelClick('Pengisian dihentikan (ESC)');
+    }
+  });
+
+  refs.abortBtn.focus();
+  return refs;
+}
+
+function renderPhase3Summary(session, summary) {
+  return new Promise((resolve) => {
+    const isAbortedOrWarn = Boolean(summary.aborted || summary.stoppedByBrake);
+    const titleText = summary.aborted
+      ? 'Pengisian Dibatalkan'
+      : (summary.stoppedByBrake ? 'Pengisian Berhenti Sebagian' : 'Pengisian Logsheet Selesai');
+
+    const statusIcon = isAbortedOrWarn
+      ? createInlineSvgMarkup(MODAL_SVG.warn, 16)
+      : createInlineSvgMarkup(MODAL_SVG.checkCircle, 16);
+
+    const closeBtnSvg = isAbortedOrWarn
+      ? createInlineSvgMarkup(MODAL_SVG.info, 14)
+      : createInlineSvgMarkup(MODAL_SVG.checkCircle, 14);
+
+    let detailMessage = `Proses pengisian ${summary.filledRowsCount > 0 ? `sebanyak ${summary.filledRowsCount} baris` : ''} telah selesai.`;
+    if (summary.aborted) {
+      detailMessage = summary.abortReason || 'Proses pengisian dihentikan sebelum seluruh target selesai.';
+    } else if (summary.stoppedByBrake) {
+      const reason = summary.blockedNotArrived ? 'jam belum tiba' : 'sel terkunci';
+      detailMessage = summary.blockedTime
+        ? `Berhenti aman saat mencapai ${formatBarisJamPhrase(summary.blockedTime)} (${reason}).`
+        : `Berhenti aman pada sel yang terkunci / belum tiba.`;
+    } else if (summary.lastCompletedRowTime) {
+      detailMessage = `Pengisian selesai hingga ${formatBarisJamPhrase(summary.lastCompletedRowTime)}.`;
+    }
+
+    session.backdrop.innerHTML = `
+      <div class="pmr-modal-card ${isAbortedOrWarn ? 'tone-warn' : 'tone-success'}" role="dialog" aria-modal="true" aria-labelledby="pmr-modal-title">
+        <div class="pmr-modal-header">
+          <div class="pmr-modal-title-wrap">
+            <span class="pmr-modal-icon ${isAbortedOrWarn ? 'is-amber' : 'is-green'}">${createInlineSvgMarkup(isAbortedOrWarn ? MODAL_SVG.warn : MODAL_SVG.checkCircle, 18)}</span>
+            <h3 id="pmr-modal-title" class="pmr-modal-title">${escapeTextForHtml(titleText)}</h3>
+          </div>
+        </div>
+        <div class="pmr-modal-summary">
+          <div class="pmr-modal-row">
+            <span class="pmr-modal-label">Berhasil Diisi</span>
+            <span class="pmr-modal-value">${summary.filledCellsCount} sel (${summary.filledRowsCount} baris)</span>
+          </div>
+          <div class="pmr-modal-row">
+            <span class="pmr-modal-label">Dilewati</span>
+            <span class="pmr-modal-value">${summary.skippedCellsCount} sel (status khusus / terkunci)</span>
+          </div>
+        </div>
+        <div class="pmr-modal-status ${isAbortedOrWarn ? 'is-warn' : 'is-ok'}">
+          ${statusIcon}
+          <span>${escapeTextForHtml(detailMessage)}</span>
+        </div>
+        <div class="pmr-modal-actions">
+          <button type="button" id="pmr-btn-close" class="pmr-modal-btn ${isAbortedOrWarn ? 'pmr-btn-amber' : 'pmr-btn-green'}">
+            ${closeBtnSvg}
+            <span>Tutup</span>
+            <span class="pmr-modal-kbd">Enter</span>
+          </button>
+        </div>
+      </div>
+    `;
+
+    const closeBtn = session.shadow.getElementById('pmr-btn-close');
+    let settled = false;
+    const closeNow = () => {
+      if (settled) return;
+      settled = true;
+      session.destroy();
+      resolve();
+    };
+
+    closeBtn.addEventListener('click', closeNow);
+    session.setKeyHandler((key) => {
+      if (key === 'Escape' || key === 'Enter') {
+        closeNow();
+      }
+    });
+    closeBtn.focus();
+  });
 }
 
 function findDilocSubmitButton() {
@@ -1052,7 +1471,7 @@ function findDilocSubmitButton() {
 }
 
 async function interruptibleSleep(ms) {
-  const step = 100;
+  const step = 80;
   let elapsed = 0;
   while (elapsed < ms) {
     if (!isRunning) return false;
@@ -1063,7 +1482,7 @@ async function interruptibleSleep(ms) {
   return isRunning;
 }
 
-async function waitForDilocAutosaveSync() {
+async function waitForDilocAutosaveSync(progressRefs = null) {
   const stillRunning = await interruptibleSleep(1150);
   if (!stillRunning) return;
 
@@ -1077,7 +1496,9 @@ async function waitForDilocAutosaveSync() {
 
   if (!isCurrentlySaving()) return;
 
-  showToast("loader", "Menunggu autosave server...", "#0284c7", true);
+  if (progressRefs && progressRefs.subEl) {
+    progressRefs.subEl.textContent = 'Menunggu sinkronisasi autosave DILOC...';
+  }
   const startedAt = Date.now();
   while (isRunning && (Date.now() - startedAt) < 6000) {
     if (!isCurrentlySaving()) break;
@@ -1093,22 +1514,45 @@ function extractRowsPayload(request) {
   const seq = Array.isArray(request.sequence) ? request.sequence : [];
   if (seq.length === 0) return [];
 
-  const navKeys = new Set(['key.tab', 'tab', 'key.right', 'arrowright', 'key.enter', 'enter', 'return', 'key.down', 'arrowdown', 'key.left', 'arrowleft']);
+  const navKeys = new Set(['key.tab', 'tab', 'key.right', 'arrowright', 'key.enter', 'enter', 'return', 'key.left', 'arrowleft']);
+  const downKeys = new Set(['key.down', 'arrowdown', 'down', '<40>', 'vk=40', 'keycode(40)']);
+  const upKeys = new Set(['key.up', 'arrowup', 'up', '<38>', 'vk=38', 'keycode(38)']);
+
   const values = [];
   let buf = [];
+  let arrowNet = 0;
+  let hasArrowSteps = false;
+
+  const commitCell = () => {
+    const typed = buf.join('').trim();
+    if (typed.length === 0 && hasArrowSteps) {
+      values.push(`__PMR_ARROW_DOWN__:${Math.max(1, arrowNet)}`);
+    } else {
+      values.push(typed);
+    }
+    buf = [];
+    arrowNet = 0;
+    hasArrowSteps = false;
+  };
+
   for (const step of seq) {
     const lk = String(step.key || '').trim().toLowerCase();
     if (navKeys.has(lk)) {
-      values.push(buf.join(''));
-      buf = [];
+      commitCell();
+    } else if (downKeys.has(lk)) {
+      arrowNet += 1;
+      hasArrowSteps = true;
+    } else if (upKeys.has(lk)) {
+      arrowNet -= 1;
+      hasArrowSteps = true;
     } else if (lk === 'key.backspace' || lk === 'backspace') {
       buf.pop();
     } else if (step.key && String(step.key).length === 1) {
       buf.push(step.key === ',' ? '.' : step.key);
     }
   }
-  if (buf.length > 0) {
-    values.push(buf.join(''));
+  if (buf.length > 0 || hasArrowSteps) {
+    commitCell();
   }
 
   const count = Math.max(1, Math.min(4, Number(request.rowCount) || 1));
@@ -1125,54 +1569,61 @@ function resolveSourceDisplayLabel(request, rowsPayload) {
   }
   const colLen = Number(request && request.expectedCellCount) || (rowsPayload[0] ? rowsPayload[0].length : 0);
   const presetKey = request && typeof request.activePreset === 'string' ? request.activePreset : '';
-  if (request && request.fileSourceType !== 'custom' && presetKey && PRESET_SHORT_LABELS[presetKey]) {
-    return `Preset: ${PRESET_SHORT_LABELS[presetKey]} (${colLen} sel)`;
-  }
-  const name = (request && request.fileName) ? String(request.fileName) : 'File Custom';
-  return `${name} (${colLen} sel)`;
+  const name = (request && request.fileName) ? String(request.fileName) : (PRESET_SHORT_LABELS[presetKey] || 'File');
+  return `${name} (${colLen} data)`;
 }
 
 async function handleStartMacro(request) {
-  if (isRunning) return;
+  if (isRunning || isModalOpen) return;
 
   await migrateSpeedStorageIfNeeded();
+
+  const isTableFrame = getAllDataRows().length > 0;
+  const isTopFrame = window === window.top || window.__PMR_SIMULATOR_TOP__ === true;
 
   const rowsPayload = extractRowsPayload(request);
   if (rowsPayload.length === 0) {
     syncRunningState(false);
+    if (isTopFrame) {
+      await openPhase3WarningModal('Data Kosong', 'Data file macro kosong atau belum dimuat.', 'warn');
+    }
     return;
   }
 
   const validationError = validatePageBeforeExecution(request, rowsPayload);
   if (validationError) {
-    if (window === window.top || window.__PMR_SIMULATOR_TOP__ === true) {
-      showToast(validationError.icon, validationError.message, validationError.color, false);
-      syncRunningState(false);
+    syncRunningState(false);
+    if (isTableFrame || isTopFrame) {
+      await openPhase3WarningModal(validationError.title, validationError.message, validationError.icon);
     }
     return;
   }
 
   const startLoc = resolveStartLocation();
   if (startLoc.error) {
-    if (window === window.top || window.__PMR_SIMULATOR_TOP__ === true) {
-      showToast(startLoc.icon || "warn", startLoc.error, "#d97706", false);
-      syncRunningState(false);
-    }
+    syncRunningState(false);
+    await openPhase3WarningModal(startLoc.title || 'Tidak Bisa Memulai', startLoc.error, startLoc.icon || 'warn');
     return;
   }
 
   const plan = scanTargetExecutionPlan(rowsPayload, startLoc);
   if (plan.fillableActiveCount === 0) {
-    if (window === window.top || window.__PMR_SIMULATOR_TOP__ === true) {
-      showToast("warn", "Tidak ada sel aktif yang dapat diisi dari posisi mulai.", "#d97706", false);
-      syncRunningState(false);
-    }
+    syncRunningState(false);
+    await openPhase3WarningModal(
+      'Tidak Ada Sel Aktif',
+      'Tidak ditemukan sel aktif yang dapat diisi dari posisi mulai.',
+      'warn'
+    );
     return;
   }
 
+  const session = createModalHostSession();
   const sourceDisplayLabel = resolveSourceDisplayLabel(request, rowsPayload);
-  const confirmed = await showUnifiedConfirmModal(plan, sourceDisplayLabel);
+  const randSummary = formatRandomizerSummary(request);
+
+  const confirmed = await renderPhase1Confirm(session, plan, sourceDisplayLabel, randSummary);
   if (!confirmed) {
+    session.destroy();
     syncRunningState(false);
     return;
   }
@@ -1180,9 +1631,10 @@ async function handleStartMacro(request) {
   const speedMs = Math.max(200, Number(request.speedMs) || 400);
   const runMeta = {
     randomMode: request.randomMode || 'off',
-    selectedSet: Array.isArray(request.selectedIndices) ? new Set(request.selectedIndices) : null
+    selectedSet: Array.isArray(request.selectedIndices) ? new Set(request.selectedIndices) : null,
+    totalPlannedFillable: Math.max(1, plan.fillableActiveCount)
   };
-  runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta);
+  await runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta, session);
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -1205,20 +1657,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     handleStartMacro(request);
     return true;
   }
+
   if (request.action === "STOP_MACRO") {
-    if (isRunning) {
-      stopMacroExecution("Pengisian dihentikan (ESC)");
+    if (isRunning && typeof activeAbortCallback === 'function') {
+      activeAbortCallback('Pengisian dihentikan dari popup');
+    } else if (isRunning) {
+      isRunning = false;
+      syncRunningState(false);
     }
     sendResponse({ ok: true });
     return true;
   }
 });
-
-function stopMacroExecution(reasonMsg) {
-  isRunning = false;
-  syncRunningState(false);
-  showToast("stop", reasonMsg, "#dc2626", false);
-}
 
 function syncRunningState(running) {
   try {
@@ -1226,11 +1676,39 @@ function syncRunningState(running) {
   } catch (e) {}
 }
 
+function selectLiveValidOptionByOrder(selectEl, order) {
+  if (!selectEl || selectEl.tagName !== 'SELECT') return;
+  const options = Array.from(selectEl.options || []);
+  const validOptions = options.filter((opt) => {
+    if (opt.disabled) return false;
+    const val = String(opt.value ?? '').trim();
+    const txt = String(opt.textContent ?? '').trim();
+    if (val === '' && (txt === '' || txt === '-' || /^(--|pilih\b|select\b)/i.test(txt))) {
+      return false;
+    }
+    if (txt === '-' || /^(--|pilih\b|select\b)/i.test(txt)) {
+      return false;
+    }
+    return true;
+  });
+
+  if (validOptions.length === 0) return;
+  const targetIdx = Math.min(validOptions.length - 1, Math.max(0, order - 1));
+  const picked = validOptions[targetIdx];
+  selectEl.value = picked.value;
+}
+
 function setNativeValue(el, value) {
   if (!el) return;
   if (el.tagName === 'SELECT') {
+    const arrowOrder = parseDropdownArrowToken(value);
+    if (arrowOrder !== null) {
+      selectLiveValidOptionByOrder(el, arrowOrder);
+      return;
+    }
+
     const needle = String(value ?? '').trim().toLowerCase();
-    const options = Array.from(el.options);
+    const options = Array.from(el.options || []);
     const match =
       options.find(opt => String(opt.value ?? '').trim().toLowerCase() === needle) ||
       options.find(opt => String(opt.textContent ?? '').trim().toLowerCase() === needle);
@@ -1265,51 +1743,57 @@ function injectCellValueVueReactive(inputEl, rawValue) {
   setNativeValue(inputEl, valueToSet);
   inputEl.dispatchEvent(new Event('input', { bubbles: true }));
   inputEl.dispatchEvent(new Event('change', { bubbles: true }));
-  // Pemicu wajib autosave DILOC sebelum pindah ke sel berikutnya
   inputEl.blur();
   inputEl.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
 }
 
-async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
+async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}, session = null) {
   isRunning = true;
   lastFilledInput = null;
   syncRunningState(true);
 
   const totalRows = Math.min(4, rowsPayload.length);
   const selectedColSet = runMeta.selectedSet instanceof Set ? runMeta.selectedSet : null;
-  const startColNumber = (startLoc.colIdx || 0) + 1;
+  const totalPlannedFillable = Math.max(1, Number(runMeta.totalPlannedFillable) || 1);
+
   let currentRow = startLoc.row || null;
   let lastCompletedRowTime = '';
   let stoppedByBrake = false;
   let blockedTime = '';
   let blockedNotArrived = false;
   let filledRowsCount = 0;
+  let filledCellsCount = 0;
+  let skippedCellsCount = 0;
   let lastRowNeedsAutosaveSync = false;
+  let abortedByUser = false;
+  let abortReason = '';
+
+  const triggerAbort = (reason) => {
+    if (abortedByUser) return;
+    abortedByUser = true;
+    abortReason = reason || 'Pengisian dihentikan';
+    isRunning = false;
+  };
+  activeAbortCallback = triggerAbort;
 
   const initialRowTime = getRowTimeLabel(currentRow);
-  showToast(
-    "play",
-    initialRowTime
-      ? `Mulai: ${initialRowTime} (Kol ${startColNumber})`
-      : `Mulai: Kol ${startColNumber}`,
-    "#0284c7",
-    true
-  );
+  const progressRefs = session
+    ? renderPhase2Progress(session, initialRowTime, totalRows, triggerAbort)
+    : null;
 
   for (let r = 0; r < totalRows; r++) {
-    if (!isRunning || !currentRow) break;
+    if (!isRunning || abortedByUser || !currentRow) break;
 
     const rowInputs = getRowDataCellInputs(currentRow);
     const rowValues = rowsPayload[r] || [];
-    // Baris 1 mengikuti posisi kursor mulai, baris ke-2 dst selalu mulai dari kolom absolut 0
     const startAbsCol = (r === 0) ? (startLoc.colIdx || 0) : 0;
     const rowTimeLabel = getRowTimeLabel(currentRow);
+    const cleanRowJam = cleanTimeText(rowTimeLabel) || `#${r + 1}`;
 
     if (rowInputs.length === 0 || startAbsCol >= rowInputs.length) {
       break;
     }
 
-    // Jeda antarbaris 250ms agar horizontal scroll kembali ke kolom awal stabil sebelum baris baru dimulai
     if (r > 0) {
       if (isRowFullyLocked(currentRow)) {
         const firstLock = inspectCellLock(rowInputs[0]);
@@ -1319,12 +1803,11 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
         break;
       }
       rowInputs[0].scrollIntoView({ block: 'nearest', inline: 'start' });
-      await sleep(250);
-      if (!isRunning) break;
+      const okRowDelay = await interruptibleSleep(250);
+      if (!okRowDelay || abortedByUser) break;
     }
 
     const isDirectIndexMapping = (rowValues.length === rowInputs.length);
-    const activeTotalInRow = rowInputs.filter(el => !isInactiveSkippableControl(el) && !isSpecialStatusSelect(el)).length;
     let sequentialCursor = 0;
     if (!isDirectIndexMapping && startAbsCol > 0) {
       for (let prevIdx = 0; prevIdx < startAbsCol; prevIdx++) {
@@ -1339,12 +1822,11 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
     let rowTouchedAnyCell = false;
 
     for (let absColIdx = startAbsCol; absColIdx < rowInputs.length; absColIdx++) {
-      if (!isRunning) break;
+      if (!isRunning || abortedByUser) break;
 
       const targetInput = rowInputs[absColIdx];
       const lockStatus = inspectCellLock(targetInput);
 
-      // Rem otomatis untuk baris/sel jam belum tiba atau permission-locked
       if (lockStatus.notArrived || lockStatus.permissionLocked) {
         stoppedByBrake = true;
         blockedTime = rowTimeLabel;
@@ -1352,13 +1834,13 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
         break;
       }
 
-      // Lewati sel disabled/readOnly (seperti #25 Op. 3 di luar 06:00/14:00/22:00) tanpa menggeser indeks array data
       if (targetInput.disabled || targetInput.readOnly || isInactiveSkippableControl(targetInput, lockStatus)) {
+        skippedCellsCount += 1;
         continue;
       }
 
-      // Lewati sel berstatus khusus klik kanan (<select> Plant Trouble, Standby, dll.) tanpa menimpa maupun menggeser indeks kolom
       if (isSpecialStatusSelect(targetInput)) {
+        skippedCellsCount += 1;
         if (!isDirectIndexMapping && sequentialCursor < rowValues.length) {
           sequentialCursor += 1;
         }
@@ -1384,20 +1866,20 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
       currentTargetEl = targetInput;
       lastFocusedParamCell = targetInput;
       rowTouchedAnyCell = true;
+      filledCellsCount += 1;
 
-      const isInitialFirstCell = (r === 0 && absColIdx === startAbsCol);
-      const displayTotal = isDirectIndexMapping ? rowInputs.length : Math.min(activeTotalInRow, rowValues.length);
-      const displayCurrent = isDirectIndexMapping ? (absColIdx + 1) : sequentialCursor;
-      if (!isInitialFirstCell && ((absColIdx - startAbsCol) % 2 === 0 || absColIdx === rowInputs.length - 1 || (!isDirectIndexMapping && sequentialCursor === rowValues.length))) {
-        const prefix = totalRows > 1 ? `Baris ${r + 1}/${totalRows} • ` : '';
-        const timePart = rowTimeLabel ? `${rowTimeLabel} • ` : '';
-        showToast("play", `${prefix}${timePart}Mengisi (${displayCurrent}/${displayTotal}) — ESC untuk Stop`, "#0284c7", true);
+      if (progressRefs) {
+        const pct = Math.min(100, Math.round((filledCellsCount / totalPlannedFillable) * 100));
+        progressRefs.fillEl.style.width = `${pct}%`;
+        progressRefs.pctEl.textContent = `${pct}%`;
+        progressRefs.statusEl.textContent = `Mengisi baris jam ${cleanRowJam} • Kolom #${absColIdx + 1} dari #${rowInputs.length}`;
       }
 
       const hasMoreDirect = isDirectIndexMapping && (absColIdx < rowInputs.length - 1);
       const hasMoreSeq = !isDirectIndexMapping && (sequentialCursor < rowValues.length) && (absColIdx < rowInputs.length - 1);
       if (hasMoreDirect || hasMoreSeq) {
-        await sleep(speedMs);
+        const okCellDelay = await interruptibleSleep(speedMs);
+        if (!okCellDelay || abortedByUser) break;
       }
     }
 
@@ -1409,13 +1891,13 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
       }
     }
 
-    if (!isRunning || stoppedByBrake) break;
+    if (!isRunning || abortedByUser || stoppedByBrake) break;
 
     if (r < totalRows - 1) {
       if (rowTouchedAnyCell) {
-        await waitForDilocAutosaveSync();
+        await waitForDilocAutosaveSync(progressRefs);
         lastRowNeedsAutosaveSync = false;
-        if (!isRunning) break;
+        if (!isRunning || abortedByUser) break;
       }
 
       const nextRow = getNextDataRow(currentRow);
@@ -1426,160 +1908,39 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
     }
   }
 
-  // Biarkan kursor tetap diam di sel terakhir yang berhasil diisi
   if (lastFilledInput && document.body && document.body.contains(lastFilledInput) && !inspectCellLock(lastFilledInput).locked) {
     lastFocusedParamCell = lastFilledInput;
     currentTargetEl = lastFilledInput;
   }
 
-  if (!isRunning) {
-    return;
+  if (isRunning && !abortedByUser && lastRowNeedsAutosaveSync) {
+    await waitForDilocAutosaveSync(progressRefs);
   }
 
-  if (lastRowNeedsAutosaveSync) {
-    await waitForDilocAutosaveSync();
-    if (!isRunning) return;
+  if (progressRefs && !abortedByUser && !stoppedByBrake) {
+    progressRefs.fillEl.style.width = '100%';
+    progressRefs.pctEl.textContent = '100%';
   }
 
   isRunning = false;
+  activeAbortCallback = null;
   syncRunningState(false);
 
-  if (stoppedByBrake) {
-    const reasonText = blockedNotArrived ? 'belum tiba' : 'terkunci';
-    let msg = 'Berhenti: sel target terkunci / belum tiba';
-    if (lastCompletedRowTime && blockedTime) {
-      msg = `Selesai s/d ${lastCompletedRowTime} • ${blockedTime} ${reasonText}`;
-    } else if (blockedTime) {
-      msg = `Berhenti di ${blockedTime} (${reasonText})`;
-    }
-    showToast(blockedNotArrived ? "clock" : "warn", msg, "#d97706", false);
-  } else {
-    const msg = lastCompletedRowTime
-      ? `Selesai s/d ${lastCompletedRowTime} (${filledRowsCount} baris)`
-      : "Pengisian logsheet selesai!";
-    showToast("success", msg, "#16a34a", false);
-  }
-}
+  // Auto-reset setting setelah Phase 2 benar-benar dieksekusi (selesai maupun dibatalkan tengah jalan)
+  await autoResetSettingsAfterExecution();
 
-function createToastSvgIcon(iconType) {
-  let svg = null;
-  if (typeof createSvgElement === 'function') {
-    const map = {
-      play: 'play',
-      stop: 'stop',
-      warn: 'warn',
-      shieldAlert: 'shieldAlert',
-      clock: 'clock',
-      loader: 'loader',
-      success: 'checkCircle'
-    };
-    svg = createSvgElement(map[iconType] || 'checkCircle', { size: 14 });
-  } else {
-    const ns = 'http://www.w3.org/2000/svg';
-    svg = document.createElementNS(ns, 'svg');
-    svg.setAttribute('width', '14');
-    svg.setAttribute('height', '14');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('fill', 'none');
-    svg.setAttribute('stroke', 'currentColor');
-    svg.setAttribute('stroke-width', '2');
-    svg.setAttribute('stroke-linecap', 'round');
-    svg.setAttribute('stroke-linejoin', 'round');
-    svg.setAttribute('aria-hidden', 'true');
-    svg.style.flexShrink = '0';
-
-    const appendPath = (tag, attrs) => {
-      const node = document.createElementNS(ns, tag);
-      for (const [k, v] of Object.entries(attrs)) {
-        node.setAttribute(k, v);
-      }
-      svg.appendChild(node);
-    };
-
-    if (iconType === 'play') {
-      appendPath('polygon', { points: '6 3 20 12 6 21 6 3' });
-    } else if (iconType === 'stop') {
-      appendPath('rect', { width: '14', height: '14', x: '5', y: '5', rx: '2' });
-    } else if (iconType === 'clock') {
-      appendPath('circle', { cx: '12', cy: '12', r: '10' });
-      appendPath('polyline', { points: '12 6 12 12 16 14' });
-    } else if (iconType === 'loader') {
-      appendPath('path', { d: 'M21 12a9 9 0 1 1-6.219-8.56' });
-    } else if (iconType === 'shieldAlert') {
-      appendPath('path', { d: 'M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z' });
-      appendPath('path', { d: 'M12 8v4' });
-      appendPath('path', { d: 'M12 16h.01' });
-    } else if (iconType === 'warn') {
-      appendPath('path', { d: 'm21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z' });
-      appendPath('path', { d: 'M12 9v4' });
-      appendPath('path', { d: 'M12 17h.01' });
-    } else {
-      appendPath('circle', { cx: '12', cy: '12', r: '10' });
-      appendPath('path', { d: 'm9 12 2 2 4-4' });
-    }
-  }
-
-  if (svg && iconType === 'loader' && typeof svg.animate === 'function') {
-    svg.animate(
-      [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],
-      { duration: 900, iterations: Infinity }
-    );
-  }
-  return svg;
-}
-
-function showToast(iconType, message, bgColor, persistent) {
-  const existingToasts = document.querySelectorAll('#pmr-runner-toast');
-  let toast = existingToasts[0] || null;
-  for (let i = 1; i < existingToasts.length; i++) {
-    existingToasts[i].remove();
-  }
-
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.id = 'pmr-runner-toast';
-    Object.assign(toast.style, {
-      position: 'fixed',
-      bottom: '18px',
-      right: '18px',
-      padding: '10px 14px',
-      borderRadius: '8px',
-      color: '#ffffff',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      fontSize: '12px',
-      fontWeight: 'bold',
-      zIndex: '999999',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: '7px',
-      transition: 'opacity 0.2s ease',
-      cursor: 'pointer',
-      maxWidth: 'calc(100vw - 36px)'
+  if (session) {
+    await renderPhase3Summary(session, {
+      aborted: abortedByUser,
+      abortReason,
+      stoppedByBrake,
+      blockedTime,
+      blockedNotArrived,
+      lastCompletedRowTime,
+      filledRowsCount,
+      filledCellsCount,
+      skippedCellsCount
     });
-    toast.addEventListener('click', () => {
-      if (isRunning) {
-        stopMacroExecution("Pengisian dihentikan (ESC)");
-      } else {
-        clearTimeout(toast._hideTimer);
-        toast.style.opacity = '0';
-        toast.style.pointerEvents = 'none';
-      }
-    });
-    document.body.appendChild(toast);
-  }
-
-  clearTimeout(toast._hideTimer);
-  toast.style.backgroundColor = bgColor;
-  toast.replaceChildren(createToastSvgIcon(iconType), document.createTextNode(message));
-  toast.style.opacity = '1';
-  toast.style.pointerEvents = 'auto';
-
-  if (!persistent) {
-    toast._hideTimer = setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.pointerEvents = 'none';
-    }, 3000);
   }
 }
 

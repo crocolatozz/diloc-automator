@@ -122,18 +122,21 @@
     }
 
     .import-status {
-      min-height: 28px;
-      padding: 6px 10px;
+      min-height: 34px;
+      height: auto;
+      padding: 8px 10px;
       border-radius: 8px;
       font-size: 11.5px;
       font-weight: 600;
+      line-height: 1.4;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 7px;
       background: #111827;
       border: 1px solid #1f2b3e;
       color: #94a3b8;
+      text-align: center;
     }
 
     .import-status.is-ok {
@@ -146,6 +149,12 @@
       background: rgba(220, 38, 38, 0.18);
       border-color: rgba(248, 113, 113, 0.5);
       color: #fecaca;
+      align-items: flex-start;
+      text-align: left;
+    }
+
+    .import-status.is-error .svg-icon {
+      margin-top: 2px;
     }
 
     .footer-credit {
@@ -181,6 +190,7 @@
   <div class="footer-credit">© 2026 — Developed by FIKRI</div>
 
   <script src="icons.js"></script>
+  <script src="parser.js"></script>
   <script src="randomizer.js"></script>
   <script src="import.js"></script>
 </body>

@@ -1,7 +1,11 @@
 let loadedSequence = [];
 let loadedFileName = "";
-let fileSourceType = "preset";
 let macrosByPreset = {};
+let operatorStandardCounts = {
+  operator1: PRESET_EXPECTED_COUNTS.operator1,
+  operator2: PRESET_EXPECTED_COUNTS.operator2,
+  operator3: PRESET_EXPECTED_COUNTS.operator3
+};
 let randomMode = "off";
 let randomRange = 1;
 let cellRandomRanges = {};
@@ -16,9 +20,9 @@ let lastPreviewResults = [];
 let isSyncingFromStorage = false;
 
 const PRESET_NAMES = {
-  operator1: "Operator 1 (167 parameter)",
-  operator2: "Operator 2 (51 parameter)",
-  operator3: "Operator 3 (44 parameter)"
+  operator1: "Operator 1",
+  operator2: "Operator 2",
+  operator3: "Operator 3"
 };
 
 const activeFilePill = document.getElementById('activeFilePill');
@@ -39,7 +43,45 @@ const searchInput = document.getElementById('searchInput');
 const saveToast = document.getElementById('saveToast');
 
 function getPresetStorageKey(presetKey) {
-  return presetKey || 'custom';
+  return presetKey && PRESET_SHORT_LABELS[presetKey] ? presetKey : 'operator1';
+}
+
+function normalizeStandardCounts(rawCounts) {
+  const next = {
+    operator1: PRESET_EXPECTED_COUNTS.operator1,
+    operator2: PRESET_EXPECTED_COUNTS.operator2,
+    operator3: PRESET_EXPECTED_COUNTS.operator3
+  };
+  if (rawCounts && typeof rawCounts === 'object') {
+    for (const op of ['operator1', 'operator2', 'operator3']) {
+      const n = parseInt(rawCounts[op], 10);
+      if (Number.isInteger(n) && n > 0) next[op] = n;
+    }
+  }
+  return next;
+}
+
+async function syncOperatorStandardCountsToStorage() {
+  const counts = {
+    operator1: PRESET_EXPECTED_COUNTS.operator1,
+    operator2: PRESET_EXPECTED_COUNTS.operator2,
+    operator3: PRESET_EXPECTED_COUNTS.operator3
+  };
+
+  for (const opKey of ['operator1', 'operator2', 'operator3']) {
+    try {
+      const meta = await fetchBuiltInPreset(opKey);
+      if (Array.isArray(meta) && meta.length > 0) {
+        counts[opKey] = meta.length;
+      }
+    } catch (e) {}
+  }
+
+  operatorStandardCounts = counts;
+  try {
+    await chrome.storage.local.set({ operatorStandardCounts: counts });
+  } catch (e) {}
+  return counts;
 }
 
 function applyTheme(theme, persist = false) {
@@ -98,7 +140,7 @@ function showOptionsAlert(msg, tone = "error") {
 
   alertBannerTimer = setTimeout(() => {
     optionsAlertBanner.hidden = true;
-  }, 4500);
+  }, 5000);
 }
 
 function hideOptionsAlert() {
@@ -122,6 +164,10 @@ async function saveSettings() {
   const key = getPresetStorageKey(activePreset);
   const sortedIndices = Array.from(selectedSet).sort((a, b) => a - b);
   selectedCellsByPreset[key] = sortedIndices;
+
+  if (randomMode !== 'off' && sanitizeRandomRange(randomRange, true) === 0) {
+    randomRange = 1;
+  }
 
   await chrome.storage.local.set({
     randomMode,
@@ -162,7 +208,7 @@ function renderMismatchBanner(totalCells) {
     return;
   }
 
-  const expectedCount = PRESET_EXPECTED_COUNTS[activePreset];
+  const expectedCount = operatorStandardCounts[activePreset] || PRESET_EXPECTED_COUNTS[activePreset];
   if (typeof expectedCount !== 'number' || totalCells === expectedCount) {
     presetMismatchBanner.hidden = true;
     presetMismatchBanner.innerHTML = '';
@@ -170,7 +216,7 @@ function renderMismatchBanner(totalCells) {
   }
 
   presetMismatchBanner.innerHTML =
-    `${renderIcon('warn', { size: 17 })}<span>Peringatan selisih kolom: File <b>${loadedFileName}</b> memiliki <b>${totalCells} sel</b>, sedangkan preset <b>${PRESET_NAMES[activePreset]}</b> membutuhkan <b>${expectedCount} parameter</b>. Pastikan file atau preset operator yang dipilih sudah sesuai.</span>`;
+    `${renderIcon('warn', { size: 17 })}<span>Peringatan selisih kolom: File <b>${loadedFileName}</b> memiliki <b>${totalCells} data</b>, sedangkan <b>${PRESET_NAMES[activePreset]} (${expectedCount} data)</b> membutuhkan <b>${expectedCount} parameter</b>.</span>`;
   presetMismatchBanner.hidden = false;
 }
 
@@ -260,7 +306,7 @@ async function applyBuiltInPreset(presetKey, silent = false) {
     if (normalized && normalized.length > 0) {
       headerMeta = normalized;
       activePreset = presetKey;
-      fileSourceType = 'preset';
+      operatorStandardCounts[presetKey] = normalized.length;
 
       const restored = Array.isArray(selectedCellsByPreset[presetKey])
         ? selectedCellsByPreset[presetKey]
@@ -270,23 +316,29 @@ async function applyBuiltInPreset(presetKey, silent = false) {
       const updatePayload = {
         headerMeta,
         activePreset,
-        fileSourceType: 'preset',
+        operatorStandardCounts,
         selectedCellIndices: Array.from(selectedSet).sort((a, b) => a - b)
       };
 
       const cachedMacro = macrosByPreset && macrosByPreset[presetKey];
       if (cachedMacro && Array.isArray(cachedMacro.sequence) && cachedMacro.sequence.length > 0) {
-        loadedSequence = cachedMacro.sequence;
-        loadedFileName = cachedMacro.fileName || `${presetKey}.pmr`;
-        updatePayload.savedMacro = cachedMacro;
+        const cachedCells = groupSequenceIntoCells(cachedMacro.sequence);
+        if (cachedCells.length === normalized.length) {
+          loadedSequence = cachedMacro.sequence;
+          loadedFileName = cachedMacro.fileName || `${presetKey}.pmr`;
+          updatePayload.savedMacro = cachedMacro;
+        }
       }
 
       if (!isSyncingFromStorage) {
         await chrome.storage.local.set(updatePayload);
+        try {
+          await chrome.storage.local.remove('fileSourceType');
+        } catch (e) {}
       }
       renderAll();
       if (!silent) {
-        notifySaved(`Preset ${PRESET_NAMES[presetKey]} aktif!`);
+        notifySaved(`Preset ${PRESET_NAMES[presetKey]} (${normalized.length}) aktif!`);
       }
     }
   } catch (err) {
@@ -317,18 +369,20 @@ function renderAll() {
   const zeroCount = cells.filter(c => c.isPureZero).length;
   const textCount = cells.filter(c => !c.isNumeric).length;
   const isSelectedMode = (randomMode === 'selected');
+  const displayRange = sanitizeRandomRange(randomRange, true);
 
-  setPillContent(renderIcon('file', { className: 'icon-sky-light', size: 15 }), `${loadedFileName} (${cells.length} Sel)`);
+  setPillContent(renderIcon('file', { className: 'icon-sky-light', size: 15 }), `${loadedFileName} (${cells.length} data)`);
   renderMismatchBanner(cells.length);
 
   const validSelectedCount = Array.from(selectedSet).filter(idx => idx >= 0 && idx < cells.length).length;
   const lockedTotal = zeroCount + textCount;
 
   statsBadges.innerHTML = `
-    <span class="badge">Aktif: ${randomizableCount} &bull; Terkunci: ${lockedTotal} (${zeroCount} nol, ${textCount} teks) &bull; Dipilih: ${validSelectedCount}</span>
+    <span class="badge">Aktif: ${randomizableCount} &bull; Terkunci: ${lockedTotal} (${zeroCount} nol, ${textCount} teks/dropdown) &bull; Dipilih: ${validSelectedCount}</span>
   `;
 
-  const previewResults = evaluateCellsWithMode(cells, randomMode, Array.from(selectedSet), headerMeta, randomRange);
+  const effectivePreviewRange = sanitizeRandomRange(randomRange, false);
+  const previewResults = evaluateCellsWithMode(cells, randomMode, Array.from(selectedSet), headerMeta, effectivePreviewRange);
   lastCells = cells;
   lastPreviewResults = previewResults;
 
@@ -360,9 +414,10 @@ function renderAll() {
   const trCheck = document.createElement('tr');
   trCheck.className = isSelectedMode ? 'row-check' : 'row-check dimmed-check-row';
   const checkStickyTitle = isSelectedMode
-    ? `Centang sel angka yang ingin di-randomize ±${randomRange}`
+    ? `Centang sel angka yang ingin di-randomize ±${effectivePreviewRange}`
     : "Diredupkan karena mode Off / All (klik kotak centang untuk langsung beralih ke Selected)";
-  trCheck.innerHTML = `<th class="sticky-col" scope="row" title="${checkStickyTitle}">Randomize (±${randomRange})</th>`;
+  const checkRowLabel = displayRange > 0 ? `Randomize (±${displayRange})` : 'Randomize';
+  trCheck.innerHTML = `<th class="sticky-col" scope="row" title="${checkStickyTitle}">${checkRowLabel}</th>`;
 
   const trPreview = document.createElement('tr');
   trPreview.className = 'row-preview';
@@ -404,6 +459,8 @@ function renderAll() {
     tdUnit.dataset.colIdx = idx;
     if (meta && meta.unit && meta.unit !== '-') {
       tdUnit.textContent = meta.unit;
+    } else if (cell.isDropdownArrow) {
+      tdUnit.innerHTML = `<span class="lock-pill">DROPDOWN</span>`;
     } else if (!cell.isNumeric) {
       tdUnit.innerHTML = `<span class="lock-pill">TEKS</span>`;
     } else if (cell.isPureZero) {
@@ -414,9 +471,12 @@ function renderAll() {
     if (highlightSelected) tdUnit.classList.add('col-selected');
     trUnit.appendChild(tdUnit);
 
+    const origText = cell.displayValue !== undefined
+      ? (cell.displayValue === '' ? '(kosong)' : cell.displayValue)
+      : (cell.rawValue === '' ? '(kosong)' : cell.rawValue);
     const tdOrig = document.createElement('td');
     tdOrig.dataset.colIdx = idx;
-    tdOrig.textContent = cell.rawValue === '' ? '(kosong)' : cell.rawValue;
+    tdOrig.textContent = origText;
     if (!cell.isRandomizable) tdOrig.classList.add('col-locked');
     if (highlightSelected) tdOrig.classList.add('col-selected');
     trOrig.appendChild(tdOrig);
@@ -430,9 +490,11 @@ function renderAll() {
 
     if (!cell.isRandomizable) {
       tdCheck.classList.add('locked-cell');
-      tdCheck.title = cell.isPureZero
-        ? "Terkunci: Nilai 0 murni tidak di-randomize"
-        : "Terkunci: Input teks/huruf tidak di-randomize";
+      tdCheck.title = cell.isDropdownArrow
+        ? `Terkunci: Dropdown panah (opsi valid ke-${cell.arrowStepIndex})`
+        : (cell.isPureZero
+          ? "Terkunci: Nilai 0 murni tidak di-randomize"
+          : "Terkunci: Input teks/huruf tidak di-randomize");
     } else {
       if (highlightSelected) tdCheck.classList.add('col-selected');
       tdCheck.addEventListener('click', (e) => {
@@ -445,14 +507,17 @@ function renderAll() {
     tdCheck.appendChild(cb);
     trCheck.appendChild(tdCheck);
 
+    const prevText = prev.displayValue !== undefined
+      ? (prev.displayValue === '' ? '(kosong)' : prev.displayValue)
+      : (prev.value === '' ? '(kosong)' : prev.value);
     const tdPrev = document.createElement('td');
     tdPrev.dataset.colIdx = idx;
-    tdPrev.textContent = prev.value === '' ? '(kosong)' : prev.value;
+    tdPrev.textContent = prevText;
     if (!cell.isRandomizable) {
       tdPrev.classList.add('col-locked');
     } else if (prev.changed) {
       tdPrev.classList.add('preview-changed');
-      tdPrev.title = `Berubah dari ${cell.rawValue} -> ${prev.value}`;
+      tdPrev.title = `Berubah dari ${origText} -> ${prevText}`;
     } else if (highlightSelected) {
       tdPrev.classList.add('col-selected');
     }
@@ -503,7 +568,6 @@ themeToggleBtn.addEventListener('click', () => {
   applyTheme(nextTheme, true);
 });
 
-// Tombol cadangan Load File .PMR / .JSON langsung di halaman Setting
 macroFileOptions.addEventListener('change', (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -517,7 +581,6 @@ macroFileOptions.addEventListener('change', (e) => {
       loadedSequence = result.savedMacro.sequence;
       loadedFileName = result.savedMacro.fileName;
       macrosByPreset = result.macrosByPreset || {};
-      fileSourceType = result.fileSourceType;
       activePreset = result.activePreset;
       headerMeta = result.headerMeta || [];
       selectedCellsByPreset = result.selectedCellsByPreset || {};
@@ -525,10 +588,17 @@ macroFileOptions.addEventListener('change', (e) => {
 
       hideOptionsAlert();
       renderAll();
-      notifySaved(`${loadedFileName} dimuat (${result.totalCells} sel)`);
+      notifySaved(`${loadedFileName} dimuat (${result.totalCells} data)`);
     } catch (err) {
-      showOptionsAlert("Format file .pmr / .json tidak valid atau rusak. Pastikan file berisi keystroke yang sesuai.", "error");
-      notifySaved("Format file .pmr / .json tidak valid!", "xCircle", "error");
+      let msg = err && err.code === 'STRICT_OPERATOR_MISMATCH' && err.message
+        ? err.message
+        : '';
+      if (!msg) {
+        const counts = await getStandardOperatorCountsFromStorage();
+        msg = formatRejectedFileMessage(0, counts);
+      }
+      showOptionsAlert(msg, "error");
+      notifySaved("File ditolak: tidak sesuai standar operator!", "xCircle", "error");
     } finally {
       macroFileOptions.value = '';
     }
@@ -613,7 +683,7 @@ function applySearchHighlight(shouldScroll = true) {
     const eq = meta ? meta.equipment.toLowerCase() : '';
     const tag = meta ? meta.tag.toLowerCase() : '';
     const lbl = meta ? meta.label.toLowerCase() : '';
-    const val = cell.rawValue.toLowerCase();
+    const val = (cell.displayValue || cell.rawValue).toLowerCase();
     if (numLabel.includes(query) || String(idx + 1) === query || eq.includes(query) || tag.includes(query) || lbl.includes(query) || val.includes(query)) {
       matchedIndices.push(idx);
     }
@@ -657,7 +727,6 @@ searchInput.addEventListener('input', () => {
   applySearchHighlight(true);
 });
 
-// Auto-sync real-time 2 arah tanpa mengganggu input pencarian yang sedang aktif
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
   let tableDirty = false;
@@ -667,11 +736,25 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     if (changes.optionsTheme) {
       applyTheme(changes.optionsTheme.newValue || 'light', false);
     }
+    if (changes.operatorStandardCounts) {
+      operatorStandardCounts = normalizeStandardCounts(changes.operatorStandardCounts.newValue);
+      tableDirty = true;
+    }
     if (changes.savedMacro) {
       const val = changes.savedMacro.newValue;
-      if (val && Array.isArray(val.sequence)) {
-        loadedSequence = val.sequence;
-        loadedFileName = val.fileName || 'macro.pmr';
+      if (val && Array.isArray(val.sequence) && val.sequence.length > 0) {
+        const cells = groupSequenceIntoCells(val.sequence);
+        const resolved = resolveStrictOperatorByCount(cells.length, operatorStandardCounts, val.fileName);
+        if (resolved) {
+          loadedSequence = val.sequence;
+          loadedFileName = val.fileName || 'macro.pmr';
+          if (!changes.activePreset) {
+            activePreset = resolved;
+          }
+        } else {
+          loadedSequence = [];
+          loadedFileName = '';
+        }
       } else {
         loadedSequence = [];
         loadedFileName = '';
@@ -682,16 +765,12 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       const val = changes.macrosByPreset.newValue;
       macrosByPreset = (val && typeof val === 'object') ? { ...val } : {};
     }
-    if (changes.fileSourceType) {
-      fileSourceType = changes.fileSourceType.newValue === 'custom' ? 'custom' : 'preset';
-      tableDirty = true;
-    }
     if (changes.randomMode) {
       randomMode = changes.randomMode.newValue || 'off';
       tableDirty = true;
     }
     if (changes.randomRange) {
-      randomRange = sanitizeRandomRange(changes.randomRange.newValue);
+      randomRange = sanitizeRandomRange(changes.randomRange.newValue, true);
       tableDirty = true;
     }
     if (changes.cellRandomRanges) {
@@ -747,7 +826,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 document.addEventListener('DOMContentLoaded', async () => {
   hydrateDataIcons();
 
-  const data = await chrome.storage.local.get(UNIFIED_STORAGE_KEYS);
+  const stdCounts = await syncOperatorStandardCountsToStorage();
+  const data = await chrome.storage.local.get([...UNIFIED_STORAGE_KEYS, 'fileSourceType']);
 
   let initialTheme = data.optionsTheme;
   if (initialTheme !== 'dark' && initialTheme !== 'light') {
@@ -760,29 +840,59 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   applyTheme(initialTheme, false);
 
-  if (data.savedMacro && Array.isArray(data.savedMacro.sequence)) {
-    loadedSequence = data.savedMacro.sequence;
-    loadedFileName = data.savedMacro.fileName || 'macro.pmr';
-  }
   macrosByPreset = (data.macrosByPreset && typeof data.macrosByPreset === 'object')
     ? { ...data.macrosByPreset }
     : {};
-  fileSourceType = data.fileSourceType === 'custom' ? 'custom' : 'preset';
+
+  const legacyCustom = data.fileSourceType === 'custom';
+  if (data.fileSourceType !== undefined) {
+    try {
+      await chrome.storage.local.remove('fileSourceType');
+    } catch (e) {}
+  }
+
+  let hasValidMacro = false;
+  if (!legacyCustom && data.savedMacro && Array.isArray(data.savedMacro.sequence) && data.savedMacro.sequence.length > 0) {
+    const cells = groupSequenceIntoCells(data.savedMacro.sequence);
+    const resolved = resolveStrictOperatorByCount(cells.length, stdCounts, data.savedMacro.fileName);
+    if (resolved) {
+      loadedSequence = data.savedMacro.sequence;
+      loadedFileName = data.savedMacro.fileName || 'macro.pmr';
+      activePreset = (data.activePreset && PRESET_SHORT_LABELS[data.activePreset] && stdCounts[data.activePreset] === cells.length)
+        ? data.activePreset
+        : resolved;
+      hasValidMacro = true;
+    }
+  }
+
+  if (!hasValidMacro && (legacyCustom || data.savedMacro)) {
+    loadedSequence = [];
+    loadedFileName = '';
+    activePreset = '';
+    try {
+      await chrome.storage.local.remove(['savedMacro', 'activePreset', 'headerMeta', 'fileSourceType']);
+      await chrome.storage.local.set({ selectedCellIndices: [] });
+    } catch (e) {}
+  }
+
   randomMode = data.randomMode || 'off';
-  randomRange = sanitizeRandomRange(data.randomRange);
+  randomRange = sanitizeRandomRange(data.randomRange, true);
   cellRandomRanges = (data.cellRandomRanges && typeof data.cellRandomRanges === 'object')
     ? { ...data.cellRandomRanges }
     : {};
-  headerMeta = Array.isArray(data.headerMeta) ? data.headerMeta : [];
-  activePreset = data.activePreset || '';
+  headerMeta = hasValidMacro && Array.isArray(data.headerMeta) ? data.headerMeta : [];
+  if (!hasValidMacro && !activePreset) {
+    activePreset = data.activePreset && PRESET_SHORT_LABELS[data.activePreset] ? data.activePreset : '';
+  }
+
   selectedCellsByPreset = (data.selectedCellsByPreset && typeof data.selectedCellsByPreset === 'object')
     ? { ...data.selectedCellsByPreset }
     : {};
 
   const activeKey = getPresetStorageKey(activePreset);
-  if (Array.isArray(selectedCellsByPreset[activeKey])) {
+  if (hasValidMacro && Array.isArray(selectedCellsByPreset[activeKey])) {
     selectedSet = new Set(selectedCellsByPreset[activeKey]);
-  } else if (Object.keys(selectedCellsByPreset).length === 0 && Array.isArray(data.selectedCellIndices)) {
+  } else if (hasValidMacro && Object.keys(selectedCellsByPreset).length === 0 && Array.isArray(data.selectedCellIndices)) {
     selectedSet = new Set(data.selectedCellIndices);
     if (data.selectedCellIndices.length > 0) {
       selectedCellsByPreset[activeKey] = data.selectedCellIndices.slice();
@@ -792,14 +902,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     selectedSet = new Set();
   }
 
-  // Auto-muat preset bawaan jika belum ada headerMeta & jumlah sel cocok
-  if (headerMeta.length === 0 && loadedSequence.length > 0 && fileSourceType !== 'custom') {
-    const totalCells = groupSequenceIntoCells(loadedSequence).length;
-    const detected = detectOperatorPreset(loadedFileName, totalCells);
-    if (detected) {
-      await applyBuiltInPreset(detected, true);
-      return;
-    }
+  if (hasValidMacro && headerMeta.length === 0 && activePreset) {
+    await applyBuiltInPreset(activePreset, true);
+    return;
   }
 
   renderAll();

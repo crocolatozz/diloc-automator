@@ -1,7 +1,11 @@
 let loadedSequence = null;
 let loadedFileName = "";
-let fileSourceType = "preset";
 let macrosByPreset = {};
+let operatorStandardCounts = {
+  operator1: PRESET_EXPECTED_COUNTS.operator1,
+  operator2: PRESET_EXPECTED_COUNTS.operator2,
+  operator3: PRESET_EXPECTED_COUNTS.operator3
+};
 let isMacroRunning = false;
 let randomMode = "off";
 let randomRange = 1;
@@ -19,22 +23,10 @@ let lastTabRefreshAt = 0;
 let refreshSeq = 0;
 let isSyncingFromStorage = false;
 
-const PRESET_NAMES = {
-  operator1: "Operator 1 (167 parameter)",
-  operator2: "Operator 2 (51 parameter)",
-  operator3: "Operator 3 (44 parameter)"
-};
-
-const PRESET_SHORT_LABELS = {
-  operator1: "Op. Lap 1",
-  operator2: "Op. Lap 2",
-  operator3: "Op. Lap 3"
-};
-
 const fileLabel = document.getElementById('fileLabel');
 const statusCard = document.getElementById('statusCard');
-const statusCardMain = document.getElementById('statusCardMain');
-const statusCardWarn = document.getElementById('statusCardWarn');
+const statusLineFile = document.getElementById('statusLineFile');
+const statusLineOp = document.getElementById('statusLineOp');
 const popupAlert = document.getElementById('popupAlert');
 const toggleBtn = document.getElementById('toggleBtn');
 const openSettingsBtn = document.getElementById('openSettingsBtn');
@@ -48,13 +40,12 @@ const rowCountInput = document.getElementById('rowCountInput');
 const themeToggleBtn = document.getElementById('themeToggleBtn');
 
 function getPresetStorageKey(presetKey) {
-  return presetKey || 'custom';
+  return presetKey && PRESET_SHORT_LABELS[presetKey] ? presetKey : 'operator1';
 }
 
 function resolveSelectedForPreset(byPresetObj, legacyArray, presetKey) {
-  const key = getPresetStorageKey(presetKey);
-  if (byPresetObj && typeof byPresetObj === 'object' && Array.isArray(byPresetObj[key])) {
-    return byPresetObj[key];
+  if (presetKey && byPresetObj && typeof byPresetObj === 'object' && Array.isArray(byPresetObj[presetKey])) {
+    return byPresetObj[presetKey];
   }
   if ((!byPresetObj || Object.keys(byPresetObj).length === 0) && Array.isArray(legacyArray)) {
     return legacyArray;
@@ -76,6 +67,21 @@ function sanitizeRowCount(val) {
   const n = parseInt(val, 10);
   if (Number.isNaN(n)) return 1;
   return Math.min(4, Math.max(1, n));
+}
+
+function normalizeStandardCounts(rawCounts) {
+  const next = {
+    operator1: PRESET_EXPECTED_COUNTS.operator1,
+    operator2: PRESET_EXPECTED_COUNTS.operator2,
+    operator3: PRESET_EXPECTED_COUNTS.operator3
+  };
+  if (rawCounts && typeof rawCounts === 'object') {
+    for (const op of ['operator1', 'operator2', 'operator3']) {
+      const n = parseInt(rawCounts[op], 10);
+      if (Number.isInteger(n) && n > 0) next[op] = n;
+    }
+  }
+  return next;
 }
 
 function isRestrictedBrowserUrl(url) {
@@ -111,7 +117,7 @@ function showPopupInlineAlert(message, tone = 'warn') {
 
   popupAlertTimer = setTimeout(() => {
     popupAlert.hidden = true;
-  }, 4200);
+  }, 4500);
 }
 
 function hidePopupInlineAlert() {
@@ -144,26 +150,6 @@ function applyTheme(theme, persist = false) {
   }
 }
 
-function setStatusCardMain(iconHtml, text, tone) {
-  if (!statusCardMain) return;
-  statusCardMain.innerHTML = '';
-  if (iconHtml) {
-    statusCardMain.insertAdjacentHTML('beforeend', iconHtml);
-  }
-  const span = document.createElement('span');
-  span.className = 'status-card-text';
-  span.textContent = text;
-  statusCardMain.appendChild(span);
-  statusCardMain.classList.remove('is-preset', 'is-custom', 'is-error');
-  if (tone === 'preset') {
-    statusCardMain.classList.add('is-preset');
-  } else if (tone === 'custom') {
-    statusCardMain.classList.add('is-custom');
-  } else if (tone === 'error') {
-    statusCardMain.classList.add('is-error');
-  }
-}
-
 function getEffectiveWebOperator() {
   const tabUrl = activeTabContext && activeTabContext.url ? activeTabContext.url : '';
   const urlOperator = detectOperatorFromUrl(tabUrl);
@@ -171,105 +157,52 @@ function getEffectiveWebOperator() {
   return urlOperator || contentOperator;
 }
 
-function computeValidationIssue(totalCells) {
-  if (!loadedSequence || loadedSequence.length === 0) {
-    return null;
+function getResolvedFileOperator(cells) {
+  const count = Array.isArray(cells) ? cells.length : 0;
+  if (count <= 0) return '';
+  if (
+    activePreset &&
+    PRESET_SHORT_LABELS[activePreset] &&
+    Number(operatorStandardCounts[activePreset]) === count
+  ) {
+    return activePreset;
   }
-
-  const effectiveWebOperator = getEffectiveWebOperator();
-  const tableColCount = activeTabContext && typeof activeTabContext.tableColCount === 'number'
-    ? activeTabContext.tableColCount
-    : 0;
-  const activeColCount = activeTabContext && typeof activeTabContext.activeColCount === 'number'
-    ? activeTabContext.activeColCount
-    : 0;
-
-  const isBuiltInPreset = Boolean(activePreset && PRESET_SHORT_LABELS[activePreset] && fileSourceType !== 'custom');
-
-  // 1. Pengaman lintas operator jika tab DILOC & preset bawaan tidak cocok
-  if (isBuiltInPreset && effectiveWebOperator && activePreset !== effectiveWebOperator) {
-    return {
-      icon: 'shieldAlert',
-      message: `Web aktif ${PRESET_SHORT_LABELS[effectiveWebOperator]}, preset masih ${PRESET_SHORT_LABELS[activePreset]}`,
-      tooltip: `Halaman aktif terdeteksi sebagai ${PRESET_SHORT_LABELS[effectiveWebOperator]}, sedangkan preset masih ${PRESET_SHORT_LABELS[activePreset]}.`,
-      quickSwitchPreset: effectiveWebOperator
-    };
-  }
-
-  // 2. Pengaman kecocokan jumlah kolom tabel web aktif (dukung juga file custom 43 sel aktif pada Op. 3)
-  const matchesTotalCols = tableColCount > 0 && totalCells === tableColCount;
-  const matchesActiveCols = activeColCount > 0 && totalCells === activeColCount;
-  if (tableColCount > 0 && !matchesTotalCols && !matchesActiveCols) {
-    return {
-      icon: 'warn',
-      message: `${totalCells} sel ≠ ${tableColCount} kolom tabel web`,
-      tooltip: `File memuat ${totalCells} sel, sedangkan tabel web aktif memiliki ${tableColCount} kolom input.`,
-      quickSwitchPreset: (fileSourceType === 'custom' && effectiveWebOperator) ? effectiveWebOperator : ''
-    };
-  }
-
-  // 3. Pengaman kecocokan jumlah sel terhadap preset bawaan terpilih
-  if (isBuiltInPreset) {
-    const expectedCount = PRESET_EXPECTED_COUNTS[activePreset];
-    if (typeof expectedCount === 'number' && totalCells !== expectedCount && !matchesActiveCols) {
-      return {
-        icon: 'warn',
-        message: `${totalCells} sel ≠ ${expectedCount} parameter`,
-        tooltip: `Jumlah sel file (${totalCells}) berbeda dengan ${expectedCount} parameter pada ${PRESET_NAMES[activePreset]}.`,
-        quickSwitchPreset: ''
-      };
-    }
-  }
-
-  return null;
+  return resolveStrictOperatorByCount(count, operatorStandardCounts, loadedFileName);
 }
 
-function renderStatusCard(totalCells, validationIssue = null) {
-  if (!statusCardMain || !statusCardWarn) return;
+function renderStatusCard(totalCells, fileOp, webOp) {
+  if (!statusCard || !statusLineFile || !statusLineOp) return;
 
-  if (!loadedSequence || loadedSequence.length === 0) {
-    setStatusCardMain(renderIcon('file', { className: 'icon-slate', size: 14 }), 'Belum ada file dimuat', '');
-    statusCardWarn.hidden = true;
-    statusCardWarn.innerHTML = '';
+  if (!loadedSequence || loadedSequence.length === 0 || !fileOp || !PRESET_SHORT_LABELS[fileOp]) {
+    statusCard.hidden = true;
+    statusLineFile.innerHTML = '';
+    statusLineOp.innerHTML = '';
+    statusLineOp.classList.remove('is-match', 'is-mismatch');
     return;
   }
 
-  if (fileSourceType === 'custom') {
-    setStatusCardMain(renderIcon('file', { className: 'icon-sky', size: 15 }), `${loadedFileName} (${totalCells} sel)`, 'custom');
-  } else {
-    const isNamedPreset = Boolean(activePreset && PRESET_SHORT_LABELS[activePreset]);
-    const mainText = isNamedPreset
-      ? `Preset: ${PRESET_SHORT_LABELS[activePreset]} (${totalCells} sel)`
-      : `${loadedFileName} (${totalCells} sel)`;
-    setStatusCardMain(renderIcon('checkCircle', { className: 'icon-emerald', size: 15 }), mainText, 'preset');
-  }
+  statusCard.hidden = false;
 
-  if (validationIssue) {
-    statusCardWarn.innerHTML = `${renderIcon(validationIssue.icon || 'warn', { size: 13 })}<span></span>`;
-    statusCardWarn.title = validationIssue.tooltip || validationIssue.message;
-    statusCardWarn.querySelector('span').textContent = validationIssue.message;
+  statusLineFile.innerHTML = `${renderIcon('file', { className: 'icon-sky', size: 14 })}<span class="status-line-text"></span>`;
+  const fileTextEl = statusLineFile.querySelector('.status-line-text');
+  fileTextEl.textContent = loadedFileName || 'macro.pmr';
+  statusLineFile.title = loadedFileName || 'macro.pmr';
 
-    if (validationIssue.quickSwitchPreset && PRESET_SHORT_LABELS[validationIssue.quickSwitchPreset]) {
-      const targetOp = validationIssue.quickSwitchPreset;
-      const quickBtn = document.createElement('button');
-      quickBtn.type = 'button';
-      quickBtn.id = 'quickSwitchPresetBtn';
-      quickBtn.className = 'quick-switch-btn';
-      quickBtn.innerHTML = `${renderIcon('refreshCw', { size: 11 })}<span></span>`;
-      quickBtn.querySelector('span').textContent = `Pakai Preset ${PRESET_SHORT_LABELS[targetOp]}`;
-      quickBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        await switchToBuiltInPreset(targetOp);
-      });
-      statusCardWarn.appendChild(quickBtn);
-    }
+  const isMatch = Boolean(webOp && fileOp && webOp === fileOp);
+  const opLabelText = `${PRESET_SHORT_LABELS[fileOp]} (${totalCells} data)`;
+  const opIcon = isMatch
+    ? renderIcon('checkCircle', { className: 'icon-emerald', size: 14 })
+    : renderIcon('warn', { className: 'icon-amber', size: 14 });
 
-    statusCardWarn.hidden = false;
-  } else {
-    statusCardWarn.hidden = true;
-    statusCardWarn.innerHTML = '';
-  }
+  statusLineOp.classList.toggle('is-match', isMatch);
+  statusLineOp.classList.toggle('is-mismatch', !isMatch);
+  statusLineOp.innerHTML = `${opIcon}<span class="status-line-text"></span>`;
+  statusLineOp.querySelector('.status-line-text').textContent = opLabelText;
+  statusLineOp.title = isMatch
+    ? `Cocok dengan tab aktif (${PRESET_SHORT_LABELS[webOp]})`
+    : (webOp
+      ? `Tab aktif ${PRESET_SHORT_LABELS[webOp]}, file untuk ${PRESET_SHORT_LABELS[fileOp]}`
+      : `Buka tab logsheet ${PRESET_SHORT_LABELS[fileOp]} untuk mengaktifkan Play`);
 }
 
 function updateSelectedCountLabel(totalCells) {
@@ -293,9 +226,9 @@ function syncRandomModePills(totalCells) {
 }
 
 function syncRandomRangePills() {
-  const safe = sanitizeRandomRange(randomRange);
+  const safe = sanitizeRandomRange(randomRange, true);
   randRangeButtons.forEach(btn => {
-    const isActive = parseInt(btn.dataset.randRange, 10) === safe;
+    const isActive = safe > 0 && parseInt(btn.dataset.randRange, 10) === safe;
     btn.classList.toggle('active', isActive);
     btn.setAttribute('aria-checked', String(isActive));
   });
@@ -326,85 +259,43 @@ function updateUIState() {
   syncSpeedPills();
   syncRowCountStepper();
 
+  const webOp = getEffectiveWebOperator();
+
   if (!loadedSequence || loadedSequence.length === 0) {
     syncRandomModePills();
-    toggleBtn.disabled = true;
-    toggleBtn.classList.remove('running');
-    toggleBtn.innerHTML = `${renderIcon('play', { size: 15 })}<span>Play</span>`;
-    fileLabel.classList.remove('disabled');
-    renderStatusCard(0, null);
+    renderStatusCard(0, '', webOp);
+    if (isMacroRunning) {
+      toggleBtn.disabled = false;
+      toggleBtn.classList.add('running');
+      toggleBtn.innerHTML = `${renderIcon('stop', { size: 15 })}<span>Stop</span>`;
+      fileLabel.classList.add('disabled');
+    } else {
+      toggleBtn.disabled = true;
+      toggleBtn.classList.remove('running');
+      toggleBtn.innerHTML = `${renderIcon('play', { size: 15 })}<span>Play</span>`;
+      fileLabel.classList.remove('disabled');
+    }
     return;
   }
 
   const cells = groupSequenceIntoCells(loadedSequence);
-  const validationIssue = computeValidationIssue(cells.length);
+  const fileOp = getResolvedFileOperator(cells);
+  const isOperatorMatch = Boolean(fileOp && webOp && webOp === fileOp);
+
   syncRandomModePills(cells.length);
+  renderStatusCard(cells.length, fileOp, webOp);
 
   if (isMacroRunning) {
     toggleBtn.disabled = false;
     toggleBtn.classList.add('running');
-    toggleBtn.innerHTML = `${renderIcon('stop', { size: 15 })}<span>Stop (Sedang Jalan...)</span>`;
+    toggleBtn.innerHTML = `${renderIcon('stop', { size: 15 })}<span>Stop</span>`;
     fileLabel.classList.add('disabled');
   } else {
-    // Hard-lock tombol Play jika operator atau jumlah kolom tidak cocok
-    toggleBtn.disabled = Boolean(validationIssue);
+    toggleBtn.disabled = !isOperatorMatch;
     toggleBtn.classList.remove('running');
     toggleBtn.innerHTML = `${renderIcon('play', { size: 15 })}<span>Play</span>`;
     fileLabel.classList.remove('disabled');
   }
-
-  renderStatusCard(cells.length, validationIssue);
-}
-
-async function switchToBuiltInPreset(targetPreset) {
-  if (!targetPreset || !PRESET_SHORT_LABELS[targetPreset]) return false;
-
-  try {
-    const meta = await fetchBuiltInPreset(targetPreset);
-    activePreset = targetPreset;
-    fileSourceType = 'preset';
-    headerMeta = Array.isArray(meta) ? meta : [];
-    selectedCellIndices = resolveSelectedForPreset(selectedCellsByPreset, [], targetPreset);
-
-    const storagePayload = {
-      activePreset,
-      fileSourceType: 'preset',
-      headerMeta,
-      selectedCellIndices
-    };
-
-    const cachedMacro = macrosByPreset && macrosByPreset[targetPreset];
-    if (cachedMacro && Array.isArray(cachedMacro.sequence) && cachedMacro.sequence.length > 0) {
-      loadedSequence = cachedMacro.sequence;
-      loadedFileName = cachedMacro.fileName || `${targetPreset}.pmr`;
-      storagePayload.savedMacro = cachedMacro;
-    }
-
-    await chrome.storage.local.set(storagePayload);
-    updateUIState();
-    return true;
-  } catch (err) {
-    console.error("Gagal switch preset:", err);
-    return false;
-  }
-}
-
-async function syncPresetWithActiveTab() {
-  // Jangan auto-switch jika macro sedang berjalan atau mode file custom aktif
-  if (isMacroRunning || fileSourceType === 'custom') {
-    return false;
-  }
-
-  const effectiveWebOperator = getEffectiveWebOperator();
-  if (!effectiveWebOperator || !PRESET_SHORT_LABELS[effectiveWebOperator]) {
-    return false;
-  }
-
-  const isPresetMode = Boolean(activePreset && PRESET_SHORT_LABELS[activePreset]) || !loadedSequence;
-  if (isPresetMode && activePreset !== effectiveWebOperator) {
-    return await switchToBuiltInPreset(effectiveWebOperator);
-  }
-  return false;
 }
 
 function safeSendTabMessage(tabId, message, tabUrl = '') {
@@ -477,7 +368,6 @@ async function queryActiveTabStatusWithRetry(tab, seq) {
     (status && status.isRunning === null)
   );
 
-  // Retry ringan 250ms (maks 2x) jika rute Vue SPA DILOC belum selesai merender <tbody>
   if (isDilocCandidate && (!status || status.tableColCount === 0)) {
     for (let attempt = 0; attempt < 2; attempt++) {
       await sleepMs(250);
@@ -517,8 +407,6 @@ async function refreshActiveTabContext(shouldUpdateUi = true) {
       isMacroRunning = false;
     }
 
-    await syncPresetWithActiveTab();
-    if (seq !== refreshSeq) return null;
     if (shouldUpdateUi) updateUIState();
     return { tab, status };
   } catch (err) {
@@ -539,7 +427,6 @@ function handleDroppedFile(file) {
       loadedSequence = result.savedMacro.sequence;
       loadedFileName = result.savedMacro.fileName;
       macrosByPreset = result.macrosByPreset || {};
-      fileSourceType = result.fileSourceType;
       activePreset = result.activePreset;
       headerMeta = result.headerMeta || [];
       selectedCellsByPreset = result.selectedCellsByPreset || {};
@@ -549,16 +436,15 @@ function handleDroppedFile(file) {
       hidePopupInlineAlert();
       await refreshActiveTabContext(true);
     } catch (err) {
-      loadedSequence = null;
-      loadedFileName = "";
-      isMacroRunning = false;
-      setStatusCardMain(renderIcon('xCircle', { className: 'icon-rose', size: 15 }), 'Format .pmr / .json tidak valid!', 'error');
-      if (statusCardWarn) {
-        statusCardWarn.hidden = true;
-        statusCardWarn.innerHTML = '';
+      let msg = err && err.code === 'STRICT_OPERATOR_MISMATCH' && err.message
+        ? err.message
+        : '';
+      if (!msg) {
+        const counts = await getStandardOperatorCountsFromStorage();
+        msg = formatRejectedFileMessage(0, counts);
       }
-      showPopupInlineAlert('File .pmr / .json rusak atau tidak berisi keystroke yang valid.', 'error');
-      toggleBtn.disabled = true;
+      showPopupInlineAlert(msg, 'error');
+      updateUIState();
     }
   };
   reader.readAsText(file);
@@ -579,11 +465,58 @@ function openImportMiniWindow() {
   }
 }
 
+async function sanitizeAndClearInvalidStoredMacro(data, stdCounts) {
+  const legacyCustom = data.fileSourceType === 'custom';
+  if (data.fileSourceType !== undefined) {
+    try {
+      await chrome.storage.local.remove('fileSourceType');
+    } catch (e) {}
+  }
+
+  const saved = data.savedMacro;
+  if (!saved || !Array.isArray(saved.sequence) || saved.sequence.length === 0) {
+    if (legacyCustom) {
+      try {
+        await chrome.storage.local.remove(['savedMacro', 'activePreset', 'headerMeta']);
+      } catch (e) {}
+    }
+    return false;
+  }
+
+  const seq = saved.sequence.map(step => ({
+    ...step,
+    key: step.key === ',' ? '.' : step.key
+  }));
+  const cells = groupSequenceIntoCells(seq);
+  const resolvedOp = resolveStrictOperatorByCount(cells.length, stdCounts, saved.fileName);
+
+  if (legacyCustom || !resolvedOp) {
+    loadedSequence = null;
+    loadedFileName = "";
+    activePreset = "";
+    headerMeta = [];
+    selectedCellIndices = [];
+    try {
+      await chrome.storage.local.remove(['savedMacro', 'activePreset', 'headerMeta', 'fileSourceType']);
+      await chrome.storage.local.set({ selectedCellIndices: [] });
+    } catch (e) {}
+    return false;
+  }
+
+  loadedSequence = seq;
+  loadedFileName = saved.fileName || "macro.pmr";
+  activePreset = (data.activePreset && PRESET_SHORT_LABELS[data.activePreset] && Number(stdCounts[data.activePreset]) === cells.length)
+    ? data.activePreset
+    : resolvedOp;
+  return true;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   hydrateDataIcons();
 
   try {
-    const data = await chrome.storage.local.get(UNIFIED_STORAGE_KEYS);
+    const data = await chrome.storage.local.get([...UNIFIED_STORAGE_KEYS, 'fileSourceType']);
+    operatorStandardCounts = normalizeStandardCounts(data.operatorStandardCounts);
 
     let initialTheme = data.optionsTheme;
     if (initialTheme !== 'dark' && initialTheme !== 'light') {
@@ -595,26 +528,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     applyTheme(initialTheme, false);
 
-    if (data.savedMacro && Array.isArray(data.savedMacro.sequence) && data.savedMacro.sequence.length > 0) {
-      loadedSequence = data.savedMacro.sequence.map(step => ({
-        ...step,
-        key: step.key === ',' ? '.' : step.key
-      }));
-      loadedFileName = data.savedMacro.fileName || "macro.pmr";
-    }
-
     macrosByPreset = (data.macrosByPreset && typeof data.macrosByPreset === 'object')
       ? { ...data.macrosByPreset }
       : {};
-    fileSourceType = data.fileSourceType === 'custom' ? 'custom' : 'preset';
+
+    const hasValidMacro = await sanitizeAndClearInvalidStoredMacro(data, operatorStandardCounts);
+
     isMacroRunning = Boolean(data.macroRunning);
     randomMode = data.randomMode || "off";
-    randomRange = sanitizeRandomRange(data.randomRange);
+    randomRange = sanitizeRandomRange(data.randomRange, true);
     cellRandomRanges = (data.cellRandomRanges && typeof data.cellRandomRanges === 'object')
       ? { ...data.cellRandomRanges }
       : {};
 
-    // Migrasi otomatis nilai storage lama (< 200ms atau rowCount > 4)
     const migrationPayload = {};
     if (data.typingSpeedMs !== undefined && Number(data.typingSpeedMs) < 200) {
       typingSpeedMs = sanitizeSpeedMs(Math.max(200, Number(data.typingSpeedMs) || 200));
@@ -631,17 +557,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       chrome.storage.local.set(migrationPayload);
     }
 
-    activePreset = data.activePreset || "";
-    headerMeta = Array.isArray(data.headerMeta) ? data.headerMeta : [];
+    if (hasValidMacro) {
+      headerMeta = Array.isArray(data.headerMeta) ? data.headerMeta : [];
+    }
     selectedCellsByPreset = (data.selectedCellsByPreset && typeof data.selectedCellsByPreset === 'object')
       ? { ...data.selectedCellsByPreset }
       : {};
 
-    selectedCellIndices = resolveSelectedForPreset(
-      selectedCellsByPreset,
-      data.selectedCellIndices,
-      activePreset
-    );
+    selectedCellIndices = hasValidMacro
+      ? resolveSelectedForPreset(selectedCellsByPreset, data.selectedCellIndices, activePreset)
+      : [];
 
     await refreshActiveTabContext(true);
   } catch (err) {
@@ -676,7 +601,6 @@ if (chrome.tabs && chrome.tabs.onUpdated && typeof chrome.tabs.onUpdated.addList
   });
 }
 
-// Sinkronisasi real-time 2 arah dengan flag anti-loop isSyncingFromStorage
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
   let dirty = false;
@@ -686,11 +610,26 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     if (changes.optionsTheme) {
       applyTheme(changes.optionsTheme.newValue || 'light', false);
     }
+    if (changes.operatorStandardCounts) {
+      operatorStandardCounts = normalizeStandardCounts(changes.operatorStandardCounts.newValue);
+      dirty = true;
+    }
     if (changes.savedMacro) {
       const val = changes.savedMacro.newValue;
       if (val && Array.isArray(val.sequence) && val.sequence.length > 0) {
-        loadedSequence = val.sequence;
-        loadedFileName = val.fileName || "macro.pmr";
+        const cells = groupSequenceIntoCells(val.sequence);
+        const resolved = resolveStrictOperatorByCount(cells.length, operatorStandardCounts, val.fileName);
+        if (resolved) {
+          loadedSequence = val.sequence;
+          loadedFileName = val.fileName || "macro.pmr";
+          if (!changes.activePreset) {
+            activePreset = resolved;
+          }
+        } else {
+          loadedSequence = null;
+          loadedFileName = "";
+          activePreset = "";
+        }
       } else {
         loadedSequence = null;
         loadedFileName = "";
@@ -701,16 +640,12 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       const val = changes.macrosByPreset.newValue;
       macrosByPreset = (val && typeof val === 'object') ? { ...val } : {};
     }
-    if (changes.fileSourceType) {
-      fileSourceType = changes.fileSourceType.newValue === 'custom' ? 'custom' : 'preset';
-      dirty = true;
-    }
     if (changes.randomMode) {
       randomMode = changes.randomMode.newValue || "off";
       dirty = true;
     }
     if (changes.randomRange) {
-      randomRange = sanitizeRandomRange(changes.randomRange.newValue);
+      randomRange = sanitizeRandomRange(changes.randomRange.newValue, true);
       dirty = true;
     }
     if (changes.cellRandomRanges) {
@@ -745,7 +680,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       selectedCellIndices = Array.isArray(changes.selectedCellIndices.newValue)
         ? changes.selectedCellIndices.newValue
         : [];
-      selectedCellsByPreset[getPresetStorageKey(activePreset)] = selectedCellIndices.slice();
+      if (activePreset && PRESET_SHORT_LABELS[activePreset]) {
+        selectedCellsByPreset[activePreset] = selectedCellIndices.slice();
+      }
       dirty = true;
     } else if (changes.activePreset) {
       selectedCellIndices = resolveSelectedForPreset(selectedCellsByPreset, [], activePreset);
@@ -816,9 +753,15 @@ randModeButtons.forEach(btn => {
     if (isSyncingFromStorage) return;
     const nextMode = btn.dataset.randMode || 'off';
     randomMode = nextMode;
+    const payload = { randomMode };
+    if (nextMode !== 'off' && sanitizeRandomRange(randomRange, true) === 0) {
+      randomRange = 1;
+      payload.randomRange = 1;
+    }
+    syncRandomRangePills();
     const totalCells = loadedSequence ? groupSequenceIntoCells(loadedSequence).length : undefined;
     syncRandomModePills(totalCells);
-    await chrome.storage.local.set({ randomMode });
+    await chrome.storage.local.set(payload);
     if (randomMode === 'selected' && selectedCellIndices.length === 0) {
       chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
       window.close();
@@ -829,7 +772,7 @@ randModeButtons.forEach(btn => {
 randRangeButtons.forEach(btn => {
   btn.addEventListener('click', async () => {
     if (isSyncingFromStorage) return;
-    randomRange = sanitizeRandomRange(btn.dataset.randRange);
+    randomRange = sanitizeRandomRange(btn.dataset.randRange, false);
     syncRandomRangePills();
     await chrome.storage.local.set({ randomRange });
   });
@@ -878,7 +821,7 @@ openSettingsBtn.addEventListener('click', () => {
 });
 
 toggleBtn.addEventListener('click', async () => {
-  if (!loadedSequence || loadedSequence.length === 0) return;
+  if (!isMacroRunning && (!loadedSequence || loadedSequence.length === 0)) return;
 
   if (rowCountInput) {
     rowCount = sanitizeRowCount(rowCountInput.value);
@@ -887,7 +830,7 @@ toggleBtn.addEventListener('click', async () => {
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || isRestrictedBrowserUrl(tab.url)) {
-    showPopupInlineAlert("Pindah dulu ke tab web logsheet (bukan halaman chrome:// atau extension), lalu tekan Play!", "warn");
+    showPopupInlineAlert("Pindah dulu ke tab web logsheet DILOC, lalu tekan Play!", "warn");
     return;
   }
 
@@ -897,100 +840,96 @@ toggleBtn.addEventListener('click', async () => {
     isMacroRunning = false;
     await chrome.storage.local.set({ macroRunning: false });
     await safeSendTabMessage(tab.id, { action: "STOP_MACRO" }, tab.url);
-    setTimeout(() => window.close(), 60);
-  } else {
-    const latest = await chrome.storage.local.get([
-      'selectedCellsByPreset',
-      'selectedCellIndices',
-      'activePreset',
-      'fileSourceType',
-      'headerMeta',
-      'randomMode',
-      'randomRange',
-      'typingSpeedMs',
-      'rowCount'
-    ]);
-    const latestPreset = typeof latest.activePreset === 'string' ? latest.activePreset : activePreset;
-    const latestSourceType = latest.fileSourceType === 'custom' ? 'custom' : 'preset';
-    const latestByPreset = (latest.selectedCellsByPreset && typeof latest.selectedCellsByPreset === 'object')
-      ? latest.selectedCellsByPreset
-      : selectedCellsByPreset;
-    const latestMode = latest.randomMode || randomMode;
-    const latestRange = sanitizeRandomRange(latest.randomRange ?? randomRange);
-    const latestMeta = Array.isArray(latest.headerMeta) ? latest.headerMeta : headerMeta;
-    const activeSpeedMs = Math.max(200, sanitizeSpeedMs(latest.typingSpeedMs ?? typingSpeedMs));
-    const activeRowCount = sanitizeRowCount(rowCountInput ? rowCountInput.value : (latest.rowCount ?? rowCount));
-
-    activePreset = latestPreset;
-    fileSourceType = latestSourceType;
-    const cells = groupSequenceIntoCells(loadedSequence);
-
-    // Validasi ulang konteks halaman sebelum START_MACRO (Hard-lock guard)
-    const tabStatus = await queryActiveTabStatus(tab);
-    if (tabStatus) {
-      activeTabContext = tabStatus;
-    }
-    const validationIssue = computeValidationIssue(cells.length);
-    if (validationIssue) {
-      updateUIState();
-      showPopupInlineAlert(validationIssue.message, 'error');
-      return;
-    }
-
-    const resolvedSelected = resolveSelectedForPreset(
-      latestByPreset,
-      latest.selectedCellIndices ?? selectedCellIndices,
-      latestPreset
-    );
-
-    isMacroRunning = true;
-    await chrome.storage.local.set({
-      macroRunning: true,
-      rowCount: activeRowCount,
-      typingSpeedMs: activeSpeedMs,
-      randomRange: latestRange
-    });
-
-    const activeIndices = resolvedSelected.filter(idx => idx >= 0 && idx < cells.length);
-
-    // Acak ulang nilai randomizer per baris (indeks kolom absolut 0..N-1)
-    const rowsPayload = [];
-    for (let r = 0; r < activeRowCount; r++) {
-      const evaluated = evaluateCellsWithMode(cells, latestMode, activeIndices, latestMeta, latestRange);
-      rowsPayload.push(evaluated.map(item => item.value));
-    }
-
-    const sequenceToRun = buildPlaybackSequence(loadedSequence, latestMode, activeIndices, latestMeta, activeSpeedMs, latestRange);
-    const sourceLabel = (latestSourceType === 'custom')
-      ? `${loadedFileName || 'file.pmr'} (${cells.length} sel)`
-      : (latestPreset && PRESET_SHORT_LABELS[latestPreset]
-        ? `Preset: ${PRESET_SHORT_LABELS[latestPreset]} (${cells.length} sel)`
-        : `${loadedFileName || 'Macro'} (${cells.length} sel)`);
-
-    const dispatchRes = await safeSendTabMessage(tab.id, {
-      action: "START_MACRO",
-      rows: rowsPayload,
-      rowCount: activeRowCount,
-      speedMs: activeSpeedMs,
-      randomMode: latestMode,
-      randomRange: latestRange,
-      activePreset: latestPreset,
-      fileSourceType: latestSourceType,
-      fileName: loadedFileName,
-      sourceLabel,
-      expectedCellCount: cells.length,
-      selectedIndices: activeIndices,
-      sequence: sequenceToRun
-    }, tab.url);
-
-    if (!dispatchRes) {
-      isMacroRunning = false;
-      await chrome.storage.local.set({ macroRunning: false });
-      updateUIState();
-      showPopupInlineAlert("Tab target belum siap menerima perintah. Muat ulang halaman lalu coba lagi.", "warn");
-      return;
-    }
-
-    setTimeout(() => window.close(), 70);
+    updateUIState();
+    return;
   }
+
+  const latest = await chrome.storage.local.get([
+    'selectedCellsByPreset',
+    'selectedCellIndices',
+    'activePreset',
+    'headerMeta',
+    'randomMode',
+    'randomRange',
+    'typingSpeedMs',
+    'rowCount'
+  ]);
+
+  const cells = groupSequenceIntoCells(loadedSequence);
+  const latestPreset = (latest.activePreset && PRESET_SHORT_LABELS[latest.activePreset])
+    ? latest.activePreset
+    : activePreset;
+  activePreset = latestPreset;
+  const fileOp = getResolvedFileOperator(cells);
+
+  const tabStatus = await queryActiveTabStatus(tab);
+  if (tabStatus) {
+    activeTabContext = tabStatus;
+  }
+  const webOp = getEffectiveWebOperator();
+
+  if (!fileOp || !webOp || webOp !== fileOp) {
+    updateUIState();
+    showPopupInlineAlert(
+      fileOp
+        ? `Tab aktif (${webOp ? PRESET_SHORT_LABELS[webOp] : 'Non-DILOC'}) tidak cocok dengan ${PRESET_SHORT_LABELS[fileOp]}.`
+        : 'Data file tidak sesuai standar operator.',
+      'warn'
+    );
+    return;
+  }
+
+  const latestByPreset = (latest.selectedCellsByPreset && typeof latest.selectedCellsByPreset === 'object')
+    ? latest.selectedCellsByPreset
+    : selectedCellsByPreset;
+  const latestMode = latest.randomMode || randomMode;
+  const latestRange = latestMode === 'off'
+    ? 0
+    : sanitizeRandomRange(latest.randomRange ?? randomRange, false);
+  const latestMeta = Array.isArray(latest.headerMeta) ? latest.headerMeta : headerMeta;
+  const activeSpeedMs = Math.max(200, sanitizeSpeedMs(latest.typingSpeedMs ?? typingSpeedMs));
+  const activeRowCount = sanitizeRowCount(rowCountInput ? rowCountInput.value : (latest.rowCount ?? rowCount));
+
+  const resolvedSelected = resolveSelectedForPreset(
+    latestByPreset,
+    latest.selectedCellIndices ?? selectedCellIndices,
+    fileOp
+  );
+  const activeIndices = resolvedSelected.filter(idx => idx >= 0 && idx < cells.length);
+
+  await chrome.storage.local.set({
+    rowCount: activeRowCount,
+    typingSpeedMs: activeSpeedMs
+  });
+
+  const rowsPayload = [];
+  for (let r = 0; r < activeRowCount; r++) {
+    const evaluated = evaluateCellsWithMode(cells, latestMode, activeIndices, latestMeta, latestRange);
+    rowsPayload.push(evaluated.map(item => item.value));
+  }
+
+  const sequenceToRun = buildPlaybackSequence(loadedSequence, latestMode, activeIndices, latestMeta, activeSpeedMs, latestRange);
+  const sourceLabel = `${loadedFileName || PRESET_SHORT_LABELS[fileOp]} (${cells.length} data)`;
+
+  const dispatchRes = await safeSendTabMessage(tab.id, {
+    action: "START_MACRO",
+    rows: rowsPayload,
+    rowCount: activeRowCount,
+    speedMs: activeSpeedMs,
+    randomMode: latestMode,
+    randomRange: latestRange,
+    activePreset: fileOp,
+    fileName: loadedFileName,
+    sourceLabel,
+    expectedCellCount: cells.length,
+    selectedIndices: activeIndices,
+    sequence: sequenceToRun
+  }, tab.url);
+
+  if (!dispatchRes) {
+    showPopupInlineAlert("Tab target belum siap menerima perintah. Muat ulang halaman lalu coba lagi.", "warn");
+    return;
+  }
+
+  setTimeout(() => window.close(), 70);
 });

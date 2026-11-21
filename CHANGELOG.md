@@ -2,6 +2,20 @@
 
 Semua perubahan penting pada proyek **PMR Web Runner** dicatat dalam file ini.
 
+## [1.11.0] - 2026-11-20
+
+### Added
+- **Modul `parser.js` & Dukungan Excel Dropdown Arrow:** Memisahkan parser `.pmr`/`.json` ke `pmr-web-runner/parser.js` dengan konversi tombol panah dropdown (`Key.down` / `Key.up`) menjadi slot data urutan opsi ke-N (`__PMR_ARROW_DOWN__:N`) yang membaca `<select>` DILOC secara *live* (melewati opsi kosong, `disabled`, `-`, atau `Pilih...`).
+- **Validasi Ketat Mini Window Import (`import.js`):** Menolak file dengan jumlah data kosong atau di luar standar **Op. Lap 1 / 2 / 3** tanpa mengubah `chrome.storage.local` maupun menutup jendela, menampilkan pesan error dinamis dengan ikon SVG `xCircle`, serta mereset `fileInput.value`.
+- **Modal Blur Shadow DOM 3 Fase (`content.js`):**
+  - **Fase 1 (Konfirmasi Awal):** Menampilkan titik mulai `baris logsheet jam HH:MM`, ringkasan **Randomizer** (`Off`, `All (±N)`, atau `Selected (±N): #kolom`), serta tombol terpusat `Batal` (merah lembut + ikon `x`) dan `Mulai Isi` (hijau) / `Timpa & Mulai` (kuning teks kontras `#0f172a`).
+  - **Fase 2 (Live Progress):** Menjaga tombol popup `Play` tetap menjadi `Stop`, menampilkan progress bar animasi `0%–100%` dan status live `Mengisi baris jam HH:MM • Kolom #X dari #Y` (referensi DOM di-cache sekali), serta tombol merah `Batal` dengan sinkronisasi stop 3-arah (`Batal`, `ESC`, atau `Stop` popup).
+  - **Fase 3 (Ringkasan Hasil):** Menampilkan jumlah sel **Berhasil Diisi** dan **Dilewati** (status khusus / terkunci), memigrasikan seluruh peringatan/error ke modal Fase 3, serta menjalankan auto-reset pengaturan (`rowCount: 1`, `randomMode: 'off'`, `randomRange: 0`, `selectedCellIndices: []`) hanya setelah eksekusi Fase 2 berjalan.
+
+### Changed
+- **Penghapusan Mode File Custom & Redesign Popup (`popup.html`, `popup.js`, `options.js`):** Menghapus seluruh logika `fileSourceType: 'custom'`, auto-pembersihan cache tidak valid saat startup, menyederhanakan Status Card popup menjadi 2 baris (`nama file` & status `Op. Lap X (N data)` hijau/kuning tanpa auto-switch paksa), serta menghapus tautan `Buka PMR Editor` dari `popup.html`.
+- **Penghapusan Toast Lama & Sinkronisasi Versi v1.11.0 (`content.js`, `manifest.json`, `options.html`, `README.txt`, `index.html`):** Menghapus `showToast()`, `createToastSvgIcon()`, dan `#pmr-runner-toast` sepenuhnya serta memperbarui versi ke `1.11.0`.
+
 ## [1.10.0] - 2026-11-20
 
 ### Added
