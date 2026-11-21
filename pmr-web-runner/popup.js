@@ -1,8 +1,11 @@
 let loadedSequence = null;
 let loadedFileName = "";
+let fileSourceType = "preset";
+let macrosByPreset = {};
 let isMacroRunning = false;
 let randomMode = "off";
 let randomRange = 1;
+let cellRandomRanges = {};
 let typingSpeedMs = 400;
 let rowCount = 1;
 let selectedCellIndices = [];
@@ -13,11 +16,13 @@ let currentTheme = "light";
 let popupAlertTimer = null;
 let activeTabContext = null;
 let lastTabRefreshAt = 0;
+let autoSyncBadgeText = "";
+let isSyncingFromStorage = false;
 
 const PRESET_NAMES = {
   operator1: "Operator 1 (167 parameter)",
   operator2: "Operator 2 (51 parameter)",
-  operator3: "Operator 3 (45 parameter)"
+  operator3: "Operator 3 (44 parameter)"
 };
 
 const PRESET_SHORT_LABELS = {
@@ -26,7 +31,6 @@ const PRESET_SHORT_LABELS = {
   operator3: "Op. Lap 3"
 };
 
-const fileInput = document.getElementById('macroFile');
 const fileLabel = document.getElementById('fileLabel');
 const fileStatus = document.getElementById('fileStatus');
 const presetBadgeWrap = document.getElementById('presetBadgeWrap');
@@ -134,7 +138,7 @@ function applyTheme(theme, persist = false) {
     window.localStorage.setItem('pmr_options_theme', resolved);
   } catch (e) {}
 
-  if (persist) {
+  if (persist && !isSyncingFromStorage) {
     chrome.storage.local.set({ optionsTheme: resolved });
   }
 }
@@ -155,47 +159,59 @@ function setStatusContent(iconHtml, text, statusTone) {
   }
 }
 
+function getEffectiveWebOperator() {
+  const tabUrl = activeTabContext && activeTabContext.url ? activeTabContext.url : '';
+  const urlOperator = detectOperatorFromUrl(tabUrl);
+  const contentOperator = activeTabContext && activeTabContext.webOperator ? activeTabContext.webOperator : '';
+  return urlOperator || contentOperator;
+}
+
 function computeValidationIssue(totalCells) {
   if (!loadedSequence || loadedSequence.length === 0) {
     return null;
   }
 
-  const tabUrl = activeTabContext && activeTabContext.url ? activeTabContext.url : '';
-  const urlOperator = detectOperatorFromUrl(tabUrl);
-  const contentOperator = activeTabContext && activeTabContext.webOperator ? activeTabContext.webOperator : '';
-  const effectiveWebOperator = urlOperator || contentOperator;
+  const effectiveWebOperator = getEffectiveWebOperator();
   const tableColCount = activeTabContext && typeof activeTabContext.tableColCount === 'number'
     ? activeTabContext.tableColCount
     : 0;
+  const activeColCount = activeTabContext && typeof activeTabContext.activeColCount === 'number'
+    ? activeTabContext.activeColCount
+    : 0;
 
-  const isBuiltInPreset = Boolean(activePreset && PRESET_SHORT_LABELS[activePreset]);
+  const isBuiltInPreset = Boolean(activePreset && PRESET_SHORT_LABELS[activePreset] && fileSourceType !== 'custom');
 
-  // 1. Pengaman lintas operator jika tab DILOC (/elogsheet/160..162 atau <h5> Op. Lap X) & preset bawaan tidak cocok
+  // 1. Pengaman lintas operator jika tab DILOC & preset bawaan tidak cocok
   if (isBuiltInPreset && effectiveWebOperator && activePreset !== effectiveWebOperator) {
     return {
       icon: 'shieldAlert',
       message: `Web aktif ${PRESET_SHORT_LABELS[effectiveWebOperator]}, preset masih ${PRESET_SHORT_LABELS[activePreset]}`,
-      tooltip: `Halaman aktif terdeteksi sebagai ${PRESET_SHORT_LABELS[effectiveWebOperator]}, sedangkan preset masih ${PRESET_SHORT_LABELS[activePreset]}.`
+      tooltip: `Halaman aktif terdeteksi sebagai ${PRESET_SHORT_LABELS[effectiveWebOperator]}, sedangkan preset masih ${PRESET_SHORT_LABELS[activePreset]}.`,
+      quickSwitchPreset: effectiveWebOperator
     };
   }
 
-  // 2. Pengaman kecocokan jumlah kolom tabel web aktif (berlaku untuk preset maupun file custom)
-  if (tableColCount > 0 && totalCells !== tableColCount) {
+  // 2. Pengaman kecocokan jumlah kolom tabel web aktif (dukung juga file custom 43 sel aktif pada Op. 3)
+  const matchesTotalCols = tableColCount > 0 && totalCells === tableColCount;
+  const matchesActiveCols = activeColCount > 0 && totalCells === activeColCount;
+  if (tableColCount > 0 && !matchesTotalCols && !matchesActiveCols) {
     return {
       icon: 'warn',
       message: `${totalCells} sel ≠ ${tableColCount} kolom tabel web`,
-      tooltip: `File memuat ${totalCells} sel, sedangkan tabel web aktif memiliki ${tableColCount} kolom input.`
+      tooltip: `File memuat ${totalCells} sel, sedangkan tabel web aktif memiliki ${tableColCount} kolom input.`,
+      quickSwitchPreset: (fileSourceType === 'custom' && effectiveWebOperator) ? effectiveWebOperator : ''
     };
   }
 
   // 3. Pengaman kecocokan jumlah sel terhadap preset bawaan terpilih
   if (isBuiltInPreset) {
     const expectedCount = PRESET_EXPECTED_COUNTS[activePreset];
-    if (typeof expectedCount === 'number' && totalCells !== expectedCount) {
+    if (typeof expectedCount === 'number' && totalCells !== expectedCount && !matchesActiveCols) {
       return {
         icon: 'warn',
         message: `${totalCells} sel ≠ ${expectedCount} parameter`,
-        tooltip: `Jumlah sel file (${totalCells}) berbeda dengan ${expectedCount} parameter pada ${PRESET_NAMES[activePreset]}.`
+        tooltip: `Jumlah sel file (${totalCells}) berbeda dengan ${expectedCount} parameter pada ${PRESET_NAMES[activePreset]}.`,
+        quickSwitchPreset: ''
       };
     }
   }
@@ -204,16 +220,30 @@ function computeValidationIssue(totalCells) {
 }
 
 function renderPresetBadge(totalCells, validationIssue = null) {
-  const hasPreset = Boolean(activePreset && PRESET_NAMES[activePreset]);
-  if (!hasPreset && !validationIssue) {
+  const hasPreset = Boolean(activePreset && PRESET_NAMES[activePreset] && fileSourceType !== 'custom');
+  const hasAutoSync = Boolean(autoSyncBadgeText);
+  if (!hasPreset && !hasAutoSync && !validationIssue) {
     presetBadgeWrap.hidden = true;
     presetBadgeWrap.innerHTML = '';
     return;
   }
 
-  let html = '';
+  presetBadgeWrap.innerHTML = '';
+
   if (hasPreset) {
-    html += `<span class="preset-pill">${renderIcon('userCheck', { size: 13 })}<span>${PRESET_NAMES[activePreset]}</span></span>`;
+    const presetSpan = document.createElement('span');
+    presetSpan.className = 'preset-pill';
+    presetSpan.innerHTML = `${renderIcon('userCheck', { size: 13 })}<span></span>`;
+    presetSpan.querySelector('span').textContent = PRESET_NAMES[activePreset];
+    presetBadgeWrap.appendChild(presetSpan);
+  }
+
+  if (hasAutoSync) {
+    const syncSpan = document.createElement('span');
+    syncSpan.className = 'autosync-pill';
+    syncSpan.innerHTML = `${renderIcon('refreshCw', { size: 12 })}<span></span>`;
+    syncSpan.querySelector('span').textContent = autoSyncBadgeText;
+    presetBadgeWrap.appendChild(syncSpan);
   }
 
   if (validationIssue) {
@@ -222,10 +252,25 @@ function renderPresetBadge(totalCells, validationIssue = null) {
     warnEl.title = validationIssue.tooltip || validationIssue.message;
     warnEl.innerHTML = `${renderIcon(validationIssue.icon || 'warn', { size: 14 })}<span></span>`;
     warnEl.querySelector('span').textContent = validationIssue.message;
-    html += warnEl.outerHTML;
+
+    if (validationIssue.quickSwitchPreset && PRESET_SHORT_LABELS[validationIssue.quickSwitchPreset]) {
+      const targetOp = validationIssue.quickSwitchPreset;
+      const quickBtn = document.createElement('button');
+      quickBtn.type = 'button';
+      quickBtn.id = 'quickSwitchPresetBtn';
+      quickBtn.className = 'quick-switch-btn';
+      quickBtn.textContent = `Pakai Preset ${PRESET_SHORT_LABELS[targetOp]}`;
+      quickBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        await switchToBuiltInPreset(targetOp, false);
+      });
+      warnEl.appendChild(quickBtn);
+    }
+
+    presetBadgeWrap.appendChild(warnEl);
   }
 
-  presetBadgeWrap.innerHTML = html;
   presetBadgeWrap.hidden = false;
 }
 
@@ -315,6 +360,59 @@ function updateUIState() {
   renderPresetBadge(cells.length, validationIssue);
 }
 
+async function switchToBuiltInPreset(targetPreset, isAuto = false) {
+  if (!targetPreset || !PRESET_SHORT_LABELS[targetPreset]) return false;
+
+  try {
+    const meta = await fetchBuiltInPreset(targetPreset);
+    activePreset = targetPreset;
+    fileSourceType = 'preset';
+    headerMeta = Array.isArray(meta) ? meta : [];
+    selectedCellIndices = resolveSelectedForPreset(selectedCellsByPreset, [], targetPreset);
+
+    const storagePayload = {
+      activePreset,
+      fileSourceType: 'preset',
+      headerMeta,
+      selectedCellIndices
+    };
+
+    const cachedMacro = macrosByPreset && macrosByPreset[targetPreset];
+    if (cachedMacro && Array.isArray(cachedMacro.sequence) && cachedMacro.sequence.length > 0) {
+      loadedSequence = cachedMacro.sequence;
+      loadedFileName = cachedMacro.fileName || `${targetPreset}.pmr`;
+      storagePayload.savedMacro = cachedMacro;
+    }
+
+    autoSyncBadgeText = isAuto ? `Auto-sync: ${PRESET_SHORT_LABELS[targetPreset]}` : '';
+    await chrome.storage.local.set(storagePayload);
+    updateUIState();
+    return true;
+  } catch (err) {
+    console.error("Gagal switch preset:", err);
+    return false;
+  }
+}
+
+async function syncPresetWithActiveTab() {
+  const effectiveWebOperator = getEffectiveWebOperator();
+  if (!effectiveWebOperator || !PRESET_SHORT_LABELS[effectiveWebOperator]) {
+    autoSyncBadgeText = '';
+    return;
+  }
+
+  // Jangan timpa file custom secara otomatis
+  if (fileSourceType === 'custom') {
+    autoSyncBadgeText = '';
+    return;
+  }
+
+  const isPresetMode = Boolean(activePreset && PRESET_SHORT_LABELS[activePreset]) || !loadedSequence;
+  if (isPresetMode && activePreset !== effectiveWebOperator) {
+    await switchToBuiltInPreset(effectiveWebOperator, true);
+  }
+}
+
 function queryActiveTabStatus(tab) {
   return new Promise((resolve) => {
     if (!tab || !tab.id || isRestrictedBrowserUrl(tab.url)) {
@@ -329,6 +427,7 @@ function queryActiveTabStatus(tab) {
             url: tab.url || '',
             webOperator: detectOperatorFromUrl(tab.url),
             tableColCount: 0,
+            activeColCount: 0,
             isRunning: null
           });
           return;
@@ -337,6 +436,7 @@ function queryActiveTabStatus(tab) {
           url: response.pageUrl || tab.url || '',
           webOperator: response.webOperator || detectOperatorFromUrl(response.pageUrl || tab.url),
           tableColCount: Number(response.tableColCount) || 0,
+          activeColCount: Number(response.activeColCount) || 0,
           isRunning: Boolean(response.isRunning)
         });
       });
@@ -345,6 +445,7 @@ function queryActiveTabStatus(tab) {
         url: tab.url || '',
         webOperator: detectOperatorFromUrl(tab.url),
         tableColCount: 0,
+        activeColCount: 0,
         isRunning: null
       });
     }
@@ -357,6 +458,7 @@ async function refreshActiveTabContext(shouldUpdateUi = true) {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id || isRestrictedBrowserUrl(tab.url)) {
       activeTabContext = null;
+      autoSyncBadgeText = '';
       if (isMacroRunning) isMacroRunning = false;
       if (shouldUpdateUi) updateUIState();
       return null;
@@ -369,6 +471,8 @@ async function refreshActiveTabContext(shouldUpdateUi = true) {
     } else {
       isMacroRunning = false;
     }
+
+    await syncPresetWithActiveTab();
     if (shouldUpdateUi) updateUIState();
     return { tab, status };
   } catch (err) {
@@ -377,23 +481,62 @@ async function refreshActiveTabContext(shouldUpdateUi = true) {
   }
 }
 
+function handleDroppedFile(file) {
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    try {
+      const rawData = JSON.parse(event.target.result);
+      const result = await persistImportedMacroFile(file.name, rawData);
+
+      loadedSequence = result.savedMacro.sequence;
+      loadedFileName = result.savedMacro.fileName;
+      macrosByPreset = result.macrosByPreset || {};
+      fileSourceType = result.fileSourceType;
+      activePreset = result.activePreset;
+      headerMeta = result.headerMeta || [];
+      selectedCellsByPreset = result.selectedCellsByPreset || {};
+      selectedCellIndices = result.selectedCellIndices || [];
+      autoSyncBadgeText = '';
+      isMacroRunning = false;
+
+      hidePopupInlineAlert();
+      await refreshActiveTabContext(true);
+    } catch (err) {
+      loadedSequence = null;
+      loadedFileName = "";
+      isMacroRunning = false;
+      autoSyncBadgeText = '';
+      setStatusContent(renderIcon('xCircle', { className: 'icon-rose', size: 15 }), 'Format .pmr / .json tidak valid!', 'error');
+      showPopupInlineAlert('File .pmr / .json rusak atau tidak berisi keystroke yang valid.', 'error');
+      renderPresetBadge(0, null);
+      toggleBtn.disabled = true;
+    }
+  };
+  reader.readAsText(file);
+}
+
+function openImportMiniWindow() {
+  if (fileLabel && fileLabel.classList.contains('disabled')) return;
+  const importUrl = chrome.runtime.getURL('import.html');
+  if (chrome.windows && typeof chrome.windows.create === 'function') {
+    chrome.windows.create({
+      url: importUrl,
+      type: 'popup',
+      width: 420,
+      height: 320
+    });
+  } else {
+    chrome.tabs.create({ url: importUrl });
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   hydrateDataIcons();
 
   try {
-    const data = await chrome.storage.local.get([
-      'savedMacro',
-      'macroRunning',
-      'randomMode',
-      'randomRange',
-      'typingSpeedMs',
-      'rowCount',
-      'selectedCellIndices',
-      'selectedCellsByPreset',
-      'activePreset',
-      'headerMeta',
-      'optionsTheme'
-    ]);
+    const data = await chrome.storage.local.get(UNIFIED_STORAGE_KEYS);
 
     let initialTheme = data.optionsTheme;
     if (initialTheme !== 'dark' && initialTheme !== 'light') {
@@ -413,9 +556,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       loadedFileName = data.savedMacro.fileName || "macro.pmr";
     }
 
+    macrosByPreset = (data.macrosByPreset && typeof data.macrosByPreset === 'object')
+      ? { ...data.macrosByPreset }
+      : {};
+    fileSourceType = data.fileSourceType === 'custom' ? 'custom' : 'preset';
     isMacroRunning = Boolean(data.macroRunning);
     randomMode = data.randomMode || "off";
     randomRange = sanitizeRandomRange(data.randomRange);
+    cellRandomRanges = (data.cellRandomRanges && typeof data.cellRandomRanges === 'object')
+      ? { ...data.cellRandomRanges }
+      : {};
 
     // Migrasi otomatis nilai storage lama (< 200ms atau rowCount > 4)
     const migrationPayload = {};
@@ -464,72 +614,90 @@ document.addEventListener('pointerenter', () => {
   }
 }, { passive: true });
 
-// Sinkronisasi real-time 2 arah
+// Sinkronisasi real-time 2 arah dengan flag anti-loop isSyncingFromStorage
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
   let dirty = false;
+  isSyncingFromStorage = true;
 
-  if (changes.optionsTheme) {
-    applyTheme(changes.optionsTheme.newValue || 'light', false);
-  }
-  if (changes.savedMacro) {
-    const val = changes.savedMacro.newValue;
-    if (val && Array.isArray(val.sequence) && val.sequence.length > 0) {
-      loadedSequence = val.sequence;
-      loadedFileName = val.fileName || "macro.pmr";
-    } else {
-      loadedSequence = null;
-      loadedFileName = "";
+  try {
+    if (changes.optionsTheme) {
+      applyTheme(changes.optionsTheme.newValue || 'light', false);
     }
-    dirty = true;
-  }
-  if (changes.randomMode) {
-    randomMode = changes.randomMode.newValue || "off";
-    dirty = true;
-  }
-  if (changes.randomRange) {
-    randomRange = sanitizeRandomRange(changes.randomRange.newValue);
-    dirty = true;
-  }
-  if (changes.typingSpeedMs) {
-    typingSpeedMs = sanitizeSpeedMs(changes.typingSpeedMs.newValue);
-    dirty = true;
-  }
-  if (changes.rowCount) {
-    rowCount = sanitizeRowCount(changes.rowCount.newValue);
-    dirty = true;
-  }
-  if (changes.activePreset) {
-    activePreset = changes.activePreset.newValue || "";
-    dirty = true;
-  }
-  if (changes.headerMeta) {
-    headerMeta = Array.isArray(changes.headerMeta.newValue) ? changes.headerMeta.newValue : [];
-    dirty = true;
-  }
-  if (changes.selectedCellsByPreset) {
-    const nextByPreset = changes.selectedCellsByPreset.newValue;
-    selectedCellsByPreset = (nextByPreset && typeof nextByPreset === 'object')
-      ? { ...nextByPreset }
-      : {};
-    selectedCellIndices = resolveSelectedForPreset(selectedCellsByPreset, selectedCellIndices, activePreset);
-    dirty = true;
-  } else if (changes.selectedCellIndices) {
-    selectedCellIndices = Array.isArray(changes.selectedCellIndices.newValue)
-      ? changes.selectedCellIndices.newValue
-      : [];
-    selectedCellsByPreset[getPresetStorageKey(activePreset)] = selectedCellIndices.slice();
-    dirty = true;
-  } else if (changes.activePreset) {
-    selectedCellIndices = resolveSelectedForPreset(selectedCellsByPreset, [], activePreset);
-  }
-  if (changes.macroRunning) {
-    isMacroRunning = Boolean(changes.macroRunning.newValue);
-    dirty = true;
-  }
+    if (changes.savedMacro) {
+      const val = changes.savedMacro.newValue;
+      if (val && Array.isArray(val.sequence) && val.sequence.length > 0) {
+        loadedSequence = val.sequence;
+        loadedFileName = val.fileName || "macro.pmr";
+      } else {
+        loadedSequence = null;
+        loadedFileName = "";
+      }
+      dirty = true;
+    }
+    if (changes.macrosByPreset) {
+      const val = changes.macrosByPreset.newValue;
+      macrosByPreset = (val && typeof val === 'object') ? { ...val } : {};
+    }
+    if (changes.fileSourceType) {
+      fileSourceType = changes.fileSourceType.newValue === 'custom' ? 'custom' : 'preset';
+      dirty = true;
+    }
+    if (changes.randomMode) {
+      randomMode = changes.randomMode.newValue || "off";
+      dirty = true;
+    }
+    if (changes.randomRange) {
+      randomRange = sanitizeRandomRange(changes.randomRange.newValue);
+      dirty = true;
+    }
+    if (changes.cellRandomRanges) {
+      const val = changes.cellRandomRanges.newValue;
+      cellRandomRanges = (val && typeof val === 'object') ? { ...val } : {};
+      dirty = true;
+    }
+    if (changes.typingSpeedMs) {
+      typingSpeedMs = sanitizeSpeedMs(changes.typingSpeedMs.newValue);
+      dirty = true;
+    }
+    if (changes.rowCount) {
+      rowCount = sanitizeRowCount(changes.rowCount.newValue);
+      dirty = true;
+    }
+    if (changes.activePreset) {
+      activePreset = changes.activePreset.newValue || "";
+      dirty = true;
+    }
+    if (changes.headerMeta) {
+      headerMeta = Array.isArray(changes.headerMeta.newValue) ? changes.headerMeta.newValue : [];
+      dirty = true;
+    }
+    if (changes.selectedCellsByPreset) {
+      const nextByPreset = changes.selectedCellsByPreset.newValue;
+      selectedCellsByPreset = (nextByPreset && typeof nextByPreset === 'object')
+        ? { ...nextByPreset }
+        : {};
+      selectedCellIndices = resolveSelectedForPreset(selectedCellsByPreset, selectedCellIndices, activePreset);
+      dirty = true;
+    } else if (changes.selectedCellIndices) {
+      selectedCellIndices = Array.isArray(changes.selectedCellIndices.newValue)
+        ? changes.selectedCellIndices.newValue
+        : [];
+      selectedCellsByPreset[getPresetStorageKey(activePreset)] = selectedCellIndices.slice();
+      dirty = true;
+    } else if (changes.activePreset) {
+      selectedCellIndices = resolveSelectedForPreset(selectedCellsByPreset, [], activePreset);
+    }
+    if (changes.macroRunning) {
+      isMacroRunning = Boolean(changes.macroRunning.newValue);
+      dirty = true;
+    }
 
-  if (dirty) {
-    updateUIState();
+    if (dirty) {
+      updateUIState();
+    }
+  } finally {
+    isSyncingFromStorage = false;
   }
 });
 
@@ -541,18 +709,49 @@ if (themeToggleBtn) {
 }
 
 if (fileLabel) {
+  fileLabel.addEventListener('click', (e) => {
+    e.preventDefault();
+    openImportMiniWindow();
+  });
+
   fileLabel.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      if (!fileLabel.classList.contains('disabled')) {
-        fileInput.click();
-      }
+      openImportMiniWindow();
     }
+  });
+
+  ['dragenter', 'dragover'].forEach((evtName) => {
+    fileLabel.addEventListener(evtName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!fileLabel.classList.contains('disabled')) {
+        fileLabel.classList.add('is-dragover');
+      }
+    });
+  });
+
+  ['dragleave', 'dragend'].forEach((evtName) => {
+    fileLabel.addEventListener(evtName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      fileLabel.classList.remove('is-dragover');
+    });
+  });
+
+  fileLabel.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    fileLabel.classList.remove('is-dragover');
+    if (fileLabel.classList.contains('disabled')) return;
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    handleDroppedFile(file);
   });
 }
 
 randModeButtons.forEach(btn => {
   btn.addEventListener('click', async () => {
+    if (isSyncingFromStorage) return;
     const nextMode = btn.dataset.randMode || 'off';
     randomMode = nextMode;
     const totalCells = loadedSequence ? groupSequenceIntoCells(loadedSequence).length : undefined;
@@ -567,6 +766,7 @@ randModeButtons.forEach(btn => {
 
 randRangeButtons.forEach(btn => {
   btn.addEventListener('click', async () => {
+    if (isSyncingFromStorage) return;
     randomRange = sanitizeRandomRange(btn.dataset.randRange);
     syncRandomRangePills();
     await chrome.storage.local.set({ randomRange });
@@ -575,6 +775,7 @@ randRangeButtons.forEach(btn => {
 
 speedButtons.forEach(btn => {
   btn.addEventListener('click', async () => {
+    if (isSyncingFromStorage) return;
     typingSpeedMs = sanitizeSpeedMs(btn.dataset.speed);
     syncSpeedPills();
     await chrome.storage.local.set({ typingSpeedMs });
@@ -582,6 +783,7 @@ speedButtons.forEach(btn => {
 });
 
 async function commitRowCount(nextVal) {
+  if (isSyncingFromStorage) return;
   rowCount = sanitizeRowCount(nextVal);
   syncRowCountStepper();
   await chrome.storage.local.set({ rowCount });
@@ -613,93 +815,6 @@ openSettingsBtn.addEventListener('click', () => {
   window.close();
 });
 
-fileInput.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = async (event) => {
-    try {
-      const rawData = JSON.parse(event.target.result);
-      loadedSequence = parsePMRData(rawData);
-      loadedFileName = file.name;
-
-      if (loadedSequence.length === 0) {
-        throw new Error("Tidak ada keystroke valid ditemukan");
-      }
-
-      hidePopupInlineAlert();
-
-      const existing = await chrome.storage.local.get(['selectedCellsByPreset', 'selectedCellIndices', 'activePreset']);
-      const existingByPreset = (existing.selectedCellsByPreset && typeof existing.selectedCellsByPreset === 'object')
-        ? { ...existing.selectedCellsByPreset }
-        : {};
-
-      if (
-        Object.keys(existingByPreset).length === 0 &&
-        Array.isArray(existing.selectedCellIndices) &&
-        existing.selectedCellIndices.length > 0
-      ) {
-        existingByPreset[getPresetStorageKey(existing.activePreset)] = existing.selectedCellIndices.slice();
-      }
-
-      const totalCells = groupSequenceIntoCells(loadedSequence).length;
-      const detected = detectOperatorPreset(loadedFileName, totalCells);
-      const targetPresetKey = getPresetStorageKey(detected);
-      const restoredForPreset = Array.isArray(existingByPreset[targetPresetKey])
-        ? existingByPreset[targetPresetKey].filter(idx => idx >= 0 && idx < totalCells)
-        : [];
-
-      selectedCellsByPreset = existingByPreset;
-      selectedCellIndices = restoredForPreset;
-      activePreset = detected;
-
-      const storagePayload = {
-        savedMacro: {
-          fileName: loadedFileName,
-          sequence: loadedSequence
-        },
-        selectedCellsByPreset,
-        selectedCellIndices,
-        macroRunning: false
-      };
-
-      if (detected) {
-        const meta = await fetchBuiltInPreset(detected);
-        if (meta && meta.length > 0) {
-          headerMeta = meta;
-          storagePayload.headerMeta = meta;
-          storagePayload.activePreset = detected;
-        } else {
-          headerMeta = [];
-          activePreset = "";
-          storagePayload.headerMeta = [];
-          storagePayload.activePreset = "";
-        }
-      } else {
-        headerMeta = [];
-        storagePayload.headerMeta = [];
-        storagePayload.activePreset = "";
-      }
-
-      isMacroRunning = false;
-      await chrome.storage.local.set(storagePayload);
-      await refreshActiveTabContext(true);
-    } catch (err) {
-      loadedSequence = null;
-      loadedFileName = "";
-      isMacroRunning = false;
-      setStatusContent(renderIcon('xCircle', { className: 'icon-rose', size: 15 }), 'Format .pmr / .json tidak valid!', 'error');
-      showPopupInlineAlert('File .pmr / .json rusak atau tidak berisi keystroke yang valid.', 'error');
-      renderPresetBadge(0, null);
-      toggleBtn.disabled = true;
-    } finally {
-      fileInput.value = '';
-    }
-  };
-  reader.readAsText(file);
-});
-
 toggleBtn.addEventListener('click', async () => {
   if (!loadedSequence || loadedSequence.length === 0) return;
 
@@ -726,6 +841,7 @@ toggleBtn.addEventListener('click', async () => {
       'selectedCellsByPreset',
       'selectedCellIndices',
       'activePreset',
+      'fileSourceType',
       'headerMeta',
       'randomMode',
       'randomRange',
@@ -733,6 +849,7 @@ toggleBtn.addEventListener('click', async () => {
       'rowCount'
     ]);
     const latestPreset = typeof latest.activePreset === 'string' ? latest.activePreset : activePreset;
+    const latestSourceType = latest.fileSourceType === 'custom' ? 'custom' : 'preset';
     const latestByPreset = (latest.selectedCellsByPreset && typeof latest.selectedCellsByPreset === 'object')
       ? latest.selectedCellsByPreset
       : selectedCellsByPreset;
@@ -743,6 +860,7 @@ toggleBtn.addEventListener('click', async () => {
     const activeRowCount = sanitizeRowCount(rowCountInput ? rowCountInput.value : (latest.rowCount ?? rowCount));
 
     activePreset = latestPreset;
+    fileSourceType = latestSourceType;
     const cells = groupSequenceIntoCells(loadedSequence);
 
     // Validasi ulang konteks halaman sebelum START_MACRO (Hard-lock guard)
@@ -790,6 +908,7 @@ toggleBtn.addEventListener('click', async () => {
       randomMode: latestMode,
       randomRange: latestRange,
       activePreset: latestPreset,
+      fileSourceType: latestSourceType,
       expectedCellCount: cells.length,
       selectedIndices: activeIndices,
       sequence: sequenceToRun

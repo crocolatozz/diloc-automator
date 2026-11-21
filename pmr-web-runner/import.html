@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <title>Import File .PMR / .JSON — PMR Web Runner</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #0b1120;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 16px 18px 12px;
+      gap: 12px;
+    }
+
+    .import-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #1f2b3e;
+    }
+
+    .import-title {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #f8fafc;
+      margin: 0;
+    }
+
+    .import-badge {
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 99px;
+      background: rgba(16, 185, 129, 0.14);
+      border: 1px solid rgba(52, 211, 153, 0.45);
+      color: #34d399;
+    }
+
+    .svg-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      vertical-align: middle;
+    }
+
+    .icon-emerald { color: #34d399; }
+    .icon-rose { color: #fb7185; }
+
+    .drop-zone {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 22px 16px;
+      background: #111827;
+      border: 2px dashed #475569;
+      border-radius: 12px;
+      cursor: pointer;
+      text-align: center;
+      transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.is-dragover {
+      border-color: #34d399;
+      background: rgba(16, 185, 129, 0.1);
+    }
+
+    .drop-zone:focus-visible {
+      outline: 2.5px solid #38bdf8;
+      outline-offset: 2px;
+    }
+
+    .drop-icon-wrap {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(16, 185, 129, 0.14);
+      border: 1px solid rgba(52, 211, 153, 0.35);
+      color: #34d399;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .drop-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #f1f5f9;
+    }
+
+    .drop-sub {
+      font-size: 11.5px;
+      color: #94a3b8;
+      line-height: 1.45;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .import-status {
+      min-height: 28px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 11.5px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: #111827;
+      border: 1px solid #1f2b3e;
+      color: #94a3b8;
+    }
+
+    .import-status.is-ok {
+      background: rgba(22, 163, 74, 0.16);
+      border-color: rgba(74, 222, 128, 0.45);
+      color: #86efac;
+    }
+
+    .import-status.is-error {
+      background: rgba(220, 38, 38, 0.18);
+      border-color: rgba(248, 113, 113, 0.5);
+      color: #fecaca;
+    }
+
+    .footer-credit {
+      text-align: center;
+      font-size: 10px;
+      color: #64748b;
+      letter-spacing: 0.2px;
+    }
+  </style>
+</head>
+<body>
+  <header class="import-header">
+    <h1 class="import-title">
+      <span data-icon="folder" data-icon-class="icon-emerald" data-icon-size="16"></span>
+      <span>PMR Web Runner — Import</span>
+    </h1>
+    <span class="import-badge">.PMR / .JSON</span>
+  </header>
+
+  <label for="importFileInput" id="dropZone" class="drop-zone" tabindex="0" aria-label="Pilih atau Drop file .pmr atau .json">
+    <span class="drop-icon-wrap">
+      <span data-icon="upload" data-icon-size="18"></span>
+    </span>
+    <span class="drop-title">Klik untuk Pilih File atau Drag &amp; Drop</span>
+    <span class="drop-sub">Mendukung format log mentah <b>.pmr</b> (PyMacroRecord) dan <b>.json</b> (PMR Editor)</span>
+  </label>
+  <input type="file" id="importFileInput" accept=".pmr,.json" />
+
+  <div id="importStatus" class="import-status" role="status" aria-live="polite">
+    <span>Pilih file .pmr / .json dari komputer Anda</span>
+  </div>
+
+  <div class="footer-credit">© 2026 — Developed by FIKRI</div>
+
+  <script src="icons.js"></script>
+  <script src="randomizer.js"></script>
+  <script src="import.js"></script>
+</body>
+</html>

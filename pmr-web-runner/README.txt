@@ -1,5 +1,5 @@
 ====================================================
-PMR WEB RUNNER v1.8.0 — BROWSER EXTENSION
+PMR WEB RUNNER v1.9.0 — BROWSER EXTENSION
 ====================================================
 
 Cara Install / Update (Load Unpacked):
@@ -10,9 +10,10 @@ Cara Install / Update (Load Unpacked):
 3. Aktifkan toggle "Developer mode" (Mode pengembang) di pojok kanan atas.
 4. Klik tombol "Load unpacked" (Muat yang belum dibuka kemasannya) dan pilih folder hasil ekstrak (atau klik ikon Reload jika menimpa folder lama).
 
-Pembaruan v1.8.0 (Minor Update):
-- Kalibrasi kecepatan baru (Santai 600ms, Normal 400ms default, Satset 200ms) tanpa label "ms" di tombol pil, ikon Speedometer, ikon Dadu oranye (#fb923c), dan migrasi storage < 200ms.
-- Pengaman lintas operator DILOC (/elogsheet/160-162 & <h5> Op. Lap 1-3) dan hard-lock tombol Play saat preset atau jumlah kolom tidak cocok.
-- Pre-scan sel terisi dengan modal konfirmasi timpa berbasis Shadow DOM (ikon SVG, ESC/Enter), Smart Autosave Sync (Submit for Approval / Menyimpan...), serta kunci lebar kolom tabel Setting (165px & 145px).
+Pembaruan v1.9.0 (Minor Update):
+- Sinkronisasi real-time skema penyimpanan terpadu antara Popup, Options, dan Mini Window Import (chrome.storage.onChanged + flag pengaman isSyncingFromStorage).
+- Upload file via Mini Window (import.html + import.js, patuh CSP MV3) saat kotak upload diklik, serta Drag & Drop langsung di kotak upload Popup.
+- Auto-Switch preset bawaan sesuai tab DILOC aktif (badge hijau "Auto-sync: Op. Lap X") dan tombol Quick-Switch 1-klik di dalam badge merah saat memakai file custom.
+- Mesin hybrid input + select (Op. 1: 167 sel, Op. 2: 51 sel, Op. 3: 44 sel), pengabaian kolom display <span> & sel disabled/readonly (seperti #25 Op. 3 di luar 06:00/14:00/22:00), serta dukungan file custom 43 sel aktif.
 
 © 2026 — Developed by FIKRI

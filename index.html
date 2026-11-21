@@ -780,6 +780,75 @@
       color: var(--text-primary);
     }
 
+    /* Mini Window Modal Overlay (chrome.windows.create mock) */
+    .mini-window-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 9000;
+      background: rgba(2, 6, 23, 0.72);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .mini-window-backdrop.is-hidden {
+      display: none;
+    }
+
+    .mini-window-shell {
+      width: 420px;
+      max-width: 100%;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      background-color: #0f172a;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .mini-window-bar {
+      height: 36px;
+      padding: 0 12px;
+      background-color: #1e293b;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .mini-window-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+
+    .mini-window-close {
+      border: 1px solid #475569;
+      background: #0f172a;
+      color: #cbd5e1;
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .mini-window-close:hover {
+      background: #334155;
+      color: #ffffff;
+    }
+
+    .mini-window-iframe {
+      width: 100%;
+      height: 320px;
+      border: 0;
+      display: block;
+      background-color: #0f172a;
+    }
+
     @media (max-width: 980px) {
       .app-shell {
         height: auto;
@@ -839,6 +908,7 @@
           <span class="dummy-label">Inject Dummy .pmr:</span>
           <button id="inject-dummy-167" type="button" class="btn btn-sm">Dummy 167 Sel</button>
           <button id="inject-dummy-51" type="button" class="btn btn-sm">Dummy 51 Sel</button>
+          <button id="inject-dummy-44" type="button" class="btn btn-sm">Dummy 44 Sel</button>
         </div>
 
         <button id="reload-btn" type="button" class="btn btn-primary btn-sm">Muat Ulang</button>
@@ -919,7 +989,7 @@
                   <select id="target-operator-select" class="select-sm" aria-label="Pilih Operator Grid DILOC">
                     <option value="operator1">Operator 1 (167 kolom)</option>
                     <option value="operator2">Operator 2 (51 kolom)</option>
-                    <option value="operator3">Operator 3 (45 kolom)</option>
+                    <option value="operator3">Operator 3 (44 kolom)</option>
                   </select>
                   <button id="target-clear-btn" type="button" class="btn btn-sm">Clear Tabel</button>
                 </div>
@@ -1010,6 +1080,17 @@
     </main>
   </div>
 
+  <!-- Mini Window Modal (chrome.windows.create mock) -->
+  <div id="mini-window-backdrop" class="mini-window-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="mini-window-title">
+    <div class="mini-window-shell">
+      <div class="mini-window-bar">
+        <span id="mini-window-title" class="mini-window-title">Import File — PMR Web Runner</span>
+        <button id="mini-window-close" type="button" class="mini-window-close">Tutup</button>
+      </div>
+      <iframe id="mini-window-frame" class="mini-window-iframe" title="Mini Window Import PMR"></iframe>
+    </div>
+  </div>
+
   <script>
     (function () {
       'use strict';
@@ -1018,19 +1099,34 @@
       const OPERATOR_COLUMN_COUNTS = {
         operator1: 167,
         operator2: 51,
-        operator3: 45
+        operator3: 44
       };
 
-      const MOCK_TAB = {
-        id: 1,
-        index: 0,
-        windowId: 1,
-        active: true,
-        highlighted: true,
-        status: 'complete',
-        title: 'DILOC Logsheet Simulator',
-        url: 'https://localhost/diloc-logsheet'
+      const SELECT_PARAM_INDICES = {
+        operator1: [7, 8, 21, 78, 145, 147],
+        operator2: [25, 36],
+        operator3: [2, 16, 26, 30, 42]
       };
+
+      const OPERATOR_ELOGSHEET_ID = {
+        operator1: '160',
+        operator2: '161',
+        operator3: '162'
+      };
+
+      function getCurrentMockTab() {
+        const eid = OPERATOR_ELOGSHEET_ID[state.targetOperator] || '160';
+        return {
+          id: 1,
+          index: 0,
+          windowId: 1,
+          active: true,
+          highlighted: true,
+          status: 'complete',
+          title: 'E-LOGSHEET FIELD - DILOC Simulator',
+          url: 'https://diloc.local/elogsheet/' + eid
+        };
+      }
 
       const state = {
         folder: FIXED_FOLDER,
@@ -1057,6 +1153,12 @@
 
       const elInjectDummy167 = document.getElementById('inject-dummy-167');
       const elInjectDummy51 = document.getElementById('inject-dummy-51');
+      const elInjectDummy44 = document.getElementById('inject-dummy-44');
+
+      const elMiniBackdrop = document.getElementById('mini-window-backdrop');
+      const elMiniTitle = document.getElementById('mini-window-title');
+      const elMiniFrame = document.getElementById('mini-window-frame');
+      const elMiniClose = document.getElementById('mini-window-close');
 
       const elPopupFrame = document.getElementById('popup-frame');
       const elOptionsFrame = document.getElementById('options-frame');
@@ -1518,7 +1620,7 @@
                 return state.manifest ? cloneVal(state.manifest) : {
                   manifest_version: 3,
                   name: folder,
-                  version: '1.8.0'
+                  version: '1.9.0'
                 };
               },
               openOptionsPage: function (callback) {
@@ -1544,6 +1646,17 @@
               onChanged: storageOnChanged
             },
 
+            windows: {
+              create: function (createData, callback) {
+                return wrapAsync(() => {
+                  const rawUrl = createData && createData.url ? String(createData.url) : '';
+                  addLog('tabs', 'windows.create', 'Membuka Mini Window dari ' + contextType, { url: rawUrl });
+                  openMiniWindowOverlay(rawUrl);
+                  return { id: 99, focused: true, type: 'popup' };
+                }, callback);
+              }
+            },
+
             tabs: {
               query: function (queryInfo, callback) {
                 if (typeof queryInfo === 'function') {
@@ -1551,7 +1664,7 @@
                   queryInfo = {};
                 }
                 return wrapAsync(() => {
-                  return [{ ...MOCK_TAB }];
+                  return [getCurrentMockTab()];
                 }, callback);
               },
 
@@ -1571,7 +1684,7 @@
                     'Mengirim ' + ((message && message.action) || 'pesan') + ' ke DILOC Target Tab #' + tabId + ' dari ' + contextType,
                     summaryPayload
                   );
-                  const sender = { id: extId, origin: contextType, tab: { ...MOCK_TAB } };
+                  const sender = { id: extId, origin: contextType, tab: getCurrentMockTab() };
                   const res = dispatchTargetRuntimeMessage(folder, message, sender);
                   return res.responseSent ? res.lastResponse : { ok: true, forwarded: true };
                 }, responseCallback);
@@ -1620,13 +1733,13 @@
         if (state.presetCache[operatorKey]) {
           return state.presetCache[operatorKey];
         }
-        const expectedCount = OPERATOR_COLUMN_COUNTS[operatorKey] || 45;
+        const expectedCount = OPERATOR_COLUMN_COUNTS[operatorKey] || 44;
         try {
           const res = await fetch('./' + FIXED_FOLDER + '/' + operatorKey + '.json?_ts=' + Date.now(), { cache: 'no-store' });
           if (!res.ok) throw new Error('HTTP ' + res.status);
           const raw = await res.json();
           if (Array.isArray(raw) && raw.length > 0) {
-            state.presetCache[operatorKey] = raw.map((item, idx) => ({
+            state.presetCache[operatorKey] = raw.slice(0, expectedCount).map((item, idx) => ({
               index: idx,
               equipment: String(item.equipment || '-'),
               tag: String(item.tag || 'Col #' + (idx + 1)),
@@ -1653,7 +1766,7 @@
         return fallback;
       }
 
-      // Build DILOC 4-row x N-col HTML with content.js injected
+      // Build DILOC 4-row x N-col hybrid (input + select + non-form display span) HTML with content.js injected
       function buildDilocTargetHtml(operatorKey, columns) {
         const baseHref = new URL('./' + FIXED_FOLDER + '/', window.location.href).href;
         const shimCode =
@@ -1664,31 +1777,82 @@
             '}' +
           '})();';
 
-        const headerCells = columns.map((col, idx) => {
+        const selectSet = new Set(SELECT_PARAM_INDICES[operatorKey] || []);
+        const displayAfter1Based = operatorKey === 'operator2'
+          ? new Set([12, 30])
+          : (operatorKey === 'operator3' ? new Set([20]) : new Set());
+
+        const headerParts = [];
+        columns.forEach((col, idx) => {
+          const oneBased = idx + 1;
+          const isSelectCol = selectSet.has(oneBased);
+          const typeChip = isSelectCol ? ' <span class="u">SEL</span>' : '';
           const unitBadge = col.unit && col.unit !== '-' ? ' <span class="u">' + escapeHtml(col.unit) + '</span>' : '';
-          return (
+          headerParts.push(
             '<th title="' + escapeHtml(col.equipment + ' — ' + col.tag + ' (' + col.unit + ')') + '">' +
-              '<div class="col-num">#' + (idx + 1) + '</div>' +
+              '<div class="col-num">#' + oneBased + typeChip + '</div>' +
               '<div class="col-tag">' + escapeHtml(col.tag) + '</div>' +
               '<div class="col-eq">' + escapeHtml(col.equipment) + unitBadge + '</div>' +
             '</th>'
           );
-        }).join('');
+          if (displayAfter1Based.has(oneBased)) {
+            headerParts.push(
+              '<th class="th-display" title="Kolom Display / Rumus (Non-input)">' +
+                '<div class="col-num">CALC</div>' +
+                '<div class="col-tag">Display</div>' +
+                '<div class="col-eq">Read-only</div>' +
+              '</th>'
+            );
+          }
+        });
+        const headerCells = headerParts.join('');
+
+        const rowTimeLabels = operatorKey === 'operator3'
+          ? ['06:00', '07:00', '08:00', '09:00']
+          : ['Jam 01', 'Jam 02', 'Jam 03', 'Jam 04'];
 
         let rowsHtml = '';
         for (let r = 1; r <= 4; r++) {
+          const timeText = rowTimeLabels[r - 1];
           const isFutureRow = (r === 4);
+          const isSpecialHourOp3 = (operatorKey === 'operator3') && (timeText === '06:00' || timeText === '14:00' || timeText === '22:00');
           const rowLabelClass = isFutureRow
             ? 'row-label sticky-col col-waktu'
             : 'row-label sticky-col col-waktu active-shift-time';
-          let tds = '<td class="' + rowLabelClass + '">Jam 0' + r + '</td>';
+          let tds = '<td class="' + rowLabelClass + '">' + escapeHtml(timeText) + '</td>';
+
           for (let c = 0; c < columns.length; c++) {
-            const tdAttrs = isFutureRow ? ' class="data-cell cell-locked" title="Jam belum tiba"' : ' class="data-cell"';
-            const inputAttrs = isFutureRow ? ' disabled title="Jam belum tiba"' : '';
-            tds +=
-              '<td' + tdAttrs + '>' +
-                '<input type="text" class="cell-input diloc-cell-input"' + inputAttrs + ' data-row="' + r + '" data-col="' + (c + 1) + '" autocomplete="off" aria-label="Jam 0' + r + ' ' + escapeHtml(columns[c].tag) + '" />' +
-              '</td>';
+            const oneBased = c + 1;
+            const isOp3Inactive25 = (operatorKey === 'operator3' && oneBased === 25 && !isSpecialHourOp3 && !isFutureRow);
+            const isLockedCell = isFutureRow || isOp3Inactive25;
+            const lockTitle = isFutureRow
+              ? ' title="Jam belum tiba"'
+              : (isOp3Inactive25 ? ' title="Hanya aktif jam 06:00 / 14:00 / 22:00"' : '');
+            const tdAttrs = ' class="data-cell' + (isLockedCell ? ' cell-locked' : '') + '"' + lockTitle;
+            const controlAttrs = isLockedCell ? ' disabled' + lockTitle : '';
+
+            if (selectSet.has(oneBased)) {
+              tds +=
+                '<td' + tdAttrs + '>' +
+                  '<select class="cell-input diloc-cell-input"' + controlAttrs + ' data-row="' + r + '" data-col="' + oneBased + '" aria-label="' + escapeHtml(timeText + ' ' + columns[c].tag) + '">' +
+                    '<option value="">-</option>' +
+                    '<option value="AUTO">AUTO</option>' +
+                    '<option value="MANUAL">MANUAL</option>' +
+                    '<option value="ON">ON</option>' +
+                    '<option value="OFF">OFF</option>' +
+                    '<option value="RUN">RUN</option>' +
+                  '</select>' +
+                '</td>';
+            } else {
+              tds +=
+                '<td' + tdAttrs + '>' +
+                  '<input type="text" class="cell-input diloc-cell-input"' + controlAttrs + ' data-row="' + r + '" data-col="' + oneBased + '" autocomplete="off" aria-label="' + escapeHtml(timeText + ' ' + columns[c].tag) + '" />' +
+                '</td>';
+            }
+
+            if (displayAfter1Based.has(oneBased)) {
+              tds += '<td class="display-cell"><span class="disp-val">CALC</span></td>';
+            }
           }
           rowsHtml += '<tr>' + tds + '</tr>';
         }
@@ -1752,6 +1916,8 @@
               '.diloc-cell-input{width:88px;height:28px;padding:0 6px;border:1px solid #cbd5e1;border-radius:4px;font-family:ui-monospace,monospace;font-size:12px;color:#0f172a;background:#ffffff;}' +
               '.diloc-cell-input:disabled{background:#e2e8f0;color:#64748b;cursor:not-allowed;}' +
               '.diloc-cell-input:focus{outline:2px solid #2563eb;border-color:#2563eb;background:#eff6ff;}' +
+              '.display-cell{background:#f8fafc;color:#64748b;text-align:center;font-family:ui-monospace,monospace;font-size:10px;}' +
+              '.th-display{background:#e2e8f0 !important;min-width:66px !important;}' +
             '</style>' +
           '</head>' +
           '<body>' +
@@ -1760,7 +1926,7 @@
               '<button type="button" id="diloc-submit-btn" class="btn btn-primary btn-sm">Submit for Approval</button>' +
             '</div>' +
             '<div class="grid-wrap">' +
-              '<table>' +
+              '<table data-pmr-sandbox="true">' +
                 '<thead><tr><th class="sticky-corner">' + escapeHtml(shortOpLabel) + '</th>' + headerCells + '</tr></thead>' +
                 '<tbody>' + rowsHtml + '</tbody>' +
               '</table>' +
@@ -1893,6 +2059,38 @@
         }
       }
 
+      function closeMiniWindowOverlay() {
+        try {
+          if (elMiniFrame && elMiniFrame.contentWindow) {
+            pruneWindowListeners(elMiniFrame.contentWindow);
+          }
+        } catch (err) {}
+        elMiniFrame.srcdoc = '';
+        elMiniBackdrop.classList.add('is-hidden');
+      }
+
+      async function openMiniWindowOverlay(rawUrl) {
+        const cleanName = String(rawUrl || 'import.html').split('/').pop().split('?')[0] || 'import.html';
+        const targetUrl = './' + FIXED_FOLDER + '/' + cleanName;
+        elMiniTitle.textContent = 'Import File — PMR Web Runner';
+        elMiniBackdrop.classList.remove('is-hidden');
+        try {
+          const res = await fetch(targetUrl + '?_ts=' + Date.now(), { cache: 'no-store' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const html = await res.text();
+          const closeHookScript =
+            '<script>(function(){window.close=function(){try{if(window.parent&&window.parent.__PMR_CLOSE_MINI_WIN__){window.parent.__PMR_CLOSE_MINI_WIN__();}}catch(e){}};})();<\/script>';
+          let injected = buildInjectedHtml(html, FIXED_FOLDER, 'import');
+          injected = injected.replace('</head>', closeHookScript + '</head>');
+          elMiniFrame.srcdoc = injected;
+        } catch (err) {
+          addLog('error', 'import', 'Gagal memuat Mini Window ' + cleanName + ': ' + err.message);
+          closeMiniWindowOverlay();
+        }
+      }
+
+      window.__PMR_CLOSE_MINI_WIN__ = closeMiniWindowOverlay;
+
       async function loadExtension() {
         const folder = FIXED_FOLDER;
         elPopupWinPath.textContent = './' + folder + '/popup.html';
@@ -1937,14 +2135,22 @@
           presetKey = 'operator2';
           fileName = 'dummy_operator2_51.pmr';
           cellCount = 51;
+        } else if (modeType === '44') {
+          presetKey = 'operator3';
+          fileName = 'dummy_operator3_44.pmr';
+          cellCount = 44;
         }
 
+        const selectSet = new Set(SELECT_PARAM_INDICES[presetKey] || []);
+        const selectDummyPool = ['AUTO', 'ON', 'RUN', 'MANUAL'];
         const columns = await fetchOperatorColumns(presetKey);
         const values = [];
 
         for (let i = 0; i < cellCount; i++) {
           const col = columns[i];
-          if (col && col.type === 'text') {
+          if (selectSet.has(i + 1)) {
+            values.push(selectDummyPool[i % selectDummyPool.length]);
+          } else if (col && col.type === 'text') {
             values.push(i % 2 === 0 ? 'A' : 'ON');
           } else if (col && col.unit === '%') {
             values.push(i % 9 === 0 ? '100' : String(45 + (i % 50)) + '.0');
@@ -1960,9 +2166,21 @@
         const restoredSelected = Array.isArray(existingByPreset[presetKey])
           ? existingByPreset[presetKey].filter((idx) => idx >= 0 && idx < cellCount)
           : [];
+        const existingMacrosByPreset = (store.macrosByPreset && typeof store.macrosByPreset === 'object')
+          ? { ...store.macrosByPreset }
+          : {};
+        existingMacrosByPreset[presetKey] = {
+          fileName: fileName,
+          sequence: sequence,
+          totalCells: cellCount,
+          sourceType: 'preset',
+          updatedAt: Date.now()
+        };
 
         const nextItems = {
           savedMacro: { fileName: fileName, sequence: sequence },
+          macrosByPreset: existingMacrosByPreset,
+          fileSourceType: 'preset',
           headerMeta: headerMeta,
           activePreset: presetKey,
           selectedCellsByPreset: existingByPreset,
@@ -1994,6 +2212,20 @@
 
       elInjectDummy51.addEventListener('click', function () {
         injectDummyPreset('51');
+      });
+
+      elInjectDummy44.addEventListener('click', function () {
+        injectDummyPreset('44');
+      });
+
+      elMiniClose.addEventListener('click', function () {
+        closeMiniWindowOverlay();
+      });
+
+      elMiniBackdrop.addEventListener('click', function (e) {
+        if (e.target === elMiniBackdrop) {
+          closeMiniWindowOverlay();
+        }
       });
 
       elTargetFrame.addEventListener('load', function () {

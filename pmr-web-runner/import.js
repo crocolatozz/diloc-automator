@@ -1,0 +1,93 @@
+const dropZone = document.getElementById('dropZone');
+const importFileInput = document.getElementById('importFileInput');
+const importStatus = document.getElementById('importStatus');
+
+function setImportStatus(iconName, iconClass, text, tone) {
+  if (!importStatus) return;
+  importStatus.classList.remove('is-ok', 'is-error');
+  if (tone === 'ok') importStatus.classList.add('is-ok');
+  if (tone === 'error') importStatus.classList.add('is-error');
+
+  importStatus.innerHTML = '';
+  if (iconName) {
+    importStatus.insertAdjacentHTML('beforeend', renderIcon(iconName, { className: iconClass || '', size: 15 }));
+  }
+  const span = document.createElement('span');
+  span.textContent = text;
+  importStatus.appendChild(span);
+}
+
+function handleSelectedFile(file) {
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (event) => {
+    try {
+      const rawData = JSON.parse(event.target.result);
+      const result = await persistImportedMacroFile(file.name, rawData);
+      setImportStatus(
+        'checkCircle',
+        'icon-emerald',
+        `${file.name} dimuat (${result.totalCells} sel). Menutup jendela...`,
+        'ok'
+      );
+      setTimeout(() => {
+        window.close();
+      }, 160);
+    } catch (err) {
+      setImportStatus(
+        'xCircle',
+        'icon-rose',
+        'Format file .pmr / .json tidak valid atau tidak berisi keystroke.',
+        'error'
+      );
+    } finally {
+      if (importFileInput) importFileInput.value = '';
+    }
+  };
+  reader.readAsText(file);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  hydrateDataIcons();
+});
+
+if (importFileInput) {
+  importFileInput.addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    handleSelectedFile(file);
+  });
+}
+
+if (dropZone) {
+  dropZone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (importFileInput) importFileInput.click();
+    }
+  });
+
+  ['dragenter', 'dragover'].forEach((evtName) => {
+    dropZone.addEventListener(evtName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.add('is-dragover');
+    });
+  });
+
+  ['dragleave', 'dragend'].forEach((evtName) => {
+    dropZone.addEventListener(evtName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.remove('is-dragover');
+    });
+  });
+
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropZone.classList.remove('is-dragover');
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    handleSelectedFile(file);
+  });
+}

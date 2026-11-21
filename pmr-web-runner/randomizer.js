@@ -315,7 +315,7 @@ function groupSequenceIntoCells(sequence) {
 const PRESET_EXPECTED_COUNTS = {
   operator1: 167,
   operator2: 51,
-  operator3: 45
+  operator3: 44
 };
 
 function isPercentContext(rawValue, meta) {
@@ -501,7 +501,7 @@ function detectOperatorPreset(fileName, totalCells) {
   if (/operator[\s_-]*3|op[\s_-]*3/.test(lower)) return 'operator3';
   if (totalCells === 167) return 'operator1';
   if (totalCells === 51) return 'operator2';
-  if (totalCells === 45) return 'operator3';
+  if (totalCells === 44) return 'operator3';
   return '';
 }
 
@@ -527,5 +527,108 @@ async function fetchBuiltInPreset(presetKey) {
   const resp = await fetch(chrome.runtime.getURL(`${presetKey}.json`));
   if (!resp.ok) return null;
   const raw = await resp.json();
-  return normalizeHeaderMetadata(raw);
+  const normalized = normalizeHeaderMetadata(raw);
+  const expected = PRESET_EXPECTED_COUNTS[presetKey];
+  if (typeof expected === 'number' && normalized.length > expected) {
+    return normalized.slice(0, expected);
+  }
+  return normalized;
+}
+
+const UNIFIED_STORAGE_KEYS = [
+  'savedMacro',
+  'macrosByPreset',
+  'fileSourceType',
+  'activePreset',
+  'headerMeta',
+  'selectedCellsByPreset',
+  'selectedCellIndices',
+  'randomMode',
+  'randomRange',
+  'cellRandomRanges',
+  'typingSpeedMs',
+  'rowCount',
+  'macroRunning',
+  'optionsTheme'
+];
+
+function buildMacroRecord(fileName, sequence) {
+  const cells = groupSequenceIntoCells(sequence);
+  return {
+    fileName: String(fileName || 'macro.pmr'),
+    sequence: Array.isArray(sequence) ? sequence : [],
+    cellValues: cells.map(c => c.rawValue)
+  };
+}
+
+async function persistImportedMacroFile(fileName, rawData) {
+  const parsedSeq = parsePMRData(rawData);
+  if (parsedSeq.length === 0) {
+    throw new Error("Tidak ada keystroke valid ditemukan");
+  }
+
+  const existing = await chrome.storage.local.get([
+    'selectedCellsByPreset',
+    'selectedCellIndices',
+    'activePreset',
+    'macrosByPreset'
+  ]);
+
+  const existingByPreset = (existing.selectedCellsByPreset && typeof existing.selectedCellsByPreset === 'object')
+    ? { ...existing.selectedCellsByPreset }
+    : {};
+
+  if (
+    Object.keys(existingByPreset).length === 0 &&
+    Array.isArray(existing.selectedCellIndices) &&
+    existing.selectedCellIndices.length > 0
+  ) {
+    existingByPreset[existing.activePreset || 'custom'] = existing.selectedCellIndices.slice();
+  }
+
+  const existingMacrosByPreset = (existing.macrosByPreset && typeof existing.macrosByPreset === 'object')
+    ? { ...existing.macrosByPreset }
+    : {};
+
+  const cells = groupSequenceIntoCells(parsedSeq);
+  const totalCells = cells.length;
+  const detected = detectOperatorPreset(fileName, totalCells);
+  const macroRecord = buildMacroRecord(fileName, parsedSeq);
+
+  let resolvedPreset = '';
+  let resolvedMeta = [];
+  let fileSourceType = 'custom';
+
+  if (detected) {
+    const meta = await fetchBuiltInPreset(detected);
+    if (meta && meta.length > 0) {
+      resolvedPreset = detected;
+      resolvedMeta = meta;
+      fileSourceType = 'preset';
+      existingMacrosByPreset[detected] = macroRecord;
+    }
+  }
+
+  const targetKey = resolvedPreset || 'custom';
+  const restoredForPreset = Array.isArray(existingByPreset[targetKey])
+    ? existingByPreset[targetKey].filter(idx => idx >= 0 && idx < totalCells)
+    : [];
+
+  const storagePayload = {
+    savedMacro: macroRecord,
+    macrosByPreset: existingMacrosByPreset,
+    fileSourceType,
+    activePreset: resolvedPreset,
+    headerMeta: resolvedMeta,
+    selectedCellsByPreset: existingByPreset,
+    selectedCellIndices: restoredForPreset,
+    macroRunning: false
+  };
+
+  await chrome.storage.local.set(storagePayload);
+
+  return {
+    ...storagePayload,
+    totalCells
+  };
 }

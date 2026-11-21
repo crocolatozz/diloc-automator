@@ -46,55 +46,12 @@ function detectOperatorFromH5() {
   return '';
 }
 
-function getTableColumnCount() {
-  const rows = Array.from(document.querySelectorAll('tbody tr, table tr'));
-  for (const tr of rows) {
-    const inputs = getRowDataCellInputs(tr);
-    if (inputs.length > 0) {
-      return inputs.length;
-    }
-  }
-  return 0;
-}
-
-function inspectDilocPageContext() {
-  const urlOperator = detectOperatorFromUrl(window.location.href);
-  const h5Operator = detectOperatorFromH5();
-  const webOperator = urlOperator || h5Operator;
-  const tableColCount = getTableColumnCount();
-
-  return {
-    urlOperator,
-    h5Operator,
-    webOperator,
-    tableColCount,
-    pageUrl: window.location.href
-  };
-}
-
-function validatePageBeforeExecution(request, rowsPayload) {
-  const ctx = inspectDilocPageContext();
-  const requestedPreset = typeof request.activePreset === 'string' ? request.activePreset : '';
-  const isBuiltInPreset = Boolean(requestedPreset && PRESET_SHORT_LABELS[requestedPreset]);
-
-  if (isBuiltInPreset && ctx.webOperator && requestedPreset !== ctx.webOperator) {
-    return {
-      icon: 'shieldAlert',
-      color: '#dc2626',
-      message: `Web aktif ${PRESET_SHORT_LABELS[ctx.webOperator]}, preset masih ${PRESET_SHORT_LABELS[requestedPreset]}`
-    };
-  }
-
-  const fileColCount = Number(request.expectedCellCount) || (rowsPayload[0] ? rowsPayload[0].length : 0);
-  if (ctx.tableColCount > 0 && fileColCount > 0 && fileColCount !== ctx.tableColCount) {
-    return {
-      icon: 'warn',
-      color: '#dc2626',
-      message: `${fileColCount} sel ≠ ${ctx.tableColCount} kolom tabel web`
-    };
-  }
-
-  return null;
+function isVisibleFormControl(el) {
+  if (!el) return false;
+  if (el.tagName !== 'INPUT' && el.tagName !== 'SELECT' && el.tagName !== 'TEXTAREA') return false;
+  if (el.tagName === 'INPUT' && String(el.type || '').toLowerCase() === 'hidden') return false;
+  if (el.offsetParent === null) return false;
+  return true;
 }
 
 function isLogsheetInputElement(el) {
@@ -112,7 +69,14 @@ function isEditableElement(el) {
 
 function inspectCellLock(inputEl) {
   if (!inputEl || !document.contains(inputEl)) {
-    return { locked: true, notArrived: false, reason: 'missing' };
+    return {
+      locked: true,
+      notArrived: false,
+      permissionLocked: false,
+      cellLocked: false,
+      isDisabledOrReadOnly: true,
+      reason: 'missing'
+    };
   }
 
   const td = inputEl.closest('td.data-cell') || inputEl.closest('td, th');
@@ -120,18 +84,31 @@ function inspectCellLock(inputEl) {
   const elTitle = String(inputEl.getAttribute('title') || '').toLowerCase();
   const notArrived = tdTitle.includes('jam belum tiba') || elTitle.includes('jam belum tiba');
 
-  const hasLockedClass = Boolean(
-    (td && (td.classList.contains('cell-locked') || td.classList.contains('permission-locked'))) ||
-    inputEl.classList.contains('cell-locked') ||
+  const permissionLocked = Boolean(
+    (td && td.classList.contains('permission-locked')) ||
     inputEl.classList.contains('permission-locked')
+  );
+
+  const cellLocked = Boolean(
+    (td && td.classList.contains('cell-locked')) ||
+    inputEl.classList.contains('cell-locked')
   );
 
   const isDisabledOrReadOnly = Boolean(inputEl.disabled || inputEl.readOnly);
 
   return {
-    locked: notArrived || hasLockedClass || isDisabledOrReadOnly,
-    notArrived
+    locked: notArrived || permissionLocked || cellLocked || isDisabledOrReadOnly,
+    notArrived,
+    permissionLocked,
+    cellLocked,
+    isDisabledOrReadOnly
   };
+}
+
+function isInactiveSkippableControl(inputEl, lockStatus = null) {
+  const lock = lockStatus || inspectCellLock(inputEl);
+  if (lock.notArrived || lock.permissionLocked) return false;
+  return Boolean(lock.isDisabledOrReadOnly || lock.cellLocked);
 }
 
 function isLockedDomNode(node) {
@@ -142,7 +119,7 @@ function isLockedDomNode(node) {
     if (td.classList.contains('cell-locked') || td.classList.contains('permission-locked') || tdTitle.includes('jam belum tiba')) {
       return true;
     }
-    const innerInput = td.querySelector('input.cell-input, input:not([type="hidden"]), textarea, select');
+    const innerInput = td.querySelector('input:not([type="hidden"]), select, textarea');
     if (innerInput && (innerInput.disabled || innerInput.readOnly)) {
       return true;
     }
@@ -180,21 +157,45 @@ document.addEventListener('keydown', (e) => {
 
 function getRowDataCellInputs(tr) {
   if (!tr) return [];
-  const dilocInputs = Array.from(tr.querySelectorAll('td.data-cell input.cell-input, td.data-cell input:not([type="hidden"])'));
-  if (dilocInputs.length > 0) {
-    return dilocInputs.filter(el => el.offsetParent !== null);
+  const table = tr.closest('table');
+  const isSandboxTable = Boolean(table && table.getAttribute('data-pmr-sandbox') === 'true');
+  const tds = Array.from(tr.children).filter(el => el.tagName === 'TD');
+
+  if (tds.length === 0) return [];
+
+  let paramTds = [];
+  if (isSandboxTable) {
+    paramTds = tds.filter(td => td.classList.contains('data-cell'));
+  } else if (tds.length > 5) {
+    // Struktur DILOC asli: lewati 5 kolom metadata paling kiri (td indeks 0..4)
+    paramTds = tds.slice(5);
+  } else {
+    paramTds = tds.filter(td => (
+      !td.classList.contains('sticky-col') &&
+      !td.classList.contains('col-waktu') &&
+      !td.classList.contains('row-label')
+    ));
   }
 
-  return Array.from(tr.querySelectorAll('td input:not([type="hidden"]), td textarea, td select'))
-    .filter(el => {
-      if (el.offsetParent === null) return false;
-      const td = el.closest('td');
-      if (!td) return false;
-      if (td.classList.contains('sticky-col') || td.classList.contains('col-waktu') || td.classList.contains('row-label')) {
-        return false;
-      }
-      return true;
-    });
+  const controls = [];
+  for (const td of paramTds) {
+    // Kumpulkan input & select; abaikan kolom display/rumus <span> non-form
+    const ctrl = Array.from(td.querySelectorAll('input, select')).find(isVisibleFormControl);
+    if (ctrl) {
+      controls.push(ctrl);
+    }
+  }
+  return controls;
+}
+
+function getRowActiveDataControls(tr) {
+  return getRowDataCellInputs(tr).filter(el => !inspectCellLock(el).locked);
+}
+
+function isRowFullyLocked(tr) {
+  const inputs = getRowDataCellInputs(tr);
+  if (inputs.length === 0) return true;
+  return inputs.every(el => inspectCellLock(el).locked);
 }
 
 function getRowTimeLabel(tr) {
@@ -203,7 +204,14 @@ function getRowTimeLabel(tr) {
   if (timeCell) {
     return String(timeCell.textContent || '').trim();
   }
-  const firstTd = tr.querySelector('td');
+  const tds = Array.from(tr.children).filter(el => el.tagName === 'TD');
+  for (let i = 0; i < Math.min(5, tds.length); i++) {
+    const txt = String(tds[i].textContent || '').trim();
+    if (/^(\d{1,2}:\d{2}|jam\s*\d+)/i.test(txt)) {
+      return txt;
+    }
+  }
+  const firstTd = tds[0] || tr.querySelector('td');
   return firstTd ? String(firstTd.textContent || '').trim() : '';
 }
 
@@ -218,22 +226,29 @@ function getNextDataRow(tr) {
   return null;
 }
 
+function isControlEmpty(el) {
+  if (!el) return false;
+  return String(el.value ?? '').trim() === '';
+}
+
 function findFirstOpenEmptyRow(rows) {
   for (const tr of rows) {
     const inputs = getRowDataCellInputs(tr);
-    const firstInput = inputs[0];
-    if (!firstInput) continue;
-    const lock = inspectCellLock(firstInput);
-    if (lock.locked) continue;
-    if (String(firstInput.value ?? '').trim() === '') {
-      return { row: tr, colIdx: 0 };
+    if (inputs.length === 0) continue;
+
+    // Abaikan elemen disabled / readOnly saat mendeteksi baris kosong
+    const activeInputs = inputs.filter(el => !el.disabled && !el.readOnly && !inspectCellLock(el).locked);
+    if (activeInputs.length === 0) continue;
+
+    if (isControlEmpty(activeInputs[0])) {
+      return { row: tr, colIdx: inputs.indexOf(activeInputs[0]) };
     }
   }
   return null;
 }
 
 function findAutoDetectStartLocation() {
-  // Lapis 1 (Prioritas Utama): baris zona shift aktif (.active-shift-time) yang sel pertamanya terbuka & kosong
+  // Lapis 1 (Prioritas Utama): baris zona shift aktif (.active-shift-time) yang sel aktif pertamanya terbuka & kosong
   const activeShiftRows = Array.from(document.querySelectorAll('tr'))
     .filter(tr => tr.querySelector('.active-shift-time') && getRowDataCellInputs(tr).length > 0);
 
@@ -302,13 +317,87 @@ function resolveStartLocation() {
   return findAutoDetectStartLocation();
 }
 
+function getTableColumnCount() {
+  const rows = Array.from(document.querySelectorAll('tbody tr, table tr'));
+  for (const tr of rows) {
+    const inputs = getRowDataCellInputs(tr);
+    if (inputs.length > 0) {
+      return inputs.length;
+    }
+  }
+  return 0;
+}
+
+function getTargetRowActiveColCount() {
+  // Jika sudah ada baris target yang akan diisi, ukur jumlah sel aktifnya (misal 43 pada jam biasa Op. 3)
+  const autoOrManual = resolveStartLocation();
+  if (autoOrManual && autoOrManual.row) {
+    return getRowActiveDataControls(autoOrManual.row).length;
+  }
+
+  const rows = Array.from(document.querySelectorAll('tbody tr, table tr'));
+  for (const tr of rows) {
+    const active = getRowActiveDataControls(tr);
+    if (active.length > 0) {
+      return active.length;
+    }
+  }
+  return 0;
+}
+
+function inspectDilocPageContext() {
+  const urlOperator = detectOperatorFromUrl(window.location.href);
+  const h5Operator = detectOperatorFromH5();
+  const webOperator = urlOperator || h5Operator;
+  const tableColCount = getTableColumnCount();
+  const activeColCount = getTargetRowActiveColCount();
+
+  return {
+    urlOperator,
+    h5Operator,
+    webOperator,
+    tableColCount,
+    activeColCount,
+    pageUrl: window.location.href
+  };
+}
+
+function validatePageBeforeExecution(request, rowsPayload) {
+  const ctx = inspectDilocPageContext();
+  const requestedPreset = typeof request.activePreset === 'string' ? request.activePreset : '';
+  const isCustomSource = request.fileSourceType === 'custom';
+  const isBuiltInPreset = Boolean(!isCustomSource && requestedPreset && PRESET_SHORT_LABELS[requestedPreset]);
+
+  if (isBuiltInPreset && ctx.webOperator && requestedPreset !== ctx.webOperator) {
+    return {
+      icon: 'shieldAlert',
+      color: '#dc2626',
+      message: `Web aktif ${PRESET_SHORT_LABELS[ctx.webOperator]}, preset masih ${PRESET_SHORT_LABELS[requestedPreset]}`
+    };
+  }
+
+  const fileColCount = Number(request.expectedCellCount) || (rowsPayload[0] ? rowsPayload[0].length : 0);
+  const matchesTableTotal = ctx.tableColCount > 0 && fileColCount === ctx.tableColCount;
+  const matchesTargetActive = ctx.activeColCount > 0 && fileColCount === ctx.activeColCount;
+
+  if (ctx.tableColCount > 0 && fileColCount > 0 && !matchesTableTotal && !matchesTargetActive) {
+    return {
+      icon: 'warn',
+      color: '#dc2626',
+      message: `${fileColCount} sel ≠ ${ctx.tableColCount} kolom tabel web`
+    };
+  }
+
+  return null;
+}
+
 function preScanTargetCells(rowsPayload, startLoc) {
   if (!startLoc) return { filledCount: 0, startRowTime: '', startColNumber: 1 };
 
   if (!startLoc.row && startLoc.singleElement) {
     const el = startLoc.singleElement;
     const lock = inspectCellLock(el);
-    const hasVal = !lock.locked && String(el.value ?? '').trim() !== '';
+    const hasVal = !lock.locked && !el.disabled && !el.readOnly && String(el.value ?? '').trim() !== '';
     return {
       filledCount: hasVal ? 1 : 0,
       startRowTime: '',
@@ -329,25 +418,37 @@ function preScanTargetCells(rowsPayload, startLoc) {
     const startAbsCol = (r === 0) ? (startLoc.colIdx || 0) : 0;
 
     if (rowInputs.length === 0 || startAbsCol >= rowInputs.length) break;
+    if (r > 0 && isRowFullyLocked(currentRow)) break;
 
-    if (r > 0 && inspectCellLock(rowInputs[0]).locked) {
-      break;
-    }
+    const isDirectIndexMapping = (rowValues.length === rowInputs.length);
+    let valCursor = 0;
+    let hitHardBrake = false;
 
-    const colLimit = Math.min(rowInputs.length, rowValues.length);
-    let hitLock = false;
-    for (let absColIdx = startAbsCol; absColIdx < colLimit; absColIdx++) {
+    for (let absColIdx = startAbsCol; absColIdx < rowInputs.length; absColIdx++) {
       const targetInput = rowInputs[absColIdx];
-      if (inspectCellLock(targetInput).locked) {
-        hitLock = true;
+      const lock = inspectCellLock(targetInput);
+
+      if (lock.notArrived || lock.permissionLocked) {
+        hitHardBrake = true;
         break;
       }
+
+      // Wajib abaikan elemen disabled / readOnly (mis. #25 Op. 3 di jam biasa)
+      if (targetInput.disabled || targetInput.readOnly || isInactiveSkippableControl(targetInput, lock)) {
+        continue;
+      }
+
+      if (!isDirectIndexMapping) {
+        if (valCursor >= rowValues.length) break;
+        valCursor += 1;
+      }
+
       if (String(targetInput.value ?? '').trim() !== '') {
         filledCount += 1;
       }
     }
 
-    if (hitLock) break;
+    if (hitHardBrake) break;
     if (r < totalRows - 1) {
       currentRow = getNextDataRow(currentRow);
     }
@@ -606,7 +707,6 @@ function extractRowsPayload(request) {
     return request.rows.map(rowArr => (Array.isArray(rowArr) ? rowArr.map(v => String(v ?? '')) : []));
   }
 
-  // Fallback jika pesan hanya mengirim sequence langkah keystroke
   const seq = Array.isArray(request.sequence) ? request.sequence : [];
   if (seq.length === 0) return [];
 
@@ -691,6 +791,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       urlOperator: ctx.urlOperator,
       h5Operator: ctx.h5Operator,
       tableColCount: ctx.tableColCount,
+      activeColCount: ctx.activeColCount,
       pageUrl: ctx.pageUrl
     });
     return true;
@@ -720,9 +821,11 @@ function syncRunningState(running) {
 function setNativeValue(el, value) {
   if (!el) return;
   if (el.tagName === 'SELECT') {
+    const needle = String(value ?? '').trim().toLowerCase();
     const options = Array.from(el.options);
-    const match = options.find(opt => opt.value === value)
-      || options.find(opt => opt.text.trim().toLowerCase() === String(value).trim().toLowerCase());
+    const match =
+      options.find(opt => String(opt.value ?? '').trim().toLowerCase() === needle) ||
+      options.find(opt => String(opt.textContent ?? '').trim().toLowerCase() === needle);
     if (match) {
       el.value = match.value;
     }
@@ -819,11 +922,11 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
 
     // Jeda antarbaris 250ms agar horizontal scroll kembali ke kolom awal stabil sebelum baris baru dimulai
     if (r > 0) {
-      const firstCellLock = inspectCellLock(rowInputs[0]);
-      if (firstCellLock.locked) {
+      if (isRowFullyLocked(currentRow)) {
+        const firstLock = inspectCellLock(rowInputs[0]);
         stoppedByBrake = true;
         blockedTime = rowTimeLabel;
-        blockedNotArrived = firstCellLock.notArrived;
+        blockedNotArrived = firstLock.notArrived;
         break;
       }
       rowInputs[0].scrollIntoView({ block: 'nearest', inline: 'start' });
@@ -831,27 +934,41 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
       if (!isRunning) break;
     }
 
-    const colLimit = Math.min(rowInputs.length, rowValues.length);
+    const isDirectIndexMapping = (rowValues.length === rowInputs.length);
+    const activeTotalInRow = rowInputs.filter(el => !isInactiveSkippableControl(el)).length;
+    let sequentialCursor = 0;
     let rowTouchedAnyCell = false;
 
-    for (let absColIdx = startAbsCol; absColIdx < colLimit; absColIdx++) {
+    for (let absColIdx = startAbsCol; absColIdx < rowInputs.length; absColIdx++) {
       if (!isRunning) break;
 
       const targetInput = rowInputs[absColIdx];
-
-      // Rem otomatis SEBELUM menyentuh elemen (.focus / .click / .value) — anti pop-up DILOC
       const lockStatus = inspectCellLock(targetInput);
-      if (lockStatus.locked) {
+
+      // Rem otomatis untuk baris/sel jam belum tiba atau permission-locked
+      if (lockStatus.notArrived || lockStatus.permissionLocked) {
         stoppedByBrake = true;
         blockedTime = rowTimeLabel;
         blockedNotArrived = lockStatus.notArrived;
         break;
       }
 
-      // Gunakan indeks kolom absolut (0..N-1) untuk membaca rowValues & cek Selected Cells
+      // Lewati sel disabled/readOnly (seperti #25 Op. 3 di luar 06:00/14:00/22:00) tanpa menggeser indeks array data
+      if (targetInput.disabled || targetInput.readOnly || isInactiveSkippableControl(targetInput, lockStatus)) {
+        continue;
+      }
+
+      let cellValue;
+      if (isDirectIndexMapping) {
+        cellValue = rowValues[absColIdx];
+      } else {
+        if (sequentialCursor >= rowValues.length) break;
+        cellValue = rowValues[sequentialCursor];
+        sequentialCursor += 1;
+      }
+
       const isColSelected = selectedColSet ? selectedColSet.has(absColIdx) : false;
-      const cellValue = rowValues[absColIdx];
-      if (runMeta.randomMode === 'selected' && selectedColSet && !isColSelected && rowsPayload[0] && absColIdx < rowsPayload[0].length && cellValue === undefined) {
+      if (runMeta.randomMode === 'selected' && selectedColSet && !isColSelected && cellValue === undefined) {
         continue;
       }
 
@@ -862,13 +979,17 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
       rowTouchedAnyCell = true;
 
       const isInitialFirstCell = (r === 0 && absColIdx === startAbsCol);
-      if (!isInitialFirstCell && ((absColIdx - startAbsCol) % 2 === 0 || absColIdx === colLimit - 1)) {
+      const displayTotal = isDirectIndexMapping ? rowInputs.length : Math.min(activeTotalInRow, rowValues.length);
+      const displayCurrent = isDirectIndexMapping ? (absColIdx + 1) : sequentialCursor;
+      if (!isInitialFirstCell && ((absColIdx - startAbsCol) % 2 === 0 || absColIdx === rowInputs.length - 1 || (!isDirectIndexMapping && sequentialCursor === rowValues.length))) {
         const prefix = totalRows > 1 ? `Baris ${r + 1}/${totalRows} • ` : '';
         const timePart = rowTimeLabel ? `${rowTimeLabel} • ` : '';
-        showToast("play", `${prefix}${timePart}Mengisi (${absColIdx + 1}/${colLimit}) — ESC untuk Stop`, "#0284c7", true);
+        showToast("play", `${prefix}${timePart}Mengisi (${displayCurrent}/${displayTotal}) — ESC untuk Stop`, "#0284c7", true);
       }
 
-      if (absColIdx < colLimit - 1) {
+      const hasMoreDirect = isDirectIndexMapping && (absColIdx < rowInputs.length - 1);
+      const hasMoreSeq = !isDirectIndexMapping && (sequentialCursor < rowValues.length) && (absColIdx < rowInputs.length - 1);
+      if (hasMoreDirect || hasMoreSeq) {
         await sleep(speedMs);
       }
     }
@@ -905,7 +1026,6 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
   }
 
   if (!isRunning) {
-    // Sudah ditangani oleh stopMacroExecution (ESC / STOP_MACRO)
     return;
   }
 

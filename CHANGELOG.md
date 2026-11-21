@@ -2,6 +2,19 @@
 
 Semua perubahan penting pada proyek **PMR Web Runner** dicatat dalam file ini.
 
+## [1.9.0] - 2026-11-20
+
+### Added
+- Halaman Mini Window upload **`pmr-web-runner/import.html`** & **`pmr-web-runner/import.js`** (100% patuh CSP Manifest V3 tanpa inline script, tema dark slate, dukungan klik Explorer maupun Drag & Drop) yang terbuka otomatis lewat `chrome.windows.create` (420×320) saat kotak upload popup diklik lalu menutup otomatis setelah file berhasil dimuat.
+- Dukungan **Drag & Drop** langsung pada kotak upload di `pmr-web-runner/popup.html` & `pmr-web-runner/popup.js` untuk memuat file `.pmr` / `.json` tanpa membuka jendela baru.
+- **Auto-Switch Preset Bawaan & Quick-Switch File Custom** di `pmr-web-runner/popup.js`: otomatis menyelaraskan preset bawaan ke operator DILOC tab aktif dengan badge hijau `"Auto-sync: Op. Lap X"`, serta mempertahankan file custom dengan tombol aksi cepat 1-klik (`"Pakai Preset Op. Lap X"`) di dalam badge peringatan merah saat jumlah sel tidak cocok.
+- **Mesin Hybrid `input` + `select` & Penanganan Op. 3 (`#25`)** di `pmr-web-runner/content.js`: melewati 5 kolom metadata kiri (`td` indeks `0..4`), mengumpulkan `input, select` secara akurat (Op. 1: `167`, Op. 2: `51`, Op. 3: `44`, mengabaikan kolom display `<span>`), mencocokkan nilai `<select>` secara *case-insensitive*, mengabaikan elemen `disabled`/`readOnly` pada *Smart Auto-Detect* & *Pre-Scan*, serta mendukung skip `#25` tanpa menggeser indeks maupun pemetaan berurutan file custom `43` sel aktif.
+- Simulasi penuh **Op. Lap 1 (`167` sel)**, **Op. Lap 2 (`51` sel + kolom display `<span>`)**, dan **Op. Lap 3 (`44` sel + kolom `#25` otomatis `disabled` di luar `06:00`, `14:00`, `22:00`)** beserta elemen `<select>` pada sandbox `index.html`.
+
+### Changed
+- Penyatuan skema penyimpanan `chrome.storage.local` terpadu (`savedMacro`, `macrosByPreset`, `fileSourceType`, `activePreset`, `headerMeta`, `selectedCellsByPreset`, `cellRandomRanges`, dll.) serta sinkronisasi real-time 2 arah via `chrome.storage.onChanged` dengan flag pengaman `isSyncingFromStorage` di `popup.js` & `options.js`.
+- Pembaruan jumlah parameter Preset Operator 3 menjadi `44` di `randomizer.js`, `popup.js`, `options.js`, `options.html`, dan `index.html`, serta pembaruan versi `1.9.0` di `manifest.json`, `options.html`, `README.txt`, dan `CHANGELOG.md`.
+
 ## [1.8.0] - 2026-11-20
 
 ### Added

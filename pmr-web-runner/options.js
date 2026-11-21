@@ -1,7 +1,10 @@
 let loadedSequence = [];
 let loadedFileName = "";
+let fileSourceType = "preset";
+let macrosByPreset = {};
 let randomMode = "off";
 let randomRange = 1;
+let cellRandomRanges = {};
 let selectedSet = new Set();
 let selectedCellsByPreset = {};
 let headerMeta = [];
@@ -10,11 +13,12 @@ let activeTableFilter = "all";
 let currentTheme = "light";
 let lastCells = [];
 let lastPreviewResults = [];
+let isSyncingFromStorage = false;
 
 const PRESET_NAMES = {
   operator1: "Operator 1 (167 parameter)",
   operator2: "Operator 2 (51 parameter)",
-  operator3: "Operator 3 (45 parameter)"
+  operator3: "Operator 3 (44 parameter)"
 };
 
 const activeFilePill = document.getElementById('activeFilePill');
@@ -114,12 +118,15 @@ function setPillContent(iconHtml, text) {
 }
 
 async function saveSettings() {
+  if (isSyncingFromStorage) return;
   const key = getPresetStorageKey(activePreset);
   const sortedIndices = Array.from(selectedSet).sort((a, b) => a - b);
   selectedCellsByPreset[key] = sortedIndices;
 
   await chrome.storage.local.set({
     randomMode,
+    randomRange,
+    cellRandomRanges,
     selectedCellsByPreset,
     selectedCellIndices: sortedIndices
   });
@@ -253,17 +260,30 @@ async function applyBuiltInPreset(presetKey, silent = false) {
     if (normalized && normalized.length > 0) {
       headerMeta = normalized;
       activePreset = presetKey;
+      fileSourceType = 'preset';
 
       const restored = Array.isArray(selectedCellsByPreset[presetKey])
         ? selectedCellsByPreset[presetKey]
         : [];
       selectedSet = new Set(restored);
 
-      await chrome.storage.local.set({
+      const updatePayload = {
         headerMeta,
         activePreset,
+        fileSourceType: 'preset',
         selectedCellIndices: Array.from(selectedSet).sort((a, b) => a - b)
-      });
+      };
+
+      const cachedMacro = macrosByPreset && macrosByPreset[presetKey];
+      if (cachedMacro && Array.isArray(cachedMacro.sequence) && cachedMacro.sequence.length > 0) {
+        loadedSequence = cachedMacro.sequence;
+        loadedFileName = cachedMacro.fileName || `${presetKey}.pmr`;
+        updatePayload.savedMacro = cachedMacro;
+      }
+
+      if (!isSyncingFromStorage) {
+        await chrome.storage.local.set(updatePayload);
+      }
       renderAll();
       if (!silent) {
         notifySaved(`Preset ${PRESET_NAMES[presetKey]} aktif!`);
@@ -492,56 +512,20 @@ macroFileOptions.addEventListener('change', (e) => {
   reader.onload = async (event) => {
     try {
       const rawData = JSON.parse(event.target.result);
-      const parsedSeq = parsePMRData(rawData);
-      if (parsedSeq.length === 0) {
-        throw new Error("Tidak ada keystroke valid ditemukan");
-      }
+      const result = await persistImportedMacroFile(file.name, rawData);
 
-      loadedSequence = parsedSeq;
-      loadedFileName = file.name;
-
-      const totalCells = groupSequenceIntoCells(loadedSequence).length;
-      const detected = detectOperatorPreset(loadedFileName, totalCells);
-      const targetKey = getPresetStorageKey(detected);
-      const restored = Array.isArray(selectedCellsByPreset[targetKey])
-        ? selectedCellsByPreset[targetKey].filter(idx => idx >= 0 && idx < totalCells)
-        : [];
-
-      selectedSet = new Set(restored);
-      activePreset = detected;
-
-      const storagePayload = {
-        savedMacro: {
-          fileName: loadedFileName,
-          sequence: loadedSequence
-        },
-        selectedCellsByPreset,
-        selectedCellIndices: Array.from(selectedSet).sort((a, b) => a - b),
-        macroRunning: false
-      };
-
-      if (detected) {
-        const meta = await fetchBuiltInPreset(detected);
-        if (meta && meta.length > 0) {
-          headerMeta = meta;
-          storagePayload.headerMeta = meta;
-          storagePayload.activePreset = detected;
-        } else {
-          headerMeta = [];
-          activePreset = "";
-          storagePayload.headerMeta = [];
-          storagePayload.activePreset = "";
-        }
-      } else {
-        headerMeta = [];
-        storagePayload.headerMeta = [];
-        storagePayload.activePreset = "";
-      }
+      loadedSequence = result.savedMacro.sequence;
+      loadedFileName = result.savedMacro.fileName;
+      macrosByPreset = result.macrosByPreset || {};
+      fileSourceType = result.fileSourceType;
+      activePreset = result.activePreset;
+      headerMeta = result.headerMeta || [];
+      selectedCellsByPreset = result.selectedCellsByPreset || {};
+      selectedSet = new Set(result.selectedCellIndices || []);
 
       hideOptionsAlert();
-      await chrome.storage.local.set(storagePayload);
       renderAll();
-      notifySaved(`${loadedFileName} dimuat (${totalCells} sel)`);
+      notifySaved(`${loadedFileName} dimuat (${result.totalCells} sel)`);
     } catch (err) {
       showOptionsAlert("Format file .pmr / .json tidak valid atau rusak. Pastikan file berisi keystroke yang sesuai.", "error");
       notifySaved("Format file .pmr / .json tidak valid!", "xCircle", "error");
@@ -673,75 +657,97 @@ searchInput.addEventListener('input', () => {
   applySearchHighlight(true);
 });
 
-// Auto-sync real-time jika file .pmr atau mode diubah dari popup
+// Auto-sync real-time 2 arah tanpa mengganggu input pencarian yang sedang aktif
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
-  let dirty = false;
+  let tableDirty = false;
+  isSyncingFromStorage = true;
 
-  if (changes.optionsTheme) {
-    applyTheme(changes.optionsTheme.newValue || 'light', false);
-  }
-  if (changes.savedMacro) {
-    const val = changes.savedMacro.newValue;
-    if (val && Array.isArray(val.sequence)) {
-      loadedSequence = val.sequence;
-      loadedFileName = val.fileName || 'macro.pmr';
-    } else {
-      loadedSequence = [];
-      loadedFileName = '';
+  try {
+    if (changes.optionsTheme) {
+      applyTheme(changes.optionsTheme.newValue || 'light', false);
     }
-    dirty = true;
-  }
-  if (changes.randomMode) {
-    randomMode = changes.randomMode.newValue || 'off';
-    dirty = true;
-  }
-  if (changes.randomRange) {
-    randomRange = sanitizeRandomRange(changes.randomRange.newValue);
-    dirty = true;
-  }
-  if (changes.activePreset) {
-    activePreset = changes.activePreset.newValue || '';
-    dirty = true;
-  }
-  if (changes.selectedCellsByPreset) {
-    const nextByPreset = changes.selectedCellsByPreset.newValue;
-    selectedCellsByPreset = (nextByPreset && typeof nextByPreset === 'object')
-      ? { ...nextByPreset }
-      : {};
-    const key = getPresetStorageKey(activePreset);
-    selectedSet = new Set(Array.isArray(selectedCellsByPreset[key]) ? selectedCellsByPreset[key] : []);
-    dirty = true;
-  } else if (changes.selectedCellIndices) {
-    selectedSet = new Set(Array.isArray(changes.selectedCellIndices.newValue) ? changes.selectedCellIndices.newValue : []);
-    dirty = true;
-  } else if (changes.activePreset) {
-    const key = getPresetStorageKey(activePreset);
-    selectedSet = new Set(Array.isArray(selectedCellsByPreset[key]) ? selectedCellsByPreset[key] : []);
-  }
-  if (changes.headerMeta) {
-    headerMeta = Array.isArray(changes.headerMeta.newValue) ? changes.headerMeta.newValue : [];
-    dirty = true;
-  }
+    if (changes.savedMacro) {
+      const val = changes.savedMacro.newValue;
+      if (val && Array.isArray(val.sequence)) {
+        loadedSequence = val.sequence;
+        loadedFileName = val.fileName || 'macro.pmr';
+      } else {
+        loadedSequence = [];
+        loadedFileName = '';
+      }
+      tableDirty = true;
+    }
+    if (changes.macrosByPreset) {
+      const val = changes.macrosByPreset.newValue;
+      macrosByPreset = (val && typeof val === 'object') ? { ...val } : {};
+    }
+    if (changes.fileSourceType) {
+      fileSourceType = changes.fileSourceType.newValue === 'custom' ? 'custom' : 'preset';
+      tableDirty = true;
+    }
+    if (changes.randomMode) {
+      randomMode = changes.randomMode.newValue || 'off';
+      tableDirty = true;
+    }
+    if (changes.randomRange) {
+      randomRange = sanitizeRandomRange(changes.randomRange.newValue);
+      tableDirty = true;
+    }
+    if (changes.cellRandomRanges) {
+      const val = changes.cellRandomRanges.newValue;
+      cellRandomRanges = (val && typeof val === 'object') ? { ...val } : {};
+      tableDirty = true;
+    }
+    if (changes.activePreset) {
+      activePreset = changes.activePreset.newValue || '';
+      tableDirty = true;
+    }
+    if (changes.selectedCellsByPreset) {
+      const nextByPreset = changes.selectedCellsByPreset.newValue;
+      selectedCellsByPreset = (nextByPreset && typeof nextByPreset === 'object')
+        ? { ...nextByPreset }
+        : {};
+      const key = getPresetStorageKey(activePreset);
+      selectedSet = new Set(Array.isArray(selectedCellsByPreset[key]) ? selectedCellsByPreset[key] : []);
+      tableDirty = true;
+    } else if (changes.selectedCellIndices) {
+      selectedSet = new Set(Array.isArray(changes.selectedCellIndices.newValue) ? changes.selectedCellIndices.newValue : []);
+      tableDirty = true;
+    } else if (changes.activePreset) {
+      const key = getPresetStorageKey(activePreset);
+      selectedSet = new Set(Array.isArray(selectedCellsByPreset[key]) ? selectedCellsByPreset[key] : []);
+    }
+    if (changes.headerMeta) {
+      headerMeta = Array.isArray(changes.headerMeta.newValue) ? changes.headerMeta.newValue : [];
+      tableDirty = true;
+    }
 
-  if (dirty) {
-    renderAll();
+    if (tableDirty) {
+      const isSearchFocused = Boolean(searchInput && document.activeElement === searchInput);
+      const selStart = isSearchFocused ? searchInput.selectionStart : null;
+      const selEnd = isSearchFocused ? searchInput.selectionEnd : null;
+
+      renderAll();
+
+      if (isSearchFocused && searchInput) {
+        searchInput.focus();
+        if (selStart !== null && selEnd !== null) {
+          try {
+            searchInput.setSelectionRange(selStart, selEnd);
+          } catch (e) {}
+        }
+      }
+    }
+  } finally {
+    isSyncingFromStorage = false;
   }
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
   hydrateDataIcons();
 
-  const data = await chrome.storage.local.get([
-    'savedMacro',
-    'randomMode',
-    'randomRange',
-    'selectedCellIndices',
-    'selectedCellsByPreset',
-    'headerMeta',
-    'activePreset',
-    'optionsTheme'
-  ]);
+  const data = await chrome.storage.local.get(UNIFIED_STORAGE_KEYS);
 
   let initialTheme = data.optionsTheme;
   if (initialTheme !== 'dark' && initialTheme !== 'light') {
@@ -758,8 +764,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadedSequence = data.savedMacro.sequence;
     loadedFileName = data.savedMacro.fileName || 'macro.pmr';
   }
+  macrosByPreset = (data.macrosByPreset && typeof data.macrosByPreset === 'object')
+    ? { ...data.macrosByPreset }
+    : {};
+  fileSourceType = data.fileSourceType === 'custom' ? 'custom' : 'preset';
   randomMode = data.randomMode || 'off';
   randomRange = sanitizeRandomRange(data.randomRange);
+  cellRandomRanges = (data.cellRandomRanges && typeof data.cellRandomRanges === 'object')
+    ? { ...data.cellRandomRanges }
+    : {};
   headerMeta = Array.isArray(data.headerMeta) ? data.headerMeta : [];
   activePreset = data.activePreset || '';
   selectedCellsByPreset = (data.selectedCellsByPreset && typeof data.selectedCellsByPreset === 'object')
@@ -780,7 +793,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // Auto-muat preset bawaan jika belum ada headerMeta & jumlah sel cocok
-  if (headerMeta.length === 0 && loadedSequence.length > 0) {
+  if (headerMeta.length === 0 && loadedSequence.length > 0 && fileSourceType !== 'custom') {
     const totalCells = groupSequenceIntoCells(loadedSequence).length;
     const detected = detectOperatorPreset(loadedFileName, totalCells);
     if (detected) {
