@@ -407,43 +407,60 @@ async function syncPresetWithActiveTab() {
   return false;
 }
 
-function queryActiveTabStatus(tab) {
+function safeSendTabMessage(tabId, message, tabUrl = '') {
   return new Promise((resolve) => {
-    if (!tab || !tab.id || isRestrictedBrowserUrl(tab.url)) {
+    if (typeof tabId !== 'number' || tabId < 0 || (tabUrl && isRestrictedBrowserUrl(tabUrl))) {
       resolve(null);
       return;
     }
 
+    let settled = false;
+    const finish = (val) => {
+      if (settled) return;
+      settled = true;
+      resolve(val);
+    };
+
     try {
-      chrome.tabs.sendMessage(tab.id, { action: "GET_STATUS" }, (response) => {
-        if (chrome.runtime.lastError || !response) {
-          resolve({
-            url: tab.url || '',
-            webOperator: detectOperatorFromUrl(tab.url),
-            tableColCount: 0,
-            activeColCount: 0,
-            isRunning: null
-          });
+      const maybePromise = chrome.tabs.sendMessage(tabId, message, (response) => {
+        if (chrome.runtime && chrome.runtime.lastError) {
+          finish(null);
           return;
         }
-        resolve({
-          url: response.pageUrl || tab.url || '',
-          webOperator: response.webOperator || detectOperatorFromUrl(response.pageUrl || tab.url),
-          tableColCount: Number(response.tableColCount) || 0,
-          activeColCount: Number(response.activeColCount) || 0,
-          isRunning: Boolean(response.isRunning)
-        });
+        finish(response ?? null);
       });
+      if (maybePromise && typeof maybePromise.catch === 'function') {
+        maybePromise.catch(() => finish(null));
+      }
     } catch (err) {
-      resolve({
-        url: tab.url || '',
-        webOperator: detectOperatorFromUrl(tab.url),
-        tableColCount: 0,
-        activeColCount: 0,
-        isRunning: null
-      });
+      finish(null);
     }
   });
+}
+
+async function queryActiveTabStatus(tab) {
+  if (!tab || !tab.id || isRestrictedBrowserUrl(tab.url)) {
+    return null;
+  }
+
+  const response = await safeSendTabMessage(tab.id, { action: "GET_STATUS" }, tab.url);
+  if (!response) {
+    return {
+      url: tab.url || '',
+      webOperator: detectOperatorFromUrl(tab.url),
+      tableColCount: 0,
+      activeColCount: 0,
+      isRunning: null
+    };
+  }
+
+  return {
+    url: response.pageUrl || tab.url || '',
+    webOperator: response.webOperator || detectOperatorFromUrl(response.pageUrl || tab.url),
+    tableColCount: Number(response.tableColCount) || 0,
+    activeColCount: Number(response.activeColCount) || 0,
+    isRunning: Boolean(response.isRunning)
+  };
 }
 
 function sleepMs(ms) {
@@ -879,7 +896,7 @@ toggleBtn.addEventListener('click', async () => {
   if (isMacroRunning) {
     isMacroRunning = false;
     await chrome.storage.local.set({ macroRunning: false });
-    chrome.tabs.sendMessage(tab.id, { action: "STOP_MACRO" });
+    await safeSendTabMessage(tab.id, { action: "STOP_MACRO" }, tab.url);
     setTimeout(() => window.close(), 60);
   } else {
     const latest = await chrome.storage.local.get([
@@ -944,8 +961,13 @@ toggleBtn.addEventListener('click', async () => {
     }
 
     const sequenceToRun = buildPlaybackSequence(loadedSequence, latestMode, activeIndices, latestMeta, activeSpeedMs, latestRange);
+    const sourceLabel = (latestSourceType === 'custom')
+      ? `${loadedFileName || 'file.pmr'} (${cells.length} sel)`
+      : (latestPreset && PRESET_SHORT_LABELS[latestPreset]
+        ? `Preset: ${PRESET_SHORT_LABELS[latestPreset]} (${cells.length} sel)`
+        : `${loadedFileName || 'Macro'} (${cells.length} sel)`);
 
-    chrome.tabs.sendMessage(tab.id, {
+    const dispatchRes = await safeSendTabMessage(tab.id, {
       action: "START_MACRO",
       rows: rowsPayload,
       rowCount: activeRowCount,
@@ -954,10 +976,21 @@ toggleBtn.addEventListener('click', async () => {
       randomRange: latestRange,
       activePreset: latestPreset,
       fileSourceType: latestSourceType,
+      fileName: loadedFileName,
+      sourceLabel,
       expectedCellCount: cells.length,
       selectedIndices: activeIndices,
       sequence: sequenceToRun
-    });
+    }, tab.url);
+
+    if (!dispatchRes) {
+      isMacroRunning = false;
+      await chrome.storage.local.set({ macroRunning: false });
+      updateUIState();
+      showPopupInlineAlert("Tab target belum siap menerima perintah. Muat ulang halaman lalu coba lagi.", "warn");
+      return;
+    }
+
     setTimeout(() => window.close(), 70);
   }
 });

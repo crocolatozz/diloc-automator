@@ -2,6 +2,17 @@
 
 Semua perubahan penting pada proyek **PMR Web Runner** dicatat dalam file ini.
 
+## [1.10.0] - 2026-11-20
+
+### Added
+- **Mulai dari Posisi Kursor Aktif & Pemetaan 1-to-1 (`content.js`):** Melacak fokus kursor aktif pada sel parameter DILOC (`focusin` & `pointerdown` dengan validasi `document.body.contains` anti-detached DOM serta reset otomatis saat klik di luar tabel parameter). Jika kursor aktif valid, eksekusi dimulai tepat dari baris dan kolom kursor (`row` & `col`) memakai pemetaan data 1-to-1 sesuai indeks parameter asli (tanpa menggeser indeks `0` ke kolom tengah), lalu baris ke-2 dst tetap dimulai dari kolom `#1`. Jika tidak ada kursor aktif, otomatis kembali ke *Smart Auto-Detect*.
+- **Proteksi Anti-Timpa Sel Status Khusus Klik Kanan (`content.js`):** Mendeteksi kontrol `<select>` status khusus pada sel parameter (`Plant Trouble`, `Plant Shutdown`, `Standby / Not Running`, `Tidak Ada Mixing`, `Maintenance`, `Overhaul`, `Plant TA`) dan melewatinya otomatis saat *pre-scan* maupun pengisian tanpa mengubah status ataupun menggeser indeks kolom.
+- **Modal Konfirmasi Terpadu Shadow DOM (`content.js`):** Menampilkan 1 modal konfirmasi terpadu sebelum eksekusi dimulai (berisi badge mode `Kursor Aktif` / `Auto-Detect`, ringkasan `Titik Mulai`, `Jangkauan`, `Sumber Data`, status kekosongan / daftar sampel sel terisi pada jalur target, serta info jumlah sel berstatus khusus yang dilewati otomatis) dengan tombol `Mulai Isi` / `Timpa & Mulai` dan `Batal` (`ESC`).
+- **Safe Tab Messaging Helper (`popup.js`):** Membungkus seluruh panggilan `chrome.tabs.sendMessage` dengan helper `safeSendTabMessage` (pengecekan `chrome.runtime.lastError`, validasi URL terlarang, serta `try/catch`) agar perpindahan ke tab non-DILOC atau halaman sistem browser tidak memunculkan *unhandled promise rejection*.
+
+### Changed
+- **Simulasi & Sinkronisasi Versi v1.10.0 (`manifest.json`, `options.html`, `README.txt`, `index.html`):** Memperbarui simulasi grid DILOC pada `index.html` dengan contoh sel `<select>` status khusus (`Plant Trouble`, `Standby`, dll.) serta menyinkronkan nomor versi ke `1.10.0`.
+
 ## [1.9.1] - 2026-11-20
 
 ### Fixed

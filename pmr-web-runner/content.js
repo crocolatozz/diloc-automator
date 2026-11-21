@@ -1,6 +1,6 @@
 let isRunning = false;
 let currentTargetEl = null;
-let lastFocusedInput = null;
+let lastFocusedParamCell = null;
 let lastLockedClickCell = null;
 let lastFilledInput = null;
 
@@ -9,6 +9,9 @@ const PRESET_SHORT_LABELS = {
   operator2: 'Op. Lap 2',
   operator3: 'Op. Lap 3'
 };
+
+const SPECIAL_STATUS_VALUE_RE = /\b(plant_trouble|plant_shutdown|standby_notrunning|tidak_ada_mixing|overhaul|plant_ta|not_running|maintenance|shutdown|trouble|standby)\b/i;
+const SPECIAL_STATUS_TEXT_RE = /\b(plant\s+trouble|plant\s+shutdown|standby(?:\s*\/\s*not\s*running)?|tidak\s+ada\s+mixing|overhaul|maintenance|plant\s+ta|not\s+running)\b/i;
 
 async function migrateSpeedStorageIfNeeded() {
   try {
@@ -46,6 +49,20 @@ function detectOperatorFromH5() {
   return '';
 }
 
+function isModalDomNode(node) {
+  if (!node) return false;
+  const host = document.getElementById('pmr-confirm-modal-host');
+  if (host) {
+    if (node === host) return true;
+    if (typeof node.getRootNode === 'function' && node.getRootNode() === host.shadowRoot) return true;
+    if (node.closest && node.closest('#pmr-confirm-modal-host')) return true;
+  }
+  if (node.closest && (node.closest('#pmr-runner-toast') || node.closest('[class*="pmr-confirm-"]'))) {
+    return true;
+  }
+  return false;
+}
+
 function isVisibleFormControl(el) {
   if (!el) return false;
   if (el.tagName !== 'INPUT' && el.tagName !== 'SELECT' && el.tagName !== 'TEXTAREA') return false;
@@ -67,8 +84,39 @@ function isEditableElement(el) {
   return true;
 }
 
+function isSpecialStatusSelect(el) {
+  if (!el || el.tagName !== 'SELECT') return false;
+  if (el.dataset && el.dataset.pmrStatusSelect === 'true') return true;
+  if (el.classList && (el.classList.contains('status-select') || el.classList.contains('row-status-select'))) return true;
+
+  const options = el.options ? Array.from(el.options) : [];
+  for (const opt of options) {
+    const val = String(opt.value ?? '').trim();
+    const txt = String(opt.textContent ?? '').trim();
+    if (SPECIAL_STATUS_VALUE_RE.test(val) || SPECIAL_STATUS_TEXT_RE.test(txt)) {
+      return true;
+    }
+  }
+
+  const curVal = String(el.value ?? '').trim();
+  if (curVal && (SPECIAL_STATUS_VALUE_RE.test(curVal) || SPECIAL_STATUS_TEXT_RE.test(curVal))) {
+    return true;
+  }
+  return false;
+}
+
+function getSpecialStatusLabel(el) {
+  if (!el || el.tagName !== 'SELECT') return 'Status Khusus';
+  const options = el.options ? Array.from(el.options) : [];
+  const selOpt = (typeof el.selectedIndex === 'number' && el.selectedIndex >= 0 && options[el.selectedIndex])
+    ? options[el.selectedIndex]
+    : null;
+  const txt = selOpt ? String(selOpt.textContent ?? '').trim() : '';
+  return txt || String(el.value ?? '').trim() || 'Status Khusus';
+}
+
 function inspectCellLock(inputEl) {
-  if (!inputEl || !document.contains(inputEl)) {
+  if (!inputEl || !document.body || !document.body.contains(inputEl)) {
     return {
       locked: true,
       notArrived: false,
@@ -130,32 +178,7 @@ function isLockedDomNode(node) {
   return false;
 }
 
-document.addEventListener('pointerdown', (e) => {
-  const target = e.target;
-  if (!target || !target.closest) return;
-  const td = target.closest('td.data-cell, td');
-  if (td && isLockedDomNode(target)) {
-    lastLockedClickCell = td;
-    lastFocusedInput = null;
-  } else if (isEditableElement(target)) {
-    lastLockedClickCell = null;
-  }
-}, true);
-
-document.addEventListener('focusin', (e) => {
-  if (isEditableElement(e.target) && !inspectCellLock(e.target).locked) {
-    lastFocusedInput = e.target;
-    lastLockedClickCell = null;
-  }
-}, true);
-
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && isRunning) {
-    stopMacroExecution("Pengisian dihentikan (ESC)");
-  }
-}, true);
-
-function getRowDataCellInputs(tr) {
+function getRowParamTds(tr) {
   if (!tr) return [];
   const table = tr.closest('table');
   const isSandboxTable = Boolean(table && table.getAttribute('data-pmr-sandbox') === 'true');
@@ -163,20 +186,22 @@ function getRowDataCellInputs(tr) {
 
   if (tds.length === 0) return [];
 
-  let paramTds = [];
   if (isSandboxTable) {
-    paramTds = tds.filter(td => td.classList.contains('data-cell'));
-  } else if (tds.length > 5) {
-    // Struktur DILOC asli: lewati 5 kolom metadata paling kiri (td indeks 0..4)
-    paramTds = tds.slice(5);
-  } else {
-    paramTds = tds.filter(td => (
-      !td.classList.contains('sticky-col') &&
-      !td.classList.contains('col-waktu') &&
-      !td.classList.contains('row-label')
-    ));
+    return tds.filter(td => td.classList.contains('data-cell'));
   }
+  if (tds.length > 5) {
+    // Struktur DILOC asli: lewati 5 kolom metadata paling kiri (td indeks 0..4)
+    return tds.slice(5);
+  }
+  return tds.filter(td => (
+    !td.classList.contains('sticky-col') &&
+    !td.classList.contains('col-waktu') &&
+    !td.classList.contains('row-label')
+  ));
+}
 
+function getRowDataCellInputs(tr) {
+  const paramTds = getRowParamTds(tr);
   const controls = [];
   for (const td of paramTds) {
     // Kumpulkan input & select; abaikan kolom display/rumus <span> non-form
@@ -187,6 +212,73 @@ function getRowDataCellInputs(tr) {
   }
   return controls;
 }
+
+function getControlRowInfo(el) {
+  if (!isLogsheetInputElement(el) || !document.body || !document.body.contains(el)) return null;
+  const tr = el.closest('tbody tr') || el.closest('table tr');
+  if (!tr) return null;
+  const rowInputs = getRowDataCellInputs(tr);
+  const colIdx = rowInputs.indexOf(el);
+  if (colIdx < 0) return null;
+  return { row: tr, colIdx, rowInputs };
+}
+
+function getAllDataRows() {
+  const tbodyRows = Array.from(document.querySelectorAll('tbody tr')).filter(tr => getRowDataCellInputs(tr).length > 0);
+  if (tbodyRows.length > 0) return tbodyRows;
+  return Array.from(document.querySelectorAll('table tr')).filter(tr => getRowDataCellInputs(tr).length > 0);
+}
+
+document.addEventListener('pointerdown', (e) => {
+  const target = e.target;
+  if (!target || isModalDomNode(target)) return;
+
+  const td = target.closest ? (target.closest('td.data-cell') || target.closest('td')) : null;
+  const tr = td ? (td.closest('tbody tr') || td.closest('table tr')) : null;
+  const paramTds = tr ? getRowParamTds(tr) : [];
+  const isInsideParamTd = Boolean(td && paramTds.includes(td));
+
+  if (!isInsideParamTd) {
+    lastLockedClickCell = null;
+    lastFocusedParamCell = null;
+    return;
+  }
+
+  if (isLockedDomNode(target)) {
+    lastLockedClickCell = td;
+    lastFocusedParamCell = null;
+    return;
+  }
+
+  const ctrl = isLogsheetInputElement(target)
+    ? target
+    : Array.from(td.querySelectorAll('input, select')).find(isVisibleFormControl);
+
+  if (ctrl && getControlRowInfo(ctrl) && !inspectCellLock(ctrl).locked) {
+    lastLockedClickCell = null;
+    lastFocusedParamCell = ctrl;
+  } else {
+    lastLockedClickCell = null;
+    lastFocusedParamCell = null;
+  }
+}, true);
+
+document.addEventListener('focusin', (e) => {
+  const target = e.target;
+  if (!target || isModalDomNode(target)) return;
+
+  const info = getControlRowInfo(target);
+  if (info && isEditableElement(target) && !inspectCellLock(target).locked) {
+    lastFocusedParamCell = target;
+    lastLockedClickCell = null;
+  }
+}, true);
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && isRunning) {
+    stopMacroExecution("Pengisian dihentikan (ESC)");
+  }
+}, true);
 
 function getRowActiveDataControls(tr) {
   return getRowDataCellInputs(tr).filter(el => !inspectCellLock(el).locked);
@@ -227,11 +319,21 @@ function getCleanNodeTextWithoutSelects(node) {
 
 function getRowTimeLabel(tr) {
   if (!tr) return '';
+  const table = tr.closest('table');
+  const isSandboxTable = Boolean(table && table.getAttribute('data-pmr-sandbox') === 'true');
+  const tds = Array.from(tr.children).filter(el => el.tagName === 'TD');
+
+  if (!isSandboxTable && tds.length > 5 && tds[4]) {
+    const td4Text = getCleanNodeTextWithoutSelects(tds[4]);
+    if (td4Text) return td4Text;
+  }
+
   const timeCell = tr.querySelector('td.sticky-col.col-waktu, td.col-waktu, td.row-label, td.sticky-col');
   if (timeCell) {
-    return getCleanNodeTextWithoutSelects(timeCell);
+    const txt = getCleanNodeTextWithoutSelects(timeCell);
+    if (txt) return txt;
   }
-  const tds = Array.from(tr.children).filter(el => el.tagName === 'TD');
+
   for (let i = 0; i < Math.min(5, tds.length); i++) {
     const txt = getCleanNodeTextWithoutSelects(tds[i]);
     if (/^(\d{1,2}:\d{2}|jam\s*\d+)/i.test(txt)) {
@@ -286,8 +388,13 @@ function findFirstOpenEmptyRow(rows) {
     const inputs = getRowDataCellInputs(tr);
     if (inputs.length === 0) continue;
 
-    // Abaikan elemen disabled / readOnly saat mendeteksi baris kosong
-    const activeInputs = inputs.filter(el => !el.disabled && !el.readOnly && !inspectCellLock(el).locked);
+    // Abaikan elemen disabled / readOnly / sel berstatus khusus saat mendeteksi baris kosong
+    const activeInputs = inputs.filter(el => (
+      !el.disabled &&
+      !el.readOnly &&
+      !inspectCellLock(el).locked &&
+      !isSpecialStatusSelect(el)
+    ));
     if (activeInputs.length === 0) continue;
 
     if (isControlEmpty(activeInputs[0])) {
@@ -304,16 +411,14 @@ function findAutoDetectStartLocation() {
 
   const layer1Match = findFirstOpenEmptyRow(activeShiftRows);
   if (layer1Match) {
-    return layer1Match;
+    return { mode: 'auto', row: layer1Match.row, colIdx: layer1Match.colIdx };
   }
 
   // Lapis 2 (Fallback Universal): scan semua baris tabel dari atas ke bawah
-  const allDataRows = Array.from(document.querySelectorAll('tbody tr, table tr'))
-    .filter(tr => getRowDataCellInputs(tr).length > 0);
-
+  const allDataRows = getAllDataRows();
   const layer2Match = findFirstOpenEmptyRow(allDataRows);
   if (layer2Match) {
-    return layer2Match;
+    return { mode: 'auto', row: layer2Match.row, colIdx: layer2Match.colIdx };
   }
 
   return {
@@ -323,8 +428,8 @@ function findAutoDetectStartLocation() {
 }
 
 function resolveStartLocation() {
-  // Prioritas 1: Cek apakah user mengklik sel terkunci secara eksplisit
-  if (lastLockedClickCell && document.contains(lastLockedClickCell)) {
+  // Prioritas 1a: Cek apakah user mengklik sel terkunci secara eksplisit
+  if (lastLockedClickCell && document.body && document.body.contains(lastLockedClickCell)) {
     const row = lastLockedClickCell.closest('tr');
     const rowTime = getRowTimeLabel(row);
     const title = String(lastLockedClickCell.getAttribute('title') || '').toLowerCase();
@@ -336,31 +441,34 @@ function resolveStartLocation() {
     return { error: msg, icon: isFuture ? 'clock' : 'warn' };
   }
 
-  // Prioritas 1: Kursor manual yang fokus di sel terbuka
-  const activeEl = document.activeElement;
-  const manualEl = isLogsheetInputElement(activeEl)
-    ? activeEl
-    : (lastFocusedInput && document.contains(lastFocusedInput) ? lastFocusedInput : null);
+  // Prioritas 1b: Mode Kursor Aktif pada sel parameter DILOC (validasi anti-detached DOM)
+  let candidate = null;
+  if (document.activeElement && !isModalDomNode(document.activeElement) && getControlRowInfo(document.activeElement)) {
+    candidate = document.activeElement;
+  } else if (lastFocusedParamCell && document.body && document.body.contains(lastFocusedParamCell) && getControlRowInfo(lastFocusedParamCell)) {
+    candidate = lastFocusedParamCell;
+  } else {
+    lastFocusedParamCell = null;
+  }
 
-  if (manualEl) {
-    const lock = inspectCellLock(manualEl);
-    const tr = manualEl.closest('tr');
+  if (candidate) {
+    const lock = inspectCellLock(candidate);
+    const info = getControlRowInfo(candidate);
     if (lock.locked) {
-      const rowTime = getRowTimeLabel(tr);
+      const rowTime = info ? getRowTimeLabel(info.row) : '';
       const msg = lock.notArrived
         ? `Sel ${rowTime ? rowTime + ' ' : ''}belum tiba — pengisian dibatalkan aman.`
         : `Sel ${rowTime ? rowTime + ' ' : ''}terkunci — tidak bisa diisi.`;
       return { error: msg, icon: lock.notArrived ? 'clock' : 'warn' };
     }
 
-    if (tr) {
-      const rowInputs = getRowDataCellInputs(tr);
-      const colIdx = rowInputs.indexOf(manualEl);
-      if (colIdx >= 0) {
-        return { row: tr, colIdx };
-      }
+    if (info) {
+      return {
+        mode: 'cursor',
+        row: info.row,
+        colIdx: info.colIdx
+      };
     }
-    return { singleElement: manualEl };
   }
 
   // Prioritas 2: Auto-detect baris kosong pertama di zona shift aktif
@@ -368,7 +476,7 @@ function resolveStartLocation() {
 }
 
 function getTableColumnCount() {
-  const rows = Array.from(document.querySelectorAll('tbody tr, table tr'));
+  const rows = getAllDataRows();
   for (const tr of rows) {
     const inputs = getRowDataCellInputs(tr);
     if (inputs.length > 0) {
@@ -379,13 +487,12 @@ function getTableColumnCount() {
 }
 
 function getTargetRowActiveColCount() {
-  // Jika sudah ada baris target yang akan diisi, ukur jumlah sel aktifnya (misal 43 pada jam biasa Op. 3)
   const autoOrManual = resolveStartLocation();
   if (autoOrManual && autoOrManual.row) {
     return getRowActiveDataControls(autoOrManual.row).length;
   }
 
-  const rows = Array.from(document.querySelectorAll('tbody tr, table tr'));
+  const rows = getAllDataRows();
   for (const tr of rows) {
     const active = getRowActiveDataControls(tr);
     if (active.length > 0) {
@@ -441,32 +548,46 @@ function validatePageBeforeExecution(request, rowsPayload) {
   return null;
 }
 
-function preScanTargetCells(rowsPayload, startLoc) {
-  if (!startLoc) return { filledCount: 0, filledSamples: [], startRowTime: '', startColNumber: 1 };
+function scanTargetExecutionPlan(rowsPayload, startLoc) {
+  const allRows = getAllDataRows();
+  const startRowIdx0 = startLoc && startLoc.row ? allRows.indexOf(startLoc.row) : -1;
+  const startRowNumber = startRowIdx0 >= 0 ? startRowIdx0 + 1 : 1;
+  const startColNumber = (startLoc && typeof startLoc.colIdx === 'number' ? startLoc.colIdx : 0) + 1;
+  const startTimeLabel = startLoc && startLoc.row ? getRowTimeLabel(startLoc.row) : '';
 
-  if (!startLoc.row && startLoc.singleElement) {
-    const el = startLoc.singleElement;
-    const lock = inspectCellLock(el);
-    const val = (!lock.locked && !el.disabled && !el.readOnly) ? getControlDisplayValue(el) : '';
-    const hasVal = val !== '';
+  if (!startLoc || !startLoc.row) {
     return {
-      filledCount: hasVal ? 1 : 0,
-      filledSamples: hasVal ? [{ paramNumber: 1, value: val }] : [],
-      startRowTime: '',
-      startColNumber: 1
+      mode: startLoc && startLoc.mode === 'cursor' ? 'cursor' : 'auto',
+      startRowNumber,
+      endRowNumber: startRowNumber,
+      plannedRowCount: 0,
+      startTimeLabel,
+      endTimeLabel: startTimeLabel,
+      startColNumber,
+      endColNumber: startColNumber,
+      fillableActiveCount: 0,
+      filledCount: 0,
+      filledSamples: [],
+      specialStatusCount: 0,
+      specialStatusSamples: []
     };
   }
 
   const totalRows = Math.min(4, rowsPayload.length);
-  const startColNumber = (startLoc.colIdx || 0) + 1;
-  const startRowTime = getRowTimeLabel(startLoc.row);
   let currentRow = startLoc.row;
+  let fillableActiveCount = 0;
   let filledCount = 0;
   const filledSamples = [];
+  let specialStatusCount = 0;
+  const specialStatusSamples = [];
+  let plannedRowCount = 0;
+  let lastPlannedRowNumber = startRowNumber;
+  let lastPlannedTimeLabel = startTimeLabel;
+  let maxParamNumber = startColNumber;
 
   for (let r = 0; r < totalRows; r++) {
     if (!currentRow) break;
-    // Zona parameter terkunci di td indeks 5+ (abaikan kolom 0..4 termasuk dropdown status baris)
+
     const rowInputs = getRowDataCellInputs(currentRow);
     const rowValues = rowsPayload[r] || [];
     const startAbsCol = (r === 0) ? (startLoc.colIdx || 0) : 0;
@@ -476,10 +597,20 @@ function preScanTargetCells(rowsPayload, startLoc) {
 
     const isDirectIndexMapping = (rowValues.length === rowInputs.length);
     let valCursor = 0;
+    if (!isDirectIndexMapping && startAbsCol > 0) {
+      for (let prevIdx = 0; prevIdx < startAbsCol; prevIdx++) {
+        const prevInput = rowInputs[prevIdx];
+        const prevLock = inspectCellLock(prevInput);
+        if (!prevInput.disabled && !prevInput.readOnly && !isInactiveSkippableControl(prevInput, prevLock)) {
+          valCursor += 1;
+        }
+      }
+    }
+
     let hitHardBrake = false;
+    let rowHasScannedCell = false;
 
     for (let absColIdx = startAbsCol; absColIdx < rowInputs.length; absColIdx++) {
-      // Pertahankan nomor parameter asli (#1..#N) sebelum melewati elemen disabled/readOnly
       const paramNumber = absColIdx + 1;
       const targetInput = rowInputs[absColIdx];
       const lock = inspectCellLock(targetInput);
@@ -489,7 +620,6 @@ function preScanTargetCells(rowsPayload, startLoc) {
         break;
       }
 
-      // Lewati elemen disabled / readOnly (mis. #25 Op. 3) tanpa menggeser paramNumber (#26 tetap #26)
       if (targetInput.disabled || targetInput.readOnly || isInactiveSkippableControl(targetInput, lock)) {
         continue;
       }
@@ -497,6 +627,22 @@ function preScanTargetCells(rowsPayload, startLoc) {
       if (!isDirectIndexMapping) {
         if (valCursor >= rowValues.length) break;
         valCursor += 1;
+      }
+
+      rowHasScannedCell = true;
+
+      if (isSpecialStatusSelect(targetInput)) {
+        specialStatusCount += 1;
+        const statusLabel = getSpecialStatusLabel(targetInput);
+        if (specialStatusSamples.length < 2 && !specialStatusSamples.includes(statusLabel)) {
+          specialStatusSamples.push(statusLabel);
+        }
+        continue;
+      }
+
+      fillableActiveCount += 1;
+      if (paramNumber > maxParamNumber) {
+        maxParamNumber = paramNumber;
       }
 
       const displayVal = getControlDisplayValue(targetInput);
@@ -508,13 +654,35 @@ function preScanTargetCells(rowsPayload, startLoc) {
       }
     }
 
+    if (rowHasScannedCell) {
+      plannedRowCount += 1;
+      const rowIdxInTable = allRows.indexOf(currentRow);
+      lastPlannedRowNumber = rowIdxInTable >= 0 ? rowIdxInTable + 1 : (startRowNumber + r);
+      const tLabel = getRowTimeLabel(currentRow);
+      if (tLabel) lastPlannedTimeLabel = tLabel;
+    }
+
     if (hitHardBrake) break;
     if (r < totalRows - 1) {
       currentRow = getNextDataRow(currentRow);
     }
   }
 
-  return { filledCount, filledSamples, startRowTime, startColNumber };
+  return {
+    mode: startLoc.mode === 'cursor' ? 'cursor' : 'auto',
+    startRowNumber,
+    endRowNumber: lastPlannedRowNumber,
+    plannedRowCount,
+    startTimeLabel,
+    endTimeLabel: lastPlannedTimeLabel,
+    startColNumber,
+    endColNumber: maxParamNumber,
+    fillableActiveCount,
+    filledCount,
+    filledSamples,
+    specialStatusCount,
+    specialStatusSamples
+  };
 }
 
 function formatPreScanSummaryDetail(filledCount, filledSamples) {
@@ -533,7 +701,30 @@ function createInlineSvgMarkup(pathsMarkup, size = 14) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pathsMarkup}</svg>`;
 }
 
-function confirmOverwriteShadowModal(filledCount, filledSamples = []) {
+function formatStartPointSummary(plan) {
+  const rawTime = String(plan.startTimeLabel || '').trim();
+  const timePart = rawTime
+    ? (/^jam\s+/i.test(rawTime) ? ` (${rawTime})` : ` (Jam ${rawTime})`)
+    : '';
+  return `Baris #${plan.startRowNumber}${timePart} • Kolom #${plan.startColNumber}`;
+}
+
+function formatLogsheetRowStatusLabel(plan) {
+  const startT = String(plan.startTimeLabel || '').trim().replace(/^jam\s+/i, '');
+  const endT = String(plan.endTimeLabel || '').trim().replace(/^jam\s+/i, '');
+  if (startT) {
+    if (plan.plannedRowCount > 1 && endT && endT !== startT) {
+      return `baris logsheet jam ${startT} – ${endT}`;
+    }
+    return `baris logsheet jam ${startT}`;
+  }
+  if (plan.plannedRowCount > 1 && plan.endRowNumber > plan.startRowNumber) {
+    return `baris #${plan.startRowNumber} – #${plan.endRowNumber}`;
+  }
+  return `baris #${plan.startRowNumber}`;
+}
+
+function showUnifiedConfirmModal(plan, sourceDisplayLabel) {
   return new Promise((resolve) => {
     const existingHost = document.getElementById('pmr-confirm-modal-host');
     if (existingHost) existingHost.remove();
@@ -545,84 +736,183 @@ function confirmOverwriteShadowModal(filledCount, filledSamples = []) {
     host.style.zIndex = '2147483647';
 
     const shadow = host.attachShadow({ mode: 'open' });
-    const detailPart = formatPreScanSummaryDetail(filledCount, filledSamples);
+    const isOverwrite = plan.filledCount >= 1;
+    const isCursorMode = plan.mode === 'cursor';
+    const modeLabel = isCursorMode ? 'Kursor Aktif' : 'Auto-Detect';
+    const startPointText = formatStartPointSummary(plan);
+    const rangeText = plan.plannedRowCount > 1
+      ? `${plan.plannedRowCount} baris (Baris #${plan.startRowNumber} – #${plan.endRowNumber})`
+      : `1 baris (Kolom #${plan.startColNumber} s/d #${plan.endColNumber})`;
+    const rowLabel = formatLogsheetRowStatusLabel(plan);
+    const detailPart = formatPreScanSummaryDetail(plan.filledCount, plan.filledSamples);
 
-    const warnSvg = createInlineSvgMarkup(
-      '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    const statusMessageHtml = isOverwrite
+      ? `Ditemukan <strong>${plan.filledCount} sel</strong> sudah terisi pada <strong>${escapeTextForHtml(rowLabel)}</strong>${escapeTextForHtml(detailPart)}. Jika dilanjutkan, nilai lama pada sel tersebut akan ditimpa.`
+      : `Sel target pada <strong>${escapeTextForHtml(rowLabel)}</strong> masih kosong. Data siap dimasukkan tanpa menimpa angka lama.`;
+
+    const specialSample = (plan.specialStatusSamples && plan.specialStatusSamples[0]) || 'Status Khusus';
+    const specialNoteHtml = plan.specialStatusCount >= 1
+      ? `<div class="pmr-confirm-special">
+          ${createInlineSvgMarkup('<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/>', 14)}
+          <span>Info: <strong>${plan.specialStatusCount} sel</strong> berstatus khusus (mis. ${escapeTextForHtml(specialSample)}) pada ${escapeTextForHtml(rowLabel)} akan dilewati otomatis agar keterangan tidak berubah.</span>
+        </div>`
+      : '';
+
+    const targetSvg = createInlineSvgMarkup(
+      '<circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/>',
       18
     );
-    const xSvg = createInlineSvgMarkup(
-      '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
-      14
-    );
-    const overwriteSvg = createInlineSvgMarkup(
-      '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
-      14
-    );
+    const statusSvg = isOverwrite
+      ? createInlineSvgMarkup('<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>', 16)
+      : createInlineSvgMarkup('<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>', 16);
+    const xSvg = createInlineSvgMarkup('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>', 14);
+    const ctaSvg = isOverwrite
+      ? createInlineSvgMarkup('<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>', 14)
+      : createInlineSvgMarkup('<polygon points="6 3 20 12 6 21 6 3"/>', 14);
 
     shadow.innerHTML = `
       <style>
         *, *::before, *::after { box-sizing: border-box; }
-        .backdrop {
+        .pmr-confirm-backdrop {
           position: fixed;
           inset: 0;
-          background: rgba(2, 6, 23, 0.72);
+          background: rgba(2, 6, 23, 0.74);
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 16px;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
-        .modal {
+        .pmr-confirm-card {
           width: 100%;
-          max-width: 400px;
+          max-width: 440px;
           background: #0f172a;
           color: #f1f5f9;
-          border: 1px solid rgba(245, 158, 11, 0.45);
+          border: 1px solid ${isOverwrite ? 'rgba(245, 158, 11, 0.45)' : 'rgba(56, 189, 248, 0.35)'};
           border-radius: 12px;
-          box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55);
+          box-shadow: 0 24px 48px rgba(0, 0, 0, 0.58);
           padding: 18px 20px;
         }
-        .header {
+        .pmr-confirm-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          margin-bottom: 12px;
+        }
+        .pmr-confirm-title-wrap {
           display: flex;
           align-items: center;
           gap: 10px;
-          margin-bottom: 10px;
+          min-width: 0;
         }
-        .icon-badge {
+        .pmr-confirm-icon {
           width: 34px;
           height: 34px;
           border-radius: 8px;
-          background: rgba(245, 158, 11, 0.16);
-          border: 1px solid rgba(251, 191, 36, 0.4);
-          color: #fbbf24;
+          background: rgba(56, 189, 248, 0.14);
+          border: 1px solid rgba(56, 189, 248, 0.35);
+          color: #38bdf8;
           display: inline-flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
         }
-        .title {
+        .pmr-confirm-title {
           margin: 0;
-          font-size: 15px;
+          font-size: 14.5px;
           font-weight: 700;
           color: #f8fafc;
+          line-height: 1.25;
         }
-        .message {
-          margin: 0 0 16px 0;
-          font-size: 13px;
-          line-height: 1.5;
-          color: #cbd5e1;
+        .pmr-confirm-badge {
+          font-size: 10.5px;
+          font-weight: 700;
+          padding: 3px 8px;
+          border-radius: 6px;
+          white-space: nowrap;
+          flex-shrink: 0;
+          background: ${isCursorMode ? 'rgba(14, 165, 233, 0.16)' : 'rgba(16, 185, 129, 0.16)'};
+          border: 1px solid ${isCursorMode ? 'rgba(56, 189, 248, 0.42)' : 'rgba(52, 211, 153, 0.42)'};
+          color: ${isCursorMode ? '#7dd3fc' : '#6ee7b7'};
         }
-        .message strong {
-          color: #fbbf24;
+        .pmr-confirm-summary {
+          background: rgba(30, 41, 59, 0.72);
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          border-radius: 8px;
+          padding: 10px 12px;
+          display: grid;
+          gap: 6px;
+          margin-bottom: 11px;
         }
-        .actions {
+        .pmr-confirm-row {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 12px;
+          font-size: 12px;
+          line-height: 1.4;
+        }
+        .pmr-confirm-label {
+          color: #94a3b8;
+          font-weight: 600;
+          flex-shrink: 0;
+        }
+        .pmr-confirm-value {
+          color: #f8fafc;
+          font-weight: 600;
+          text-align: right;
+          word-break: break-word;
+        }
+        .pmr-confirm-status {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          padding: 10px 12px;
+          border-radius: 8px;
+          font-size: 12.5px;
+          line-height: 1.48;
+          margin-bottom: ${plan.specialStatusCount >= 1 ? '8px' : '16px'};
+          background: ${isOverwrite ? 'rgba(245, 158, 11, 0.12)' : 'rgba(16, 185, 129, 0.1)'};
+          border: 1px solid ${isOverwrite ? 'rgba(245, 158, 11, 0.36)' : 'rgba(52, 211, 153, 0.3)'};
+          color: ${isOverwrite ? '#fde68a' : '#d1fae5'};
+        }
+        .pmr-confirm-status svg {
+          flex-shrink: 0;
+          margin-top: 2px;
+          color: ${isOverwrite ? '#fbbf24' : '#34d399'};
+        }
+        .pmr-confirm-status strong {
+          color: ${isOverwrite ? '#fbbf24' : '#6ee7b7'};
+        }
+        .pmr-confirm-special {
+          display: flex;
+          align-items: flex-start;
+          gap: 7px;
+          padding: 8px 11px;
+          border-radius: 8px;
+          font-size: 11.5px;
+          line-height: 1.45;
+          margin-bottom: 16px;
+          background: rgba(56, 189, 248, 0.1);
+          border: 1px solid rgba(56, 189, 248, 0.28);
+          color: #bae6fd;
+        }
+        .pmr-confirm-special svg {
+          flex-shrink: 0;
+          margin-top: 1px;
+          color: #38bdf8;
+        }
+        .pmr-confirm-special strong {
+          color: #e0f2fe;
+        }
+        .pmr-confirm-actions {
           display: flex;
           align-items: center;
           justify-content: flex-end;
           gap: 8px;
         }
-        button {
+        .pmr-confirm-btn {
           font-family: inherit;
           font-size: 12.5px;
           font-weight: 600;
@@ -635,28 +925,28 @@ function confirmOverwriteShadowModal(filledCount, filledSamples = []) {
           gap: 6px;
           transition: filter 0.15s ease, background-color 0.15s ease;
         }
-        button:focus-visible {
+        .pmr-confirm-btn:focus-visible {
           outline: 2px solid #38bdf8;
           outline-offset: 2px;
         }
-        .btn-cancel {
+        .pmr-confirm-btn-cancel {
           background: rgba(30, 41, 59, 0.85);
           color: #cbd5e1;
           border: 1px solid rgba(148, 163, 184, 0.35);
         }
-        .btn-cancel:hover {
+        .pmr-confirm-btn-cancel:hover {
           background: #1e293b;
           color: #ffffff;
         }
-        .btn-confirm {
-          background: #d97706;
+        .pmr-confirm-btn-primary {
+          background: ${isOverwrite ? '#d97706' : '#0284c7'};
           color: #ffffff;
-          border: 1px solid #f59e0b;
+          border: 1px solid ${isOverwrite ? '#f59e0b' : '#38bdf8'};
         }
-        .btn-confirm:hover {
-          background: #b45309;
+        .pmr-confirm-btn-primary:hover {
+          background: ${isOverwrite ? '#b45309' : '#0369a1'};
         }
-        .kbd {
+        .pmr-confirm-kbd {
           font-size: 10px;
           opacity: 0.78;
           padding: 1px 5px;
@@ -664,23 +954,44 @@ function confirmOverwriteShadowModal(filledCount, filledSamples = []) {
           background: rgba(0, 0, 0, 0.28);
         }
       </style>
-      <div class="backdrop" part="backdrop">
-        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pmr-modal-title">
-          <div class="header">
-            <span class="icon-badge">${warnSvg}</span>
-            <h3 id="pmr-modal-title" class="title">Konfirmasi Timpa Sel Terisi</h3>
+      <div class="pmr-confirm-backdrop" part="backdrop">
+        <div class="pmr-confirm-card" role="dialog" aria-modal="true" aria-labelledby="pmr-confirm-title">
+          <div class="pmr-confirm-header">
+            <div class="pmr-confirm-title-wrap">
+              <span class="pmr-confirm-icon">${targetSvg}</span>
+              <h3 id="pmr-confirm-title" class="pmr-confirm-title">Konfirmasi Pengisian Logsheet</h3>
+            </div>
+            <span class="pmr-confirm-badge">${escapeTextForHtml(modeLabel)}</span>
           </div>
-          <p class="message">Ditemukan <strong>${filledCount} sel</strong> sudah terisi${escapeTextForHtml(detailPart)}. Tetap timpa angka lama?</p>
-          <div class="actions">
-            <button type="button" id="pmr-btn-cancel" class="btn-cancel">
+          <div class="pmr-confirm-summary">
+            <div class="pmr-confirm-row">
+              <span class="pmr-confirm-label">Titik Mulai</span>
+              <span class="pmr-confirm-value">${escapeTextForHtml(startPointText)}</span>
+            </div>
+            <div class="pmr-confirm-row">
+              <span class="pmr-confirm-label">Jangkauan</span>
+              <span class="pmr-confirm-value">${escapeTextForHtml(rangeText)}</span>
+            </div>
+            <div class="pmr-confirm-row">
+              <span class="pmr-confirm-label">Sumber Data</span>
+              <span class="pmr-confirm-value">${escapeTextForHtml(sourceDisplayLabel)}</span>
+            </div>
+          </div>
+          <div class="pmr-confirm-status">
+            ${statusSvg}
+            <span>${statusMessageHtml}</span>
+          </div>
+          ${specialNoteHtml}
+          <div class="pmr-confirm-actions">
+            <button type="button" id="pmr-btn-cancel" class="pmr-confirm-btn pmr-confirm-btn-cancel">
               ${xSvg}
               <span>Batal</span>
-              <span class="kbd">ESC</span>
+              <span class="pmr-confirm-kbd">ESC</span>
             </button>
-            <button type="button" id="pmr-btn-confirm" class="btn-confirm">
-              ${overwriteSvg}
-              <span>Tetap Timpa</span>
-              <span class="kbd">Enter</span>
+            <button type="button" id="pmr-btn-confirm" class="pmr-confirm-btn pmr-confirm-btn-primary">
+              ${ctaSvg}
+              <span>${isOverwrite ? 'Timpa & Mulai' : 'Mulai Isi'}</span>
+              <span class="pmr-confirm-kbd">Enter</span>
             </button>
           </div>
         </div>
@@ -689,7 +1000,7 @@ function confirmOverwriteShadowModal(filledCount, filledSamples = []) {
 
     const cancelBtn = shadow.getElementById('pmr-btn-cancel');
     const confirmBtn = shadow.getElementById('pmr-btn-confirm');
-    const backdrop = shadow.querySelector('.backdrop');
+    const backdrop = shadow.querySelector('.pmr-confirm-backdrop');
 
     let settled = false;
     const cleanupAndResolve = (result) => {
@@ -808,6 +1119,19 @@ function extractRowsPayload(request) {
   return rows;
 }
 
+function resolveSourceDisplayLabel(request, rowsPayload) {
+  if (request && typeof request.sourceLabel === 'string' && request.sourceLabel.trim()) {
+    return request.sourceLabel.trim();
+  }
+  const colLen = Number(request && request.expectedCellCount) || (rowsPayload[0] ? rowsPayload[0].length : 0);
+  const presetKey = request && typeof request.activePreset === 'string' ? request.activePreset : '';
+  if (request && request.fileSourceType !== 'custom' && presetKey && PRESET_SHORT_LABELS[presetKey]) {
+    return `Preset: ${PRESET_SHORT_LABELS[presetKey]} (${colLen} sel)`;
+  }
+  const name = (request && request.fileName) ? String(request.fileName) : 'File Custom';
+  return `${name} (${colLen} sel)`;
+}
+
 async function handleStartMacro(request) {
   if (isRunning) return;
 
@@ -837,13 +1161,20 @@ async function handleStartMacro(request) {
     return;
   }
 
-  const preScan = preScanTargetCells(rowsPayload, startLoc);
-  if (preScan.filledCount >= 1) {
-    const confirmed = await confirmOverwriteShadowModal(preScan.filledCount, preScan.filledSamples);
-    if (!confirmed) {
+  const plan = scanTargetExecutionPlan(rowsPayload, startLoc);
+  if (plan.fillableActiveCount === 0) {
+    if (window === window.top || window.__PMR_SIMULATOR_TOP__ === true) {
+      showToast("warn", "Tidak ada sel aktif yang dapat diisi dari posisi mulai.", "#d97706", false);
       syncRunningState(false);
-      return;
     }
+    return;
+  }
+
+  const sourceDisplayLabel = resolveSourceDisplayLabel(request, rowsPayload);
+  const confirmed = await showUnifiedConfirmModal(plan, sourceDisplayLabel);
+  if (!confirmed) {
+    syncRunningState(false);
+    return;
   }
 
   const speedMs = Math.max(200, Number(request.speedMs) || 400);
@@ -870,11 +1201,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 
   if (request.action === "START_MACRO" && (request.rows || request.sequence)) {
+    sendResponse({ ok: true });
     handleStartMacro(request);
-  } else if (request.action === "STOP_MACRO") {
+    return true;
+  }
+  if (request.action === "STOP_MACRO") {
     if (isRunning) {
       stopMacroExecution("Pengisian dihentikan (ESC)");
     }
+    sendResponse({ ok: true });
+    return true;
   }
 });
 
@@ -950,25 +1286,6 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
   let filledRowsCount = 0;
   let lastRowNeedsAutosaveSync = false;
 
-  // Fallback jika input bukan di dalam struktur <tr> tabel
-  if (!currentRow && startLoc.singleElement) {
-    const el = startLoc.singleElement;
-    const lock = inspectCellLock(el);
-    if (!lock.locked && rowsPayload[0] && rowsPayload[0].length > 0) {
-      showToast("play", `Mulai: Kol ${startColNumber}`, "#0284c7", true);
-      injectCellValueVueReactive(el, rowsPayload[0][0]);
-      lastFilledInput = el;
-      currentTargetEl = el;
-      lastFocusedInput = el;
-      await waitForDilocAutosaveSync();
-    }
-    if (!isRunning) return;
-    isRunning = false;
-    syncRunningState(false);
-    showToast("success", "Pengisian sel selesai!", "#16a34a", false);
-    return;
-  }
-
   const initialRowTime = getRowTimeLabel(currentRow);
   showToast(
     "play",
@@ -1007,8 +1324,18 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
     }
 
     const isDirectIndexMapping = (rowValues.length === rowInputs.length);
-    const activeTotalInRow = rowInputs.filter(el => !isInactiveSkippableControl(el)).length;
+    const activeTotalInRow = rowInputs.filter(el => !isInactiveSkippableControl(el) && !isSpecialStatusSelect(el)).length;
     let sequentialCursor = 0;
+    if (!isDirectIndexMapping && startAbsCol > 0) {
+      for (let prevIdx = 0; prevIdx < startAbsCol; prevIdx++) {
+        const prevInput = rowInputs[prevIdx];
+        const prevLock = inspectCellLock(prevInput);
+        if (!prevInput.disabled && !prevInput.readOnly && !isInactiveSkippableControl(prevInput, prevLock)) {
+          sequentialCursor += 1;
+        }
+      }
+    }
+
     let rowTouchedAnyCell = false;
 
     for (let absColIdx = startAbsCol; absColIdx < rowInputs.length; absColIdx++) {
@@ -1030,6 +1357,14 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
         continue;
       }
 
+      // Lewati sel berstatus khusus klik kanan (<select> Plant Trouble, Standby, dll.) tanpa menimpa maupun menggeser indeks kolom
+      if (isSpecialStatusSelect(targetInput)) {
+        if (!isDirectIndexMapping && sequentialCursor < rowValues.length) {
+          sequentialCursor += 1;
+        }
+        continue;
+      }
+
       let cellValue;
       if (isDirectIndexMapping) {
         cellValue = rowValues[absColIdx];
@@ -1047,7 +1382,7 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
       injectCellValueVueReactive(targetInput, cellValue);
       lastFilledInput = targetInput;
       currentTargetEl = targetInput;
-      lastFocusedInput = targetInput;
+      lastFocusedParamCell = targetInput;
       rowTouchedAnyCell = true;
 
       const isInitialFirstCell = (r === 0 && absColIdx === startAbsCol);
@@ -1092,8 +1427,8 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}) {
   }
 
   // Biarkan kursor tetap diam di sel terakhir yang berhasil diisi
-  if (lastFilledInput && document.contains(lastFilledInput) && !inspectCellLock(lastFilledInput).locked) {
-    lastFocusedInput = lastFilledInput;
+  if (lastFilledInput && document.body && document.body.contains(lastFilledInput) && !inspectCellLock(lastFilledInput).locked) {
+    lastFocusedParamCell = lastFilledInput;
     currentTargetEl = lastFilledInput;
   }
 

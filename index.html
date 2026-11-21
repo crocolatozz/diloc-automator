@@ -1004,7 +1004,7 @@
               </div>
 
               <div class="target-hint">
-                Tekan langsung <b>Play</b> di popup untuk menguji <i>Smart Auto-Detect</i> pada baris kosong <code>.active-shift-time</code> (Jam 01–03 hingga rem otomatis di Jam 04 <code>title="Jam belum tiba"</code>), klik sel input manual untuk mulai/resume dari kolom tertentu, atau tekan <b>ESC</b> untuk berhenti.
+                Tekan langsung <b>Play</b> untuk mode <i>Auto-Detect</i> pada baris kosong <code>.active-shift-time</code>, klik sel input di kolom tengah untuk menguji mode <b>Kursor Aktif (1-to-1)</b>, atau <b>klik kanan</b> sel mana saja untuk mengubahnya menjadi status khusus (<code>Plant Trouble</code> / <code>Standby</code>, dilewati otomatis saat mengisi). Baris ke-2 Kol #4 memuat contoh sel berstatus khusus.
               </div>
             </div>
 
@@ -1644,7 +1644,7 @@
                 return state.manifest ? cloneVal(state.manifest) : {
                   manifest_version: 3,
                   name: folder,
-                  version: '1.9.1'
+                  version: '1.10.0'
                 };
               },
               openOptionsPage: function (callback) {
@@ -1888,8 +1888,22 @@
               : (isOp3Inactive25 ? ' title="Hanya aktif jam 06:00 / 14:00 / 22:00"' : '');
             const tdAttrs = ' class="data-cell' + (isLockedCell ? ' cell-locked' : '') + '"' + lockTitle;
             const controlAttrs = isLockedCell ? ' disabled' + lockTitle : '';
+            const isDefaultSpecialCell = (r === 2 && oneBased === 4 && !isLockedCell);
 
-            if (selectSet.has(oneBased)) {
+            if (isDefaultSpecialCell) {
+              tds +=
+                '<td' + tdAttrs + '>' +
+                  '<select class="cell-input diloc-cell-input status-select" data-pmr-status-select="true" data-row="' + r + '" data-col="' + oneBased + '" aria-label="' + escapeHtml(timeText + ' ' + columns[c].tag + ' Status') + '">' +
+                    '<option value="plant_trouble" selected>Plant Trouble</option>' +
+                    '<option value="plant_shutdown">Plant Shutdown</option>' +
+                    '<option value="standby_notrunning">Standby / Not Running</option>' +
+                    '<option value="tidak_ada_mixing">Tidak Ada Mixing</option>' +
+                    '<option value="maintenance">Maintenance</option>' +
+                    '<option value="overhaul">Overhaul</option>' +
+                    '<option value="plant_ta">Plant TA</option>' +
+                  '</select>' +
+                '</td>';
+            } else if (selectSet.has(oneBased)) {
               tds +=
                 '<td' + tdAttrs + '>' +
                   '<select class="cell-input diloc-cell-input"' + controlAttrs + ' data-row="' + r + '" data-col="' + oneBased + '" aria-label="' + escapeHtml(timeText + ' ' + columns[c].tag) + '">' +
@@ -1922,10 +1936,10 @@
         const dilocAutosaveSimScript =
           '(function(){' +
             'var btn = document.getElementById("diloc-submit-btn");' +
-            'if(!btn) return;' +
             'var debounceTimer = null;' +
             'var saveTimer = null;' +
             'function triggerAutosave(){' +
+              'if(!btn) return;' +
               'clearTimeout(debounceTimer);' +
               'clearTimeout(saveTimer);' +
               'debounceTimer = setTimeout(function(){' +
@@ -1943,6 +1957,30 @@
             'document.addEventListener("change", function(e){' +
               'if(e.target && e.target.classList && e.target.classList.contains("diloc-cell-input")){ triggerAutosave(); }' +
             '}, true);' +
+            'document.addEventListener("contextmenu", function(e){' +
+              'var td = e.target && e.target.closest ? e.target.closest("td.data-cell") : null;' +
+              'if(!td || td.classList.contains("cell-locked")) return;' +
+              'var cur = td.querySelector(".diloc-cell-input");' +
+              'if(!cur || cur.disabled) return;' +
+              'e.preventDefault();' +
+              'if(cur.dataset && cur.dataset.pmrStatusSelect === "true"){' +
+                'var restored = document.createElement("input");' +
+                'restored.type = "text";' +
+                'restored.className = "cell-input diloc-cell-input";' +
+                'restored.autocomplete = "off";' +
+                'if(cur.dataset.row) restored.dataset.row = cur.dataset.row;' +
+                'if(cur.dataset.col) restored.dataset.col = cur.dataset.col;' +
+                'td.replaceChildren(restored);' +
+              '} else {' +
+                'var sel = document.createElement("select");' +
+                'sel.className = "cell-input diloc-cell-input status-select";' +
+                'sel.dataset.pmrStatusSelect = "true";' +
+                'if(cur.dataset && cur.dataset.row) sel.dataset.row = cur.dataset.row;' +
+                'if(cur.dataset && cur.dataset.col) sel.dataset.col = cur.dataset.col;' +
+                'sel.innerHTML = "<option value=\\"plant_trouble\\" selected>Plant Trouble</option><option value=\\"plant_shutdown\\">Plant Shutdown</option><option value=\\"standby_notrunning\\">Standby / Not Running</option><option value=\\"tidak_ada_mixing\\">Tidak Ada Mixing</option><option value=\\"maintenance\\">Maintenance</option><option value=\\"overhaul\\">Overhaul</option><option value=\\"plant_ta\\">Plant TA</option>";' +
+                'td.replaceChildren(sel);' +
+              '}' +
+            '}, false);' +
           '})();';
 
         return (
@@ -1975,6 +2013,7 @@
               '.col-eq{font-size:10px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
               '.u{background:#e2e8f0;color:#1e293b;padding:0 4px;border-radius:3px;font-weight:600;}' +
               '.diloc-cell-input{width:88px;height:28px;padding:0 6px;border:1px solid #cbd5e1;border-radius:4px;font-family:ui-monospace,monospace;font-size:12px;color:#0f172a;background:#ffffff;}' +
+              '.diloc-cell-input.status-select{background:#fffbeb;border-color:#f59e0b;color:#92400e;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:10.5px;font-weight:600;}' +
               '.diloc-cell-input:disabled{background:#e2e8f0;color:#64748b;cursor:not-allowed;}' +
               '.diloc-cell-input:focus{outline:2px solid #2563eb;border-color:#2563eb;background:#eff6ff;}' +
               '.display-cell{background:#f8fafc;color:#64748b;text-align:center;font-family:ui-monospace,monospace;font-size:10px;}' +
