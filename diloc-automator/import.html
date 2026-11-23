@@ -40,8 +40,10 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      font-size: 14px;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13.5px;
       font-weight: 700;
+      letter-spacing: -0.02em;
       color: #f8fafc;
       margin: 0;
       min-width: 0;
@@ -173,7 +175,7 @@
       <span data-icon="robotRed" data-icon-size="20"></span>
       <span>DILOC Automator — Import</span>
     </h1>
-    <span class="import-badge">v2.1.2 · .PMR / .JSON</span>
+    <span class="import-badge">v2.2.0 · .PMR / .JSON</span>
   </header>
 
   <label for="importFileInput" id="dropZone" class="drop-zone" tabindex="0" aria-label="Pilih atau Drop file .pmr atau .json">
@@ -192,6 +194,8 @@
   <div class="footer-credit">© 2026 — Developed by FIKRI</div>
 
   <script src="icons.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="firestore-sync.js"></script>
   <script src="parser.js"></script>
   <script src="randomizer.js"></script>
   <script src="import.js"></script>

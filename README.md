@@ -1,14 +1,14 @@
-# DILOC Automator (`v2.1.2`)
+# DILOC Automator (`v2.2.0`)
 
-Ekstensi Google Chrome / Microsoft Edge (**Manifest V3**) berbasis **100% Vanilla HTML5, CSS3, dan ES6+ JavaScript** untuk mengotomatiskan pengisian form web **E-Logsheet DILOC** dari file macro **`.pmr`** (PyMacroRecord) maupun **`.json`** (PMR Editor & format native **DILOC Automator**), lengkap dengan acak digit pintar kontekstual (`±1` s/d `±3`), pemetaan dropdown panah 1-to-1, Export/Import preset JSON, preset kolom **Op. Lap 1 / 2 / 3**, modal progres 3 fase, Web Worker anti-throttle tab background, dan **Smooth Dark Mode**.
+Ekstensi Google Chrome / Microsoft Edge (**Manifest V3**) berbasis **100% Vanilla HTML5, CSS3, dan ES6+ JavaScript** untuk mengotomatiskan pengisian form web **E-Logsheet DILOC** dari file macro **`.pmr`** (PyMacroRecord) maupun **`.json`** (PMR Editor & format native **DILOC Automator**), lengkap dengan sinkronisasi master parameter terpusat **Cloud Firestore** (Read-Only REST API), acak digit pintar kontekstual (`±1` s/d `±3`), pemetaan dropdown panah 1-to-1, Export/Import preset JSON, modal progres 3 fase, Web Worker anti-throttle tab background, dan **Smooth Dark Mode**.
 
 ## Fitur Utama
 
-- **Dual-Format Parser (`parser.js`) & Export/Import Native (`options.js`):** Membaca log mentah `.pmr`, JSON terstruktur PMR Editor, dan preset native `diloc-automator-preset`, mengonversi tombol panah dropdown (`Key.down` / `Key.up`) menjadi urutan opsi valid ke-*N*, mendukung **Export JSON** bersih dari halaman Options beserta status centang per sel (yang langsung dipulihkan saat diimpor ulang), serta memvalidasi ketat standar **Op. Lap 1 (167)**, **Op. Lap 2 (51)**, atau **Op. Lap 3 (44)**.
-- **Smart Auto-Detect, Kursor Aktif 1-to-1 & Web Worker Anti-Throttle (`content.js`):** Memprioritaskan pengisian dari posisi kursor aktif dengan pemetaan kolom 1-to-1, otomatis mendeteksi baris kosong `.active-shift-time` dan `<select>` `"Select..."`, serta memakai timer Web Worker (dengan fallback CSP aman) agar pengisian tetap lancar meski berpindah tab.
+- **Sinkronisasi Master Cloud Firestore (`firebase-config.js`, `firestore-sync.js`):** Menarik metadata parameter (`index`, `equipment`, `tag`, `unit`, `type`) untuk **Op. Lap 1 / 2 / 3** secara *Read-Only* melalui Firestore REST API v1 (`urea1b-project-database` / koleksi `diloc_master_parameter`: `oplap_1`, `oplap_2`, `oplap_3`) dan menyimpannya ke cache `chrome.storage.local` (`masterParametersCache`), lengkap dengan auto-sync ringan saat Popup/Options dibuka serta tombol **Sync Master**.
+- **Dual-Format Parser Dinamis (`parser.js`) & Export/Import Native (`options.js`):** Membaca log mentah `.pmr`, JSON terstruktur PMR Editor, dan preset native `diloc-automator-preset`, mengonversi tombol panah dropdown (`Key.down` / `Key.up`) menjadi urutan opsi valid ke-*N*, mendukung **Export JSON** (`DILOC_OpLap{op}_{YYYY}-{MM}-{DD}_{HH}-{mm}.json`) beserta status centang per sel, serta validasi jumlah kolom dinamis sesuai data Firestore (dengan **Auto-Sync Safety Net** 1x otomatis saat jumlah sel belum cocok dengan cache lokal).
+- **Deteksi Sel Non-Angka Otomatis & Randomize Kontekstual (`randomizer.js`, `options.js`):** Mengunci otomatis sel non-angka (teks, dropdown/select, status, boolean, nilai `0`) berdasarkan metadata `type`/`unit` dari Firestore dan isi sel, serta mengacak digit terakhir secara fisik (`0%–100%`, non-negatif) pada mode `All` atau `Selected`.
+- **Smart Auto-Detect, Kursor Aktif 1-to-1 & Web Worker Anti-Throttle (`content.js`):** Memprioritaskan pengisian dari posisi kursor aktif dengan pemetaan kolom 1-to-1, otomatis mendeteksi baris kosong `.active-shift-time` dan `<select>` `"Select..."`, serta memakai 1 reusable Web Worker per eksekusi (dengan fallback CSP `setTimeout` otomatis).
 - **Proteksi DOM DILOC Nyata & Auto-Reset Selektif:** Melewati atau menghentikan pengisian secara aman saat menyentuh sel terkunci, baris luar shift (`row-outside-shift`, `Jam belum tiba`) langsung ke modal Fase 3 tanpa macet, serta mereset hanya 3 pengaturan (`randomMode`, `typingSpeedMs`, `rowCount`) saat eksekusi 100% sukses tanpa menghapus file maupun preset centang.
-- **Modal Blur 3 Fase, Clear File (`×`) & Tooltip Adaptif:** Menampilkan Konfirmasi Awal (Fase 1), Progres Live (Fase 2), dan Ringkasan Hasil (Fase 3) bebas shortcut keyboard, tombol lepas file (`×`) dengan modal konfirmasi aman di Popup/Options, serta floating tooltip CSS adaptif berikon `info`.
-- **Randomize Kontekstual (`randomizer.js`) & Options Kontras Tinggi:** Mengacak digit terakhir dengan batas fisik (`0%–100%`, non-negatif) pada mode `All` atau `Selected`, mendukung preview kontras tinggi dan filter interaktif di halaman **Options** yang tersinkron real-time melalui `chrome.storage.local`.
 
 ## Struktur Repository
 
@@ -21,6 +21,8 @@ Ekstensi Google Chrome / Microsoft Edge (**Manifest V3**) berbasis **100% Vanill
     ├── README.md           # Dokumentasi utama proyek
     └── diloc-automator/    # Folder inti ekstensi Manifest V3 (siap Load Unpacked)
         ├── manifest.json
+        ├── firebase-config.js
+        ├── firestore-sync.js
         ├── popup.html / popup.js
         ├── options.html / options.js
         ├── import.html / import.js
@@ -29,7 +31,6 @@ Ekstensi Google Chrome / Microsoft Edge (**Manifest V3**) berbasis **100% Vanill
         ├── randomizer.js
         ├── icons.js
         ├── theme-init.js
-        ├── operator1.json / operator2.json / operator3.json
         ├── icons/
         │   ├── icon16.png
         │   ├── icon48.png

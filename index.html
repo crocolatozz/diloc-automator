@@ -96,9 +96,10 @@
 
     .brand-title {
       margin: 0;
-      font-size: 14.5px;
+      font-family: var(--font-mono);
+      font-size: 14px;
       font-weight: 700;
-      letter-spacing: -0.01em;
+      letter-spacing: -0.02em;
       color: var(--text-primary);
       white-space: nowrap;
     }
@@ -1644,7 +1645,8 @@
                 return state.manifest ? cloneVal(state.manifest) : {
                   manifest_version: 3,
                   name: 'DILOC Automator',
-                  version: '2.1.2'
+                  version: '2.2.0',
+                  host_permissions: ['https://firestore.googleapis.com/*']
                 };
               },
               openOptionsPage: function (callback) {
@@ -1776,19 +1778,51 @@
         }
       };
 
-      // Fetch operator metadata dynamically with numbered fallback
+      function decodeSimFirestoreVal(node) {
+        if (!node || typeof node !== 'object') return node;
+        if ('nullValue' in node) return null;
+        if ('stringValue' in node) return String(node.stringValue);
+        if ('booleanValue' in node) return Boolean(node.booleanValue);
+        if ('integerValue' in node) return Number(node.integerValue);
+        if ('doubleValue' in node) return Number(node.doubleValue);
+        if (node.arrayValue) return (node.arrayValue.values || []).map(decodeSimFirestoreVal);
+        if (node.mapValue && node.mapValue.fields) {
+          const out = {};
+          for (const k of Object.keys(node.mapValue.fields)) {
+            out[k] = decodeSimFirestoreVal(node.mapValue.fields[k]);
+          }
+          return out;
+        }
+        return node;
+      }
+
+      // Fetch operator metadata dynamically from Cloud Firestore REST API with numbered fallback
       async function fetchOperatorColumns(operatorKey) {
         if (state.presetCache[operatorKey]) {
           return state.presetCache[operatorKey];
         }
         const expectedCount = OPERATOR_COLUMN_COUNTS[operatorKey] || 44;
+        const docMap = { operator1: 'oplap_1', operator2: 'oplap_2', operator3: 'oplap_3' };
+        const docId = docMap[operatorKey] || 'oplap_1';
         try {
-          const res = await fetch('./' + FIXED_FOLDER + '/' + operatorKey + '.json?_ts=' + Date.now(), { cache: 'no-store' });
+          const url = 'https://firestore.googleapis.com/v1/projects/urea1b-project-database/databases/(default)/documents/diloc_master_parameter/' + docId;
+          const res = await fetch(url, { cache: 'no-store' });
           if (!res.ok) throw new Error('HTTP ' + res.status);
-          const raw = await res.json();
-          if (Array.isArray(raw) && raw.length > 0) {
-            state.presetCache[operatorKey] = raw.slice(0, expectedCount).map((item, idx) => ({
-              index: idx,
+          const docJson = await res.json();
+          let rawList = null;
+          if (docJson && docJson.fields) {
+            const candidate = docJson.fields.parameters || docJson.fields.items || docJson.fields.data || null;
+            const decoded = candidate ? decodeSimFirestoreVal(candidate) : null;
+            if (typeof decoded === 'string') {
+              const parsed = JSON.parse(decoded);
+              rawList = Array.isArray(parsed) ? parsed : (parsed && (parsed.parameters || parsed.items || parsed.data));
+            } else if (Array.isArray(decoded)) {
+              rawList = decoded;
+            }
+          }
+          if (Array.isArray(rawList) && rawList.length > 0) {
+            state.presetCache[operatorKey] = rawList.map((item, idx) => ({
+              index: typeof item.index === 'number' ? item.index : idx,
               equipment: String(item.equipment || '-'),
               tag: String(item.tag || 'Col #' + (idx + 1)),
               unit: String(item.unit || '-'),
@@ -2229,22 +2263,17 @@
           : {};
 
         let presetKey = 'operator1';
-        let fileName = 'dummy_operator1_167.pmr';
-        let cellCount = 167;
-
         if (modeType === '51') {
           presetKey = 'operator2';
-          fileName = 'dummy_operator2_51.pmr';
-          cellCount = 51;
         } else if (modeType === '44') {
           presetKey = 'operator3';
-          fileName = 'dummy_operator3_44.pmr';
-          cellCount = 44;
         }
 
         const selectSet = new Set(SELECT_PARAM_INDICES[presetKey] || []);
         const selectDummyPool = ['AUTO', 'ON', 'RUN', 'MANUAL'];
         const columns = await fetchOperatorColumns(presetKey);
+        const cellCount = columns.length;
+        const fileName = 'dummy_' + presetKey + '_' + cellCount + '.pmr';
         const values = [];
 
         for (let i = 0; i < cellCount; i++) {
@@ -2275,13 +2304,24 @@
           sequence: sequence,
           totalCells: cellCount,
           operatorKey: presetKey,
-          updatedAt: Date.now()
+          importedAt: new Date().toISOString()
         };
 
+        const existingCounts = (store.operatorStandardCounts && typeof store.operatorStandardCounts === 'object')
+          ? { ...store.operatorStandardCounts }
+          : { operator1: 167, operator2: 51, operator3: 44 };
+        existingCounts[presetKey] = cellCount;
+
         const nextItems = {
-          savedMacro: { fileName: fileName, sequence: sequence, totalCells: cellCount, operatorKey: presetKey },
+          savedMacro: {
+            fileName: fileName,
+            sequence: sequence,
+            totalCells: cellCount,
+            operatorKey: presetKey,
+            importedAt: existingMacrosByPreset[presetKey].importedAt
+          },
           macrosByPreset: existingMacrosByPreset,
-          operatorStandardCounts: { operator1: 167, operator2: 51, operator3: 44 },
+          operatorStandardCounts: existingCounts,
           headerMeta: headerMeta,
           activePreset: presetKey,
           selectedCellsByPreset: existingByPreset,

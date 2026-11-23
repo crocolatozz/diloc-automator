@@ -261,9 +261,10 @@
 
     .topbar-title h1 {
       margin: 0;
-      font-size: 20px;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 19.5px;
       font-weight: 700;
-      letter-spacing: -0.015em;
+      letter-spacing: -0.02em;
       color: var(--text-topbar);
     }
 
@@ -631,6 +632,31 @@
     :root[data-theme="dark"] .btn-export:hover:not(:disabled) {
       background: rgba(14, 165, 233, 0.28);
       border-color: rgba(56, 189, 248, 0.75);
+    }
+
+    .sync-status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border-soft);
+      background: var(--bg-surface-muted);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+    }
+
+    .btn-sync.is-syncing .svg-icon {
+      animation: spinSync 0.85s linear infinite;
+    }
+
+    @keyframes spinSync {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
 
     /* Custom CSS Floating Tooltip System */
@@ -1388,19 +1414,27 @@
           </span>
           <button class="preset-btn" data-preset="operator1">
             <span data-icon="userCheck" data-icon-class="preset-icon" data-icon-size="14"></span>
-            <span>Operator 1 (167)</span>
+            <span data-preset-label="operator1">Operator 1</span>
           </button>
           <button class="preset-btn" data-preset="operator2">
             <span data-icon="userCheck" data-icon-class="preset-icon" data-icon-size="14"></span>
-            <span>Operator 2 (51)</span>
+            <span data-preset-label="operator2">Operator 2</span>
           </button>
           <button class="preset-btn" data-preset="operator3">
             <span data-icon="userCheck" data-icon-class="preset-icon" data-icon-size="14"></span>
-            <span>Operator 3 (44)</span>
+            <span data-preset-label="operator3">Operator 3</span>
           </button>
         </div>
 
         <div class="toolbar-actions">
+          <span class="sync-status-pill">
+            <span data-icon="clock" data-icon-class="icon-sky" data-icon-size="13"></span>
+            <span id="masterSyncStatus">Master: Belum sinkron</span>
+          </span>
+          <button id="syncMasterBtn" type="button" class="btn btn-sync">
+            <span data-icon="refreshCw" data-icon-class="icon-sky" data-icon-size="14"></span>
+            <span>Sync Master</span>
+          </button>
           <a href="https://crocolatozz.github.io/pmr-editor/" target="_blank" rel="noopener noreferrer" class="btn btn-editor">
             <span data-icon="edit" data-icon-size="14"></span>
             <span>Buka DILOC Editor</span>
@@ -1440,7 +1474,7 @@
     <div id="tableContainer"></div>
 
     <footer class="page-footer">
-      <span>DILOC Automator v2.1.2</span>
+      <span>DILOC Automator v2.2.0</span>
       <span>© 2026 — Developed by FIKRI</span>
     </footer>
   </div>
@@ -1468,6 +1502,8 @@
   </div>
 
   <script src="icons.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="firestore-sync.js"></script>
   <script src="parser.js"></script>
   <script src="randomizer.js"></script>
   <script src="options.js"></script>

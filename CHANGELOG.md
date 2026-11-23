@@ -2,6 +2,19 @@
 
 Semua perubahan penting pada proyek **DILOC Automator** (sebelumnya *PMR Web Runner*) dicatat dalam file ini.
 
+## [2.2.0] - 2026-11-23
+
+### Added
+- **Integrasi Cloud Firestore REST API Read-Only (`firebase-config.js`, `firestore-sync.js`, `manifest.json`):** Menambahkan modul konfigurasi `firebase-config.js` (`urea1b-project-database`, koleksi `diloc_master_parameter`: `oplap_1`, `oplap_2`, `oplap_3`) dan `firestore-sync.js` untuk menarik master parameter via Firestore REST API v1 tanpa library eksternal (support format `arrayValue`/`mapValue` maupun JSON `stringValue`), menyimpannya ke cache `chrome.storage.local` (`masterParametersCache`, `operatorStandardCounts`, `lastMasterSyncAt`), serta menambahkan `host_permissions` `https://firestore.googleapis.com/*`.
+- **Auto-Sync Ringan & Tombol `Sync Master` (`popup.html`, `popup.js`, `options.html`, `options.js`):** Menambahkan auto-sync latar belakang non-blocking saat Popup atau Options dibuka, tombol manual **Sync Master** dengan ikon animasi `refreshCw`, serta indikator timestamp lokal terformat `DD/MM/YY HH:mm` (aman terhadap tanggal kosong/invalid, fallback `"Belum sinkron"`).
+- **Auto-Sync Safety Net Saat Impor (`parser.js`):** Jika file `.pmr` / `.json` memiliki jumlah kolom yang belum cocok dengan cache lokal (atau cache masih kosong), `persistImportedMacroFile()` otomatis melakukan 1x pull Cloud Firestore lalu memvalidasi ulang sebelum menolak file.
+- **Auto-Lock Sel Non-Angka dari Metadata Firestore (`firestore-sync.js`, `options.js`, `randomizer.js`):** Menambahkan `isMetaRandomizableAllowed()` dan `isCellEligibleForRandomize()` untuk mengunci sel non-angka (`select`, `dropdown`, `text`, `string`, `status`, `boolean`, `checkbox`, `readonly`) secara otomatis dari metadata Firestore tanpa memerlukan flag `randomizable` manual.
+
+### Changed
+- **Penghapusan Total Master JSON Lokal (`parser.js`, `randomizer.js`, `options.html`, `index.html`, `README.md`):** Menghapus `operator1.json`, `operator2.json`, dan `operator3.json` beserta seluruh ketergantungan angka statis `167`/`51`/`44` pada validasi inti; `fetchBuiltInPreset()` kini membaca dari `masterParametersCache` (dengan fallback sync Firestore) dan label tombol Preset Logsheet di Options diperbarui dinamis dari cache.
+- **Format Nama File Export JSON & Timestamp Lokal (`options.js`, `firestore-sync.js`):** Mengubah format nama file unduhan `Export JSON` menjadi `DILOC_OpLap{op}_{YYYY}-{MM}-{DD}_{HH}-{mm}.json` memakai waktu lokal device (tanpa kata `Preset`), memperbarui metadata `"version": "2.2.0"`, serta menyimpan `importedAt` ISO 8601 yang diformat ke `DD/MM/YY HH:mm`.
+- **Tipografi Judul `JetBrains Mono` (`popup.html`, `options.html`, `import.html`, `index.html`):** Menerapkan stack font `'JetBrains Mono', ui-monospace, ...` ala tag equipment *Running Status* pada judul utama Popup, Options, Mini Window Import, dan Dev Workbench, serta menyinkronkan versi `v2.2.0` di seluruh file termasuk footer `© 2026 — Developed by FIKRI`.
+
 ## [2.1.2] - 2026-11-21
 
 ### Changed

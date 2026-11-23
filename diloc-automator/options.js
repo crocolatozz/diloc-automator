@@ -1,11 +1,14 @@
 let loadedSequence = [];
 let loadedFileName = "";
+let loadedFileImportedAt = "";
 let macrosByPreset = {};
 let operatorStandardCounts = {
-  operator1: PRESET_EXPECTED_COUNTS.operator1,
-  operator2: PRESET_EXPECTED_COUNTS.operator2,
-  operator3: PRESET_EXPECTED_COUNTS.operator3
+  operator1: 0,
+  operator2: 0,
+  operator3: 0
 };
+let lastMasterSyncAt = "";
+let isManualSyncing = false;
 let randomMode = "off";
 let randomRange = 1;
 let cellRandomRanges = {};
@@ -44,6 +47,8 @@ const clearAllBtn = document.getElementById('clearAllBtn');
 const rerollPreviewBtn = document.getElementById('rerollPreviewBtn');
 const exportJsonWrap = document.getElementById('exportJsonWrap');
 const exportJsonBtn = document.getElementById('exportJsonBtn');
+const masterSyncStatus = document.getElementById('masterSyncStatus');
+const syncMasterBtn = document.getElementById('syncMasterBtn');
 const searchInput = document.getElementById('searchInput');
 const saveToast = document.getElementById('saveToast');
 const clearConfirmModal = document.getElementById('clearConfirmModal');
@@ -55,42 +60,115 @@ function getPresetStorageKey(presetKey) {
   return presetKey && PRESET_SHORT_LABELS[presetKey] ? presetKey : 'operator1';
 }
 
-function normalizeStandardCounts(rawCounts) {
-  const next = {
-    operator1: PRESET_EXPECTED_COUNTS.operator1,
-    operator2: PRESET_EXPECTED_COUNTS.operator2,
-    operator3: PRESET_EXPECTED_COUNTS.operator3
-  };
-  if (rawCounts && typeof rawCounts === 'object') {
-    for (const op of ['operator1', 'operator2', 'operator3']) {
+function isCellEligibleForRandomize(cell, meta = null) {
+  if (!cell || !cell.isRandomizable) return false;
+  if (typeof isMetaRandomizableAllowed === 'function' && !isMetaRandomizableAllowed(meta)) {
+    return false;
+  }
+  return true;
+}
+
+function normalizeStandardCounts(rawCounts, cacheObj = null, macrosObj = null) {
+  if (typeof computeCountsFromCacheAndStorage === 'function') {
+    return computeCountsFromCacheAndStorage(cacheObj, rawCounts, macrosObj);
+  }
+  const next = { operator1: 0, operator2: 0, operator3: 0 };
+  for (const op of ['operator1', 'operator2', 'operator3']) {
+    if (cacheObj && Array.isArray(cacheObj[op]) && cacheObj[op].length > 0) {
+      next[op] = cacheObj[op].length;
+    } else if (rawCounts && typeof rawCounts === 'object') {
       const n = parseInt(rawCounts[op], 10);
       if (Number.isInteger(n) && n > 0) next[op] = n;
+    }
+    if (next[op] === 0 && macrosObj && macrosObj[op]) {
+      const mCount = parseInt(macrosObj[op].totalCells, 10);
+      if (Number.isInteger(mCount) && mCount > 0) next[op] = mCount;
     }
   }
   return next;
 }
 
-async function syncOperatorStandardCountsToStorage() {
-  const counts = {
-    operator1: PRESET_EXPECTED_COUNTS.operator1,
-    operator2: PRESET_EXPECTED_COUNTS.operator2,
-    operator3: PRESET_EXPECTED_COUNTS.operator3
-  };
+function syncPresetButtonLabels() {
+  presetButtons.forEach(btn => {
+    const opKey = btn.dataset.preset;
+    const labelEl = btn.querySelector('[data-preset-label]');
+    if (!labelEl || !PRESET_NAMES[opKey]) return;
+    const count = Number(operatorStandardCounts[opKey]) || 0;
+    labelEl.textContent = count > 0
+      ? `${PRESET_NAMES[opKey]} (${count})`
+      : PRESET_NAMES[opKey];
+  });
+}
 
-  for (const opKey of ['operator1', 'operator2', 'operator3']) {
-    try {
-      const meta = await fetchBuiltInPreset(opKey);
-      if (Array.isArray(meta) && meta.length > 0) {
-        counts[opKey] = meta.length;
-      }
-    } catch (e) {}
+function renderMasterSyncStatus() {
+  if (masterSyncStatus) {
+    const formatted = typeof formatLocalTimestamp === 'function'
+      ? formatLocalTimestamp(lastMasterSyncAt, 'Belum sinkron')
+      : 'Belum sinkron';
+    masterSyncStatus.textContent = `Master: ${formatted}`;
+  }
+  if (syncMasterBtn) {
+    syncMasterBtn.disabled = isManualSyncing;
+    syncMasterBtn.classList.toggle('is-syncing', isManualSyncing);
+    const labelSpan = syncMasterBtn.querySelector('span:last-child');
+    if (labelSpan) {
+      labelSpan.textContent = isManualSyncing ? 'Syncing...' : 'Sync Master';
+    }
+  }
+}
+
+async function syncOperatorStandardCountsToStorage(options = {}) {
+  const { background = false, forcePull = false } = options;
+
+  if (!forcePull && typeof getMasterCacheAndCountsFromStorage === 'function') {
+    const localState = await getMasterCacheAndCountsFromStorage();
+    operatorStandardCounts = normalizeStandardCounts(
+      localState.counts,
+      localState.cache,
+      macrosByPreset
+    );
+    if (localState.lastMasterSyncAt) {
+      lastMasterSyncAt = localState.lastMasterSyncAt;
+    }
+    syncPresetButtonLabels();
+    renderMasterSyncStatus();
+    if (!background) {
+      return operatorStandardCounts;
+    }
   }
 
-  operatorStandardCounts = counts;
-  try {
-    await chrome.storage.local.set({ operatorStandardCounts: counts });
-  } catch (e) {}
-  return counts;
+  if (typeof syncMasterParametersFromFirestore === 'function') {
+    if (!background) {
+      isManualSyncing = true;
+      renderMasterSyncStatus();
+    }
+    try {
+      const res = await syncMasterParametersFromFirestore();
+      if (res && res.ok) {
+        operatorStandardCounts = normalizeStandardCounts(res.counts, res.cache, macrosByPreset);
+        lastMasterSyncAt = res.lastMasterSyncAt || lastMasterSyncAt;
+        if (activePreset && res.cache && Array.isArray(res.cache[activePreset])) {
+          headerMeta = res.cache[activePreset];
+        }
+        syncPresetButtonLabels();
+        renderMasterSyncStatus();
+        if (!background) {
+          hideOptionsAlert();
+          notifySaved('Master parameter Cloud Firestore tersinkron!', 'refreshCw');
+        }
+      } else if (!background) {
+        showOptionsAlert('Gagal sinkronisasi master Cloud Firestore. Menggunakan cache lokal.', 'warn');
+        notifySaved('Gagal sync Firestore — memakai cache lokal', 'warn', 'warn');
+      }
+    } finally {
+      if (!background) {
+        isManualSyncing = false;
+        renderMasterSyncStatus();
+      }
+    }
+  }
+
+  return operatorStandardCounts;
 }
 
 function applyTheme(theme, persist = false) {
@@ -189,6 +267,9 @@ async function saveSettings() {
 }
 
 function syncToolbarState() {
+  syncPresetButtonLabels();
+  renderMasterSyncStatus();
+
   modeButtons.forEach(btn => {
     btn.classList.toggle('active', btn.dataset.mode === randomMode);
   });
@@ -214,7 +295,7 @@ function syncToolbarState() {
         ? activePreset
         : resolveStrictOperatorByCount(cells.length, operatorStandardCounts, loadedFileName);
       const opLapNum = resolvedOpKey === 'operator2' ? 2 : (resolvedOpKey === 'operator3' ? 3 : 1);
-      const checkedCount = cells.filter(c => c.isRandomizable && selectedSet.has(c.index)).length;
+      const checkedCount = cells.filter(c => isCellEligibleForRandomize(c, headerMeta[c.index] || null) && selectedSet.has(c.index)).length;
       setElementTooltip(
         exportJsonWrap,
         `Export Op. Lap ${opLapNum} (${cells.length} sel, ${checkedCount} dicentang)`
@@ -245,8 +326,8 @@ function renderMismatchBanner(totalCells) {
     return;
   }
 
-  const expectedCount = operatorStandardCounts[activePreset] || PRESET_EXPECTED_COUNTS[activePreset];
-  if (typeof expectedCount !== 'number' || totalCells === expectedCount) {
+  const expectedCount = Number(operatorStandardCounts[activePreset]) || 0;
+  if (expectedCount <= 0 || totalCells === expectedCount) {
     presetMismatchBanner.hidden = true;
     presetMismatchBanner.innerHTML = '';
     return;
@@ -308,10 +389,11 @@ function applyTableColumnFilter(searchMatchedSet = null) {
 
   lastCells.forEach((cell, idx) => {
     const prev = lastPreviewResults[idx];
+    const meta = headerMeta[idx] || null;
     let visible = true;
 
     if (activeTableFilter === 'selected') {
-      visible = cell.isRandomizable && selectedSet.has(idx);
+      visible = isCellEligibleForRandomize(cell, meta) && selectedSet.has(idx);
     } else if (activeTableFilter === 'changed') {
       visible = Boolean(prev && prev.changed);
     }
@@ -363,6 +445,7 @@ async function applyBuiltInPreset(presetKey, silent = false) {
         if (cachedCells.length === normalized.length) {
           loadedSequence = cachedMacro.sequence;
           loadedFileName = cachedMacro.fileName || `${presetKey}.pmr`;
+          loadedFileImportedAt = cachedMacro.importedAt || '';
           updatePayload.savedMacro = cachedMacro;
         }
       }
@@ -377,6 +460,8 @@ async function applyBuiltInPreset(presetKey, silent = false) {
       if (!silent) {
         notifySaved(`Preset ${PRESET_NAMES[presetKey]} (${normalized.length}) aktif!`);
       }
+    } else if (!silent) {
+      notifySaved('Master preset belum tersedia. Tekan Sync Master terlebih dahulu.', 'warn', 'warn');
     }
   } catch (err) {
     console.error("Gagal memuat preset:", presetKey, err);
@@ -434,17 +519,25 @@ function renderAll() {
   }
 
   const cells = groupSequenceIntoCells(loadedSequence);
-  const randomizableCount = cells.filter(c => c.isRandomizable).length;
-  const zeroCount = cells.filter(c => c.isPureZero).length;
-  const textCount = cells.filter(c => !c.isNumeric).length;
+  const randomizableCount = cells.filter(c => isCellEligibleForRandomize(c, headerMeta[c.index] || null)).length;
+  const zeroCount = cells.filter(c => c.isPureZero && !isCellEligibleForRandomize(c, headerMeta[c.index] || null)).length;
+  const lockedTotal = cells.length - randomizableCount;
+  const textCount = Math.max(0, lockedTotal - zeroCount);
   const isSelectedMode = (randomMode === 'selected');
   const displayRange = sanitizeRandomRange(randomRange, true);
 
-  setPillContent(renderIcon('file', { className: 'icon-sky-light', size: 15 }), `${loadedFileName} (${cells.length} data)`);
+  const importedTs = typeof formatLocalTimestamp === 'function'
+    ? formatLocalTimestamp(loadedFileImportedAt, '')
+    : '';
+  const pillText = importedTs
+    ? `${loadedFileName} (${cells.length} data · ${importedTs})`
+    : `${loadedFileName} (${cells.length} data)`;
+  setPillContent(renderIcon('file', { className: 'icon-sky-light', size: 15 }), pillText);
   renderMismatchBanner(cells.length);
 
-  const validSelectedCount = Array.from(selectedSet).filter(idx => idx >= 0 && idx < cells.length).length;
-  const lockedTotal = zeroCount + textCount;
+  const validSelectedCount = Array.from(selectedSet).filter(idx => (
+    idx >= 0 && idx < cells.length && isCellEligibleForRandomize(cells[idx], headerMeta[idx] || null)
+  )).length;
 
   renderStatsBadges(randomizableCount, lockedTotal, zeroCount, textCount, validSelectedCount);
 
@@ -492,14 +585,18 @@ function renderAll() {
 
   cells.forEach((cell, idx) => {
     const meta = headerMeta[idx] || null;
-    const isChecked = cell.isRandomizable && selectedSet.has(idx);
+    const eligible = isCellEligibleForRandomize(cell, meta);
+    const lockReason = !eligible
+      ? (typeof getCellRandomizeLockReason === 'function' ? getCellRandomizeLockReason(cell, meta) : 'text')
+      : '';
+    const isChecked = eligible && selectedSet.has(idx);
     const highlightSelected = isSelectedMode && isChecked;
     const prev = previewResults[idx];
 
     const th = document.createElement('th');
     th.dataset.colIdx = idx;
     th.textContent = `#${idx + 1}`;
-    if (cell.isRandomizable) {
+    if (eligible) {
       th.classList.add('clickable-col');
       th.title = "Klik untuk centang/hapus centang sel ini";
       th.addEventListener('click', () => toggleCellSelection(idx, true));
@@ -526,11 +623,11 @@ function renderAll() {
     tdUnit.dataset.colIdx = idx;
     if (meta && meta.unit && meta.unit !== '-') {
       tdUnit.textContent = meta.unit;
-    } else if (cell.isDropdownArrow) {
+    } else if (lockReason === 'dropdown') {
       tdUnit.innerHTML = `<span class="lock-pill">DROPDOWN</span>`;
-    } else if (!cell.isNumeric) {
+    } else if (lockReason === 'text') {
       tdUnit.innerHTML = `<span class="lock-pill">TEKS</span>`;
-    } else if (cell.isPureZero) {
+    } else if (lockReason === 'zero') {
       tdUnit.innerHTML = `<span class="lock-pill">NOL (0)</span>`;
     } else {
       tdUnit.textContent = 'Angka';
@@ -544,7 +641,7 @@ function renderAll() {
     const tdOrig = document.createElement('td');
     tdOrig.dataset.colIdx = idx;
     tdOrig.textContent = origText;
-    if (!cell.isRandomizable) tdOrig.classList.add('col-locked');
+    if (!eligible) tdOrig.classList.add('col-locked');
     if (highlightSelected) tdOrig.classList.add('col-selected');
     trOrig.appendChild(tdOrig);
 
@@ -553,15 +650,21 @@ function renderAll() {
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = isChecked;
-    cb.disabled = !cell.isRandomizable;
+    cb.disabled = !eligible;
 
-    if (!cell.isRandomizable) {
+    if (!eligible) {
       tdCheck.classList.add('locked-cell');
-      tdCheck.title = cell.isDropdownArrow
-        ? `Terkunci: Dropdown panah (opsi valid ke-${cell.arrowStepIndex})`
-        : (cell.isPureZero
-          ? "Terkunci: Nilai 0 murni tidak di-randomize"
-          : "Terkunci: Input teks/huruf tidak di-randomize");
+      if (cell.isDropdownArrow) {
+        tdCheck.title = `Terkunci: Dropdown panah (opsi valid ke-${cell.arrowStepIndex})`;
+      } else if (lockReason === 'dropdown') {
+        tdCheck.title = `Terkunci: Parameter dropdown (${meta && meta.type ? meta.type : 'select'}) tidak di-randomize`;
+      } else if (lockReason === 'zero') {
+        tdCheck.title = "Terkunci: Nilai 0 murni tidak di-randomize";
+      } else if (meta && typeof isMetaRandomizableAllowed === 'function' && !isMetaRandomizableAllowed(meta)) {
+        tdCheck.title = `Terkunci: Parameter tipe non-angka (${meta.type || meta.unit}) tidak di-randomize`;
+      } else {
+        tdCheck.title = "Terkunci: Input teks/huruf tidak di-randomize";
+      }
     } else {
       if (highlightSelected) tdCheck.classList.add('col-selected');
       tdCheck.addEventListener('click', (e) => {
@@ -580,7 +683,7 @@ function renderAll() {
     const tdPrev = document.createElement('td');
     tdPrev.dataset.colIdx = idx;
     tdPrev.textContent = prevText;
-    if (!cell.isRandomizable) {
+    if (!eligible) {
       tdPrev.classList.add('col-locked');
     } else if (prev.changed) {
       tdPrev.classList.add('preview-changed');
@@ -647,7 +750,9 @@ macroFileOptions.addEventListener('change', (e) => {
 
       loadedSequence = result.savedMacro.sequence;
       loadedFileName = result.savedMacro.fileName;
+      loadedFileImportedAt = result.savedMacro.importedAt || '';
       macrosByPreset = result.macrosByPreset || {};
+      operatorStandardCounts = normalizeStandardCounts(result.operatorStandardCounts, null, macrosByPreset);
       activePreset = result.activePreset;
       headerMeta = result.headerMeta || [];
       selectedCellsByPreset = result.selectedCellsByPreset || {};
@@ -688,6 +793,13 @@ if (fileLabelTop) {
   });
 }
 
+if (syncMasterBtn) {
+  syncMasterBtn.addEventListener('click', async () => {
+    await syncOperatorStandardCountsToStorage({ background: false, forcePull: true });
+    renderAll();
+  });
+}
+
 modeButtons.forEach(btn => {
   btn.addEventListener('click', async () => {
     randomMode = btn.dataset.mode;
@@ -717,7 +829,11 @@ filterButtons.forEach(btn => {
 selectAllNumBtn.addEventListener('click', async () => {
   if (!loadedSequence || loadedSequence.length === 0) return;
   const cells = groupSequenceIntoCells(loadedSequence);
-  selectedSet = new Set(cells.filter(c => c.isRandomizable).map(c => c.index));
+  selectedSet = new Set(
+    cells
+      .filter(c => isCellEligibleForRandomize(c, headerMeta[c.index] || null))
+      .map(c => c.index)
+  );
   randomMode = 'selected';
   await saveSettings();
   renderAll();
@@ -803,10 +919,14 @@ async function buildNativeExportPayload() {
 
   const exportedCells = cells.map((cell) => {
     const meta = exportMeta[cell.index] || null;
-    const isChecked = cell.isRandomizable ? storedCheckedSet.has(cell.index) : false;
-    const cellType = (cell.isDropdownArrow || (meta && meta.type === 'select'))
+    const eligible = isCellEligibleForRandomize(cell, meta);
+    const isChecked = eligible ? storedCheckedSet.has(cell.index) : false;
+    const lockReason = !eligible
+      ? (typeof getCellRandomizeLockReason === 'function' ? getCellRandomizeLockReason(cell, meta) : 'text')
+      : '';
+    const cellType = (cell.isDropdownArrow || lockReason === 'dropdown' || (meta && /select|dropdown/i.test(String(meta.type || ''))))
       ? 'dropdown'
-      : (cell.isNumeric ? 'number' : 'text');
+      : (cell.isNumeric && (!meta || isMetaRandomizableAllowed(meta)) ? 'number' : 'text');
 
     return {
       index: cell.index,
@@ -822,7 +942,7 @@ async function buildNativeExportPayload() {
     opLapNum,
     payload: {
       format: 'diloc-automator-preset',
-      version: '2.1.2',
+      version: '2.2.0',
       opLap: opLapNum,
       exportedAt: new Date().toISOString(),
       cells: exportedCells
@@ -837,11 +957,19 @@ async function exportNativeJsonPreset() {
     return;
   }
   const { opLapNum, payload } = result;
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  const exportFileName = `DILOC_OpLap${opLapNum}_Preset_${yyyy}-${mm}-${dd}.json`;
+  const parts = typeof formatExportTimestampParts === 'function'
+    ? formatExportTimestampParts(new Date())
+    : (() => {
+      const now = new Date();
+      return {
+        yyyy: String(now.getFullYear()),
+        mm: String(now.getMonth() + 1).padStart(2, '0'),
+        dd: String(now.getDate()).padStart(2, '0'),
+        hh: String(now.getHours()).padStart(2, '0'),
+        min: String(now.getMinutes()).padStart(2, '0')
+      };
+    })();
+  const exportFileName = `DILOC_OpLap${opLapNum}_${parts.yyyy}-${parts.mm}-${parts.dd}_${parts.hh}-${parts.min}.json`;
 
   const jsonText = JSON.stringify(payload, null, 2);
   const blob = new Blob([jsonText], { type: 'application/json;charset=utf-8' });
@@ -889,6 +1017,7 @@ async function performClearLoadedFile() {
   closeClearConfirmModal();
   loadedSequence = [];
   loadedFileName = '';
+  loadedFileImportedAt = '';
   activePreset = '';
   headerMeta = [];
   selectedSet = new Set();
@@ -1001,27 +1130,41 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       applyTheme(changes.optionsTheme.newValue || 'light', false);
     }
     if (changes.operatorStandardCounts) {
-      operatorStandardCounts = normalizeStandardCounts(changes.operatorStandardCounts.newValue);
+      operatorStandardCounts = normalizeStandardCounts(changes.operatorStandardCounts.newValue, null, macrosByPreset);
+      tableDirty = true;
+    }
+    if (changes.masterParametersCache) {
+      operatorStandardCounts = normalizeStandardCounts(operatorStandardCounts, changes.masterParametersCache.newValue, macrosByPreset);
+      tableDirty = true;
+    }
+    if (changes.lastMasterSyncAt) {
+      lastMasterSyncAt = typeof changes.lastMasterSyncAt.newValue === 'string'
+        ? changes.lastMasterSyncAt.newValue
+        : '';
       tableDirty = true;
     }
     if (changes.savedMacro) {
       const val = changes.savedMacro.newValue;
       if (val && Array.isArray(val.sequence) && val.sequence.length > 0) {
         const cells = groupSequenceIntoCells(val.sequence);
-        const resolved = resolveStrictOperatorByCount(cells.length, operatorStandardCounts, val.fileName);
+        const hasAnyCounts = Number(operatorStandardCounts.operator1) > 0 || Number(operatorStandardCounts.operator2) > 0 || Number(operatorStandardCounts.operator3) > 0;
+        const resolved = resolveStrictOperatorByCount(cells.length, operatorStandardCounts, val.fileName) || (hasAnyCounts ? '' : (val.operatorKey || ''));
         if (resolved) {
           loadedSequence = val.sequence;
           loadedFileName = val.fileName || 'macro.pmr';
+          loadedFileImportedAt = val.importedAt || '';
           if (!changes.activePreset) {
             activePreset = resolved;
           }
         } else {
           loadedSequence = [];
           loadedFileName = '';
+          loadedFileImportedAt = '';
         }
       } else {
         loadedSequence = [];
         loadedFileName = '';
+        loadedFileImportedAt = '';
         if (!changes.activePreset) {
           activePreset = '';
         }
@@ -1104,9 +1247,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   hydrateDataIcons();
   initCustomTooltips();
 
-  const stdCounts = await syncOperatorStandardCountsToStorage();
   const data = await chrome.storage.local.get([...UNIFIED_STORAGE_KEYS, 'fileSourceType']);
   isMacroRunning = Boolean(data.macroRunning);
+
+  macrosByPreset = (data.macrosByPreset && typeof data.macrosByPreset === 'object')
+    ? { ...data.macrosByPreset }
+    : {};
+  operatorStandardCounts = normalizeStandardCounts(
+    data.operatorStandardCounts,
+    data.masterParametersCache || null,
+    macrosByPreset
+  );
+  lastMasterSyncAt = typeof data.lastMasterSyncAt === 'string' ? data.lastMasterSyncAt : '';
 
   let initialTheme = data.optionsTheme;
   if (initialTheme !== 'dark' && initialTheme !== 'light') {
@@ -1119,10 +1271,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   applyTheme(initialTheme, false);
 
-  macrosByPreset = (data.macrosByPreset && typeof data.macrosByPreset === 'object')
-    ? { ...data.macrosByPreset }
-    : {};
-
   const legacyCustom = data.fileSourceType === 'custom';
   if (data.fileSourceType !== undefined) {
     try {
@@ -1130,16 +1278,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (e) {}
   }
 
+  const hasAnyCounts = Number(operatorStandardCounts.operator1) > 0 || Number(operatorStandardCounts.operator2) > 0 || Number(operatorStandardCounts.operator3) > 0;
   let hasValidMacro = false;
   if (!legacyCustom && data.savedMacro && Array.isArray(data.savedMacro.sequence) && data.savedMacro.sequence.length > 0) {
     const cells = groupSequenceIntoCells(data.savedMacro.sequence);
-    const resolved = resolveStrictOperatorByCount(cells.length, stdCounts, data.savedMacro.fileName);
-    if (resolved) {
+    const resolved = resolveStrictOperatorByCount(cells.length, operatorStandardCounts, data.savedMacro.fileName);
+    if (resolved || !hasAnyCounts) {
       loadedSequence = data.savedMacro.sequence;
       loadedFileName = data.savedMacro.fileName || 'macro.pmr';
-      activePreset = (data.activePreset && PRESET_SHORT_LABELS[data.activePreset] && stdCounts[data.activePreset] === cells.length)
+      loadedFileImportedAt = data.savedMacro.importedAt || '';
+      activePreset = (data.activePreset && PRESET_SHORT_LABELS[data.activePreset] && (!hasAnyCounts || operatorStandardCounts[data.activePreset] === cells.length))
         ? data.activePreset
-        : resolved;
+        : (resolved || data.savedMacro.operatorKey || '');
       hasValidMacro = true;
     }
   }
@@ -1147,6 +1297,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!hasValidMacro && (legacyCustom || data.savedMacro)) {
     loadedSequence = [];
     loadedFileName = '';
+    loadedFileImportedAt = '';
     activePreset = '';
     try {
       await chrome.storage.local.remove(['savedMacro', 'activePreset', 'headerMeta', 'fileSourceType']);
@@ -1183,8 +1334,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if (hasValidMacro && headerMeta.length === 0 && activePreset) {
     await applyBuiltInPreset(activePreset, true);
-    return;
+  } else {
+    renderAll();
   }
 
-  renderAll();
+  // Background auto-sync ringan saat halaman Options dibuka
+  syncOperatorStandardCountsToStorage({ background: true, forcePull: true }).then(() => {
+    renderAll();
+  });
 });

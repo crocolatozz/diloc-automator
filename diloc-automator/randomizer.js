@@ -100,8 +100,11 @@ function evaluateCellsWithMode(cells, mode, selectedIndices, headerMeta = [], ra
 
   return cells.map(cell => {
     const meta = metaList[cell.index] || null;
+    const metaAllowed = typeof isMetaRandomizableAllowed === 'function'
+      ? isMetaRandomizableAllowed(meta)
+      : true;
 
-    if (cell.isDropdownArrow || !cell.isRandomizable || mode === 'off') {
+    if (cell.isDropdownArrow || !cell.isRandomizable || !metaAllowed || mode === 'off') {
       return {
         value: cell.rawValue,
         displayValue: cell.displayValue || cell.rawValue,
@@ -221,15 +224,25 @@ function normalizeHeaderMetadata(rawJson) {
 
 async function fetchBuiltInPreset(presetKey) {
   if (!presetKey || !['operator1', 'operator2', 'operator3'].includes(presetKey)) return null;
-  const resp = await fetch(chrome.runtime.getURL(`${presetKey}.json`));
-  if (!resp.ok) return null;
-  const raw = await resp.json();
-  const normalized = normalizeHeaderMetadata(raw);
-  const expected = PRESET_EXPECTED_COUNTS[presetKey];
-  if (typeof expected === 'number' && normalized.length > expected) {
-    return normalized.slice(0, expected);
+
+  try {
+    const data = await chrome.storage.local.get(['masterParametersCache']);
+    const cache = data && data.masterParametersCache && typeof data.masterParametersCache === 'object'
+      ? data.masterParametersCache
+      : null;
+    if (cache && Array.isArray(cache[presetKey]) && cache[presetKey].length > 0) {
+      return normalizeHeaderMetadata(cache[presetKey]);
+    }
+  } catch (e) {}
+
+  if (typeof syncMasterParametersFromFirestore === 'function') {
+    const syncRes = await syncMasterParametersFromFirestore();
+    if (syncRes && syncRes.cache && Array.isArray(syncRes.cache[presetKey]) && syncRes.cache[presetKey].length > 0) {
+      return normalizeHeaderMetadata(syncRes.cache[presetKey]);
+    }
   }
-  return normalized;
+
+  return null;
 }
 
 const UNIFIED_STORAGE_KEYS = [
@@ -237,7 +250,9 @@ const UNIFIED_STORAGE_KEYS = [
   'macrosByPreset',
   'activePreset',
   'headerMeta',
+  'masterParametersCache',
   'operatorStandardCounts',
+  'lastMasterSyncAt',
   'selectedCellsByPreset',
   'selectedCellIndices',
   'randomMode',

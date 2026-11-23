@@ -1,8 +1,3 @@
-const PRESET_EXPECTED_COUNTS = {
-  operator1: 167,
-  operator2: 51,
-  operator3: 44
-};
 
 const PRESET_SHORT_LABELS = {
   operator1: 'Op. Lap 1',
@@ -426,29 +421,40 @@ function groupSequenceIntoCells(sequence) {
   return cells;
 }
 
-function sanitizeStandardCount(val, fallback) {
+function sanitizeStandardCount(val, fallback = 0) {
   const n = parseInt(val, 10);
   return Number.isInteger(n) && n > 0 ? n : fallback;
 }
 
 async function getStandardOperatorCountsFromStorage() {
-  const counts = {
-    operator1: PRESET_EXPECTED_COUNTS.operator1,
-    operator2: PRESET_EXPECTED_COUNTS.operator2,
-    operator3: PRESET_EXPECTED_COUNTS.operator3
-  };
+  if (typeof getMasterCacheAndCountsFromStorage === 'function') {
+    const res = await getMasterCacheAndCountsFromStorage();
+    if (res && res.counts) {
+      return res.counts;
+    }
+  }
 
+  const counts = { operator1: 0, operator2: 0, operator3: 0 };
   try {
-    const data = await chrome.storage.local.get(['operatorStandardCounts', 'macrosByPreset']);
-    if (data && data.operatorStandardCounts && typeof data.operatorStandardCounts === 'object') {
-      for (const opKey of ['operator1', 'operator2', 'operator3']) {
-        counts[opKey] = sanitizeStandardCount(data.operatorStandardCounts[opKey], counts[opKey]);
+    const data = await chrome.storage.local.get([
+      'masterParametersCache',
+      'operatorStandardCounts',
+      'macrosByPreset'
+    ]);
+    const cache = data && data.masterParametersCache && typeof data.masterParametersCache === 'object'
+      ? data.masterParametersCache
+      : null;
+
+    for (const opKey of ['operator1', 'operator2', 'operator3']) {
+      if (cache && Array.isArray(cache[opKey]) && cache[opKey].length > 0) {
+        counts[opKey] = cache[opKey].length;
+      } else if (data && data.operatorStandardCounts && typeof data.operatorStandardCounts === 'object') {
+        counts[opKey] = sanitizeStandardCount(data.operatorStandardCounts[opKey], 0);
       }
-    } else if (data && data.macrosByPreset && typeof data.macrosByPreset === 'object') {
-      for (const opKey of ['operator1', 'operator2', 'operator3']) {
+      if (counts[opKey] === 0 && data && data.macrosByPreset && data.macrosByPreset[opKey]) {
         const entry = data.macrosByPreset[opKey];
         if (entry && typeof entry.totalCells === 'number' && entry.totalCells > 0) {
-          counts[opKey] = sanitizeStandardCount(entry.totalCells, counts[opKey]);
+          counts[opKey] = sanitizeStandardCount(entry.totalCells, 0);
         }
       }
     }
@@ -459,16 +465,16 @@ async function getStandardOperatorCountsFromStorage() {
 
 function detectOperatorHintFromFileName(fileName) {
   const lower = String(fileName || '').toLowerCase();
-  if (/operator[\s_-]*1|op[\s_-]*1/.test(lower)) return 'operator1';
-  if (/operator[\s_-]*2|op[\s_-]*2/.test(lower)) return 'operator2';
-  if (/operator[\s_-]*3|op[\s_-]*3/.test(lower)) return 'operator3';
+  if (/operator[\s_-]*1|op[\s_-]*1|oplap[\s_-]*1/.test(lower)) return 'operator1';
+  if (/operator[\s_-]*2|op[\s_-]*2|oplap[\s_-]*2/.test(lower)) return 'operator2';
+  if (/operator[\s_-]*3|op[\s_-]*3|oplap[\s_-]*3/.test(lower)) return 'operator3';
   return '';
 }
 
 function resolveStrictOperatorByCount(totalCells, standardCounts, fileName = '') {
   if (!Number.isInteger(totalCells) || totalCells <= 0 || !standardCounts) return '';
   const matches = ['operator1', 'operator2', 'operator3'].filter(
-    op => Number(standardCounts[op]) === totalCells
+    op => Number(standardCounts[op]) > 0 && Number(standardCounts[op]) === totalCells
   );
   if (matches.length === 0) return '';
   if (matches.length === 1) return matches[0];
@@ -477,24 +483,32 @@ function resolveStrictOperatorByCount(totalCells, standardCounts, fileName = '')
 }
 
 function formatRejectedFileMessage(readCount, standardCounts) {
-  const a = Number(standardCounts && standardCounts.operator1) || PRESET_EXPECTED_COUNTS.operator1;
-  const b = Number(standardCounts && standardCounts.operator2) || PRESET_EXPECTED_COUNTS.operator2;
-  const c = Number(standardCounts && standardCounts.operator3) || PRESET_EXPECTED_COUNTS.operator3;
-  return `File ditolak (tidak termuat): terbaca ${readCount} data. Hanya mendukung standar Op. Lap 1 (${a} data), Op. Lap 2 (${b} data), atau Op. Lap 3 (${c} data).`;
+  const a = Number(standardCounts && standardCounts.operator1) || 0;
+  const b = Number(standardCounts && standardCounts.operator2) || 0;
+  const c = Number(standardCounts && standardCounts.operator3) || 0;
+  if (a === 0 && b === 0 && c === 0) {
+    return 'Master parameter belum tersinkronisasi dari Firestore. Periksa koneksi internet lalu tekan Sync Master.';
+  }
+  const parts = [];
+  if (a > 0) parts.push(`Op. Lap 1 (${a} data)`);
+  if (b > 0) parts.push(`Op. Lap 2 (${b} data)`);
+  if (c > 0) parts.push(`Op. Lap 3 (${c} data)`);
+  return `File ditolak (tidak termuat): terbaca ${readCount} data. Hanya mendukung standar ${parts.join(', ')}.`;
 }
 
-function buildMacroRecord(fileName, sequence, operatorKey = '') {
+function buildMacroRecord(fileName, sequence, operatorKey = '', importedAt = '') {
   const cells = groupSequenceIntoCells(sequence);
   return {
     fileName: String(fileName || 'macro.pmr'),
     sequence: Array.isArray(sequence) ? sequence : [],
     cellValues: cells.map(c => c.rawValue),
     totalCells: cells.length,
-    operatorKey: operatorKey || ''
+    operatorKey: operatorKey || '',
+    importedAt: importedAt || new Date().toISOString()
   };
 }
 
-function validateNativePresetStructure(rawData, standardCounts) {
+function validateNativePresetCellEntries(rawData) {
   if (!Array.isArray(rawData.cells) || rawData.cells.length === 0) {
     const err = new Error('File JSON preset tidak valid: properti "cells" harus berupa array tidak kosong.');
     err.code = 'STRICT_OPERATOR_MISMATCH';
@@ -556,18 +570,41 @@ function validateNativePresetStructure(rawData, standardCounts) {
       err.code = 'STRICT_OPERATOR_MISMATCH';
       throw err;
     }
+  }
+}
+
+function validateNativePresetStructure(rawData, standardCounts) {
+  validateNativePresetCellEntries(rawData);
+
+  if (rawData.opLap !== undefined && rawData.opLap !== null) {
+    const opNum = Number(rawData.opLap);
     const candidateOp = `operator${opNum}`;
-    const expectedCount = Number(standardCounts && standardCounts[candidateOp]) || PRESET_EXPECTED_COUNTS[candidateOp];
-    if (rawData.cells.length !== expectedCount) {
-      const err = new Error(
-        `File ditolak: preset Op. Lap ${opNum} terbaca ${rawData.cells.length} kolom, seharusnya ${expectedCount} kolom.`
-      );
+    const expectedCount = Number(standardCounts && standardCounts[candidateOp]) || 0;
+    if (expectedCount <= 0 || rawData.cells.length !== expectedCount) {
+      const msg = expectedCount > 0
+        ? `File ditolak: preset Op. Lap ${opNum} terbaca ${rawData.cells.length} kolom, seharusnya ${expectedCount} kolom.`
+        : formatRejectedFileMessage(rawData.cells.length, standardCounts);
+      const err = new Error(msg);
       err.code = 'STRICT_OPERATOR_MISMATCH';
       err.readCount = rawData.cells.length;
       err.standardCounts = standardCounts;
       throw err;
     }
   }
+}
+
+function matchOperatorAgainstCounts(totalCells, standardCounts, isNativePreset, rawData, fileName) {
+  if (totalCells <= 0 || !standardCounts) return '';
+  if (isNativePreset && rawData.opLap !== undefined && rawData.opLap !== null) {
+    const opNum = Number(rawData.opLap);
+    if ([1, 2, 3].includes(opNum)) {
+      const candidateOp = `operator${opNum}`;
+      const expected = Number(standardCounts[candidateOp]) || 0;
+      return expected > 0 && expected === totalCells ? candidateOp : '';
+    }
+    return '';
+  }
+  return resolveStrictOperatorByCount(totalCells, standardCounts, fileName);
 }
 
 async function persistImportedMacroFile(fileName, rawData) {
@@ -578,27 +615,32 @@ async function persistImportedMacroFile(fileName, rawData) {
     rawData.format === 'diloc-automator-preset'
   );
 
-  const standardCounts = await getStandardOperatorCountsFromStorage();
-
   if (isNativePreset) {
-    validateNativePresetStructure(rawData, standardCounts);
+    validateNativePresetCellEntries(rawData);
   }
 
   const parsedSeq = parsePMRData(rawData);
   const cells = groupSequenceIntoCells(parsedSeq);
   const totalCells = cells.length;
 
-  let matchedOp = '';
-  if (isNativePreset && [1, 2, 3].includes(Number(rawData.opLap))) {
-    const candidateOp = `operator${Number(rawData.opLap)}`;
-    if (Number(standardCounts[candidateOp]) === totalCells) {
-      matchedOp = candidateOp;
+  let standardCounts = await getStandardOperatorCountsFromStorage();
+  let matchedOp = (parsedSeq.length > 0 && totalCells > 0)
+    ? matchOperatorAgainstCounts(totalCells, standardCounts, isNativePreset, rawData, fileName)
+    : '';
+
+  // Auto-sync safety net: jika cache belum terisi atau jumlah kolom belum cocok, pull 1x dari Cloud Firestore sebelum menolak
+  if (parsedSeq.length > 0 && totalCells > 0 && !matchedOp && typeof syncMasterParametersFromFirestore === 'function') {
+    const syncRes = await syncMasterParametersFromFirestore();
+    if (syncRes && syncRes.counts) {
+      standardCounts = syncRes.counts;
+    } else {
+      standardCounts = await getStandardOperatorCountsFromStorage();
     }
+    matchedOp = matchOperatorAgainstCounts(totalCells, standardCounts, isNativePreset, rawData, fileName);
   }
-  if (!matchedOp && !isNativePreset) {
-    matchedOp = resolveStrictOperatorByCount(totalCells, standardCounts, fileName);
-  } else if (!matchedOp && isNativePreset && rawData.opLap === undefined) {
-    matchedOp = resolveStrictOperatorByCount(totalCells, standardCounts, fileName);
+
+  if (isNativePreset) {
+    validateNativePresetStructure(rawData, standardCounts);
   }
 
   if (parsedSeq.length === 0 || totalCells === 0 || !matchedOp) {
@@ -643,7 +685,7 @@ async function persistImportedMacroFile(fileName, rawData) {
     }
   }
 
-  const macroRecord = buildMacroRecord(fileName, parsedSeq, matchedOp);
+  const macroRecord = buildMacroRecord(fileName, parsedSeq, matchedOp, new Date().toISOString());
   existingMacrosByPreset[matchedOp] = macroRecord;
 
   let restoredForPreset;
@@ -653,6 +695,10 @@ async function persistImportedMacroFile(fileName, rawData) {
       const idx = (item && typeof item.index === 'number' && Number.isInteger(item.index))
         ? item.index
         : arrayIdx;
+      const meta = resolvedMeta[idx] || null;
+      const metaAllowed = typeof isMetaRandomizableAllowed === 'function'
+        ? isMetaRandomizableAllowed(meta)
+        : true;
       if (
         idx >= 0 &&
         idx < totalCells &&
@@ -660,6 +706,7 @@ async function persistImportedMacroFile(fileName, rawData) {
         item.checked === true &&
         cells[idx] &&
         cells[idx].isRandomizable &&
+        metaAllowed &&
         !checkedIndices.includes(idx)
       ) {
         checkedIndices.push(idx);
@@ -670,7 +717,13 @@ async function persistImportedMacroFile(fileName, rawData) {
     restoredForPreset = checkedIndices;
   } else {
     restoredForPreset = Array.isArray(existingByPreset[matchedOp])
-      ? existingByPreset[matchedOp].filter(idx => idx >= 0 && idx < totalCells)
+      ? existingByPreset[matchedOp].filter(idx => {
+        if (idx < 0 || idx >= totalCells) return false;
+        const metaAllowed = typeof isMetaRandomizableAllowed === 'function'
+          ? isMetaRandomizableAllowed(resolvedMeta[idx] || null)
+          : true;
+        return Boolean(cells[idx] && cells[idx].isRandomizable && metaAllowed);
+      })
       : [];
   }
 
