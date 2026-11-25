@@ -29,6 +29,7 @@ const PRESET_NAMES = {
 };
 
 const activeFilePill = document.getElementById('activeFilePill');
+const optionsVersionBadge = document.getElementById('optionsVersionBadge');
 const clearFileBtnWrap = document.getElementById('clearFileBtnWrap');
 const clearFileBtn = document.getElementById('clearFileBtn');
 const macroFileOptions = document.getElementById('macroFileOptions');
@@ -54,6 +55,22 @@ const clearConfirmModal = document.getElementById('clearConfirmModal');
 const clearConfirmFileName = document.getElementById('clearConfirmFileName');
 const confirmClearCancelBtn = document.getElementById('confirmClearCancelBtn');
 const confirmClearOkBtn = document.getElementById('confirmClearOkBtn');
+
+function resolveExtensionVersion() {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.runtime && typeof chrome.runtime.getManifest === 'function') {
+      const manifest = chrome.runtime.getManifest();
+      if (manifest && manifest.version) return String(manifest.version);
+    }
+  } catch (e) {}
+  return '2.2.3';
+}
+
+function syncOptionsVersionBadge() {
+  if (optionsVersionBadge) {
+    optionsVersionBadge.textContent = `v${resolveExtensionVersion()}`;
+  }
+}
 
 function getPresetStorageKey(presetKey) {
   return presetKey && PRESET_SHORT_LABELS[presetKey] ? presetKey : 'operator1';
@@ -955,7 +972,7 @@ async function buildNativeExportPayload() {
     opLapNum,
     payload: {
       format: 'diloc-automator-preset',
-      version: '2.2.2',
+      version: resolveExtensionVersion(),
       opLap: opLapNum,
       exportedAt: new Date().toISOString(),
       cells: exportedCells
@@ -1259,6 +1276,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
 document.addEventListener('DOMContentLoaded', async () => {
   hydrateDataIcons();
+  syncOptionsVersionBadge();
   initCustomTooltips();
 
   const data = await chrome.storage.local.get([...UNIFIED_STORAGE_KEYS, 'fileSourceType']);

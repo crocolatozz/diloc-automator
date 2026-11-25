@@ -2,6 +2,14 @@
 
 Semua perubahan penting pada proyek **DILOC Automator** (sebelumnya *PMR Web Runner*) dicatat dalam file ini.
 
+## [2.2.3] - 2026-11-25
+
+### Changed
+- **Penguncian Lebar `340px` & Proporsi Header Popup (`popup.html`):** Mengunci ukuran *fix* `340px` (`width`/`min-width`/`max-width: 340px`, `box-sizing: border-box`, `overflow-x: hidden`) pada `html`, `body`, dan wrapper `.popup-shell` dengan truncation `ellipsis` nama file pada `.status-line-text`, menaikkan ukuran font judul **DILOC Automator** (`JetBrains Mono`) menjadi `15px` dengan `flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;` agar seimbang dengan ikon robot, serta mempertahankan pil versi **`v2.2.3`** di kanan header.
+- **Pil Versi Topbar & Footer Tengah Options (`options.html`, `options.js`):** Menambahkan pil versi **`v2.2.3`** (`.options-ver-badge`) di sebelah kanan judul **DILOC Automator** yang disinkronkan secara aman via `resolveExtensionVersion()` / `syncOptionsVersionBadge()`, menghapus tulisan versi di footer kiri bawah, dan mengatur `.page-footer` agar teks `© 2026 — Developed by FIKRI` rata tengah.
+- **Penyederhanaan Badge Halaman Impor (`import.html`):** Menghapus tulisan versi dari badge header Mini Window Import sehingga tampil bersih hanya `.PMR / .JSON`.
+- **Sinkronisasi Versi `v2.2.3` (`manifest.json`, `popup.html`, `options.html`, `options.js`, `README.txt`, `README.md`):** Memperbarui nomor versi ekstensi dan metadata `"version"` pada file JSON hasil export ke `2.2.3` dengan tetap mempertahankan seluruh fondasi inti `v2.2.2` dan footer `© 2026 — Developed by FIKRI`.
+
 ## [2.2.2] - 2026-11-25
 
 ### Changed
