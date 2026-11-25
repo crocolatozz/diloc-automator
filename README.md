@@ -1,4 +1,4 @@
-# DILOC Automator (`v2.2.3`)
+# DILOC Automator (`v2.2.4`)
 
 Ekstensi Google Chrome / Microsoft Edge (**Manifest V3**) berbasis **100% Vanilla HTML5, CSS3, dan ES6+ JavaScript** untuk mengotomatiskan pengisian form web **E-Logsheet DILOC** dari file macro **`.pmr`** (PyMacroRecord) maupun **`.json`** (DILOC Editor & format native **DILOC Automator**), lengkap dengan sinkronisasi master parameter terpusat **Cloud Firestore** (Read-Only REST API), acak digit pintar kontekstual (`±1` s/d `±3`), pemetaan dropdown panah 1-to-1, Export/Import preset JSON, modal progres 3 fase, kecepatan pengisian standar *Normal* (`400 ms`), Web Worker anti-throttle tab background, dan **Smooth Dark Mode**.
 

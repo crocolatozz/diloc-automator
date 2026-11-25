@@ -159,6 +159,8 @@
     }
 
     .popup-header {
+      width: 100%;
+      min-width: 0;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -173,7 +175,7 @@
     .popup-brand {
       display: flex;
       align-items: center;
-      gap: 7px;
+      gap: 8px;
       min-width: 0;
       flex: 1 1 auto;
     }
@@ -181,7 +183,7 @@
     .popup-header h4 {
       margin: 0;
       font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 15px;
+      font-size: 18px;
       line-height: 1.2;
       color: var(--text-title);
       font-weight: 700;
@@ -197,20 +199,8 @@
 
     @media (max-width: 339px) {
       .popup-header h4 {
-        font-size: 13px;
+        font-size: 15px;
       }
-    }
-
-    .popup-ver-badge {
-      font-size: 9.5px;
-      font-weight: 700;
-      padding: 1.5px 6px;
-      border-radius: 999px;
-      background: rgba(16, 185, 129, 0.14);
-      border: 1px solid rgba(16, 185, 129, 0.45);
-      color: var(--text-pill-active);
-      flex-shrink: 0;
-      letter-spacing: 0.01em;
     }
 
     /* Interactive Sliding Pill Toggle */
@@ -446,6 +436,8 @@
       position: relative;
       width: 100%;
       min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
       margin: 8px 0 9px 0;
       padding: 7px 28px;
       border-radius: 8px;
@@ -514,6 +506,7 @@
       width: 100%;
       max-width: 100%;
       min-width: 0;
+      overflow: hidden;
     }
 
     .status-line-text {
@@ -871,8 +864,10 @@
 
     .confirm-modal-title {
       margin: 0 0 6px;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 13.5px;
       font-weight: 700;
+      letter-spacing: -0.02em;
       color: #f8fafc;
     }
 
@@ -940,7 +935,6 @@
     <div class="popup-brand">
       <span data-icon="robotRed" data-icon-size="22"></span>
       <h4>DILOC Automator</h4>
-      <span class="popup-ver-badge">v2.2.3</span>
     </div>
     <button
       id="themeToggleBtn"

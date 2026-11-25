@@ -2,6 +2,13 @@
 
 Semua perubahan penting pada proyek **DILOC Automator** (sebelumnya *PMR Web Runner*) dicatat dalam file ini.
 
+## [2.2.4] - 2026-11-25
+
+### Changed
+- **Header Popup `18px` Tanpa Pil Versi & Kunci Lebar `340px` (`popup.html`):** Menghapus badge versi dari header Popup utama, menaikkan ukuran font judul **DILOC Automator** (`JetBrains Mono`) menjadi `18px` (`flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`) agar tingginya seimbang dengan ikon robot, serta memperketat penguncian lebar `340px` (`html`, `body`, `.popup-shell`) dengan `overflow: hidden` pada `.status-card` dan `.status-line` agar Chrome asli (*Load Unpacked*) tidak menyusut maupun melebar saat nama file panjang.
+- **Standarisasi Tipografi `JetBrains Mono` di Seluruh Judul & Modal (`popup.html`, `options.html`, `import.html`, `content.js`):** Menerapkan `JetBrains Mono` secara seragam pada seluruh judul/heading aplikasi—termasuk `.confirm-modal-title` di Popup dan Options, `.empty-state h3` & `.empty-table-title` di Options, `.drop-title` di halaman Import, serta `.pmr-modal-brand` & `.pmr-modal-title` pada seluruh modal konfirmasi, progres waktu pengisian (`Mengisi Logsheet...`), peringatan, dan ringkasan di Shadow DOM (`content.js`).
+- **Sinkronisasi Versi `v2.2.4` (`manifest.json`, `options.html`, `options.js`, `README.txt`, `README.md`):** Memperbarui versi ekstensi, pil versi di kanan judul Options (`v2.2.4`), fallback `resolveExtensionVersion()`, dan metadata `"version"` pada file JSON hasil export ke `2.2.4` dengan tetap menjaga footer `© 2026 — Developed by FIKRI`.
+
 ## [2.2.3] - 2026-11-25
 
 ### Changed

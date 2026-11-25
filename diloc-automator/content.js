@@ -979,9 +979,10 @@ function getModalSharedStyles() {
       display: inline-flex;
       align-items: center;
       gap: 6px;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 11px;
       font-weight: 700;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.01em;
       color: #cbd5e1;
       margin-bottom: 8px;
       flex-shrink: 0;
@@ -1035,8 +1036,10 @@ function getModalSharedStyles() {
     }
     .pmr-modal-title {
       margin: 0;
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 15px;
       font-weight: 700;
+      letter-spacing: -0.02em;
       color: #f8fafc;
       line-height: 1.25;
     }

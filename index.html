@@ -332,8 +332,10 @@
     }
 
     .stage-title {
+      font-family: var(--font-mono);
       font-size: 13px;
       font-weight: 600;
+      letter-spacing: -0.01em;
       color: var(--text-primary);
     }
 
@@ -455,8 +457,10 @@
 
     .section-heading {
       margin: 0;
+      font-family: var(--font-mono);
       font-size: 14.5px;
       font-weight: 600;
+      letter-spacing: -0.01em;
       color: var(--text-primary);
     }
 
@@ -1700,7 +1704,7 @@
                 return state.manifest ? cloneVal(state.manifest) : {
                   manifest_version: 3,
                   name: 'DILOC Automator',
-                  version: '2.2.3',
+                  version: '2.2.4',
                   host_permissions: ['https://firestore.googleapis.com/*']
                 };
               },

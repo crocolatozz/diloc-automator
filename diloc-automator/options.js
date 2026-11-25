@@ -63,7 +63,7 @@ function resolveExtensionVersion() {
       if (manifest && manifest.version) return String(manifest.version);
     }
   } catch (e) {}
-  return '2.2.3';
+  return '2.2.4';
 }
 
 function syncOptionsVersionBadge() {
