@@ -6,6 +6,8 @@ let lastFilledInput = null;
 let activeAbortCallback = null;
 let activeSleepController = null;
 
+const DEFAULT_TYPING_SPEED_MS = 400;
+
 const PRESET_SHORT_LABELS = {
   operator1: 'Op. Lap 1',
   operator2: 'Op. Lap 2',
@@ -28,9 +30,8 @@ async function migrateSpeedStorageIfNeeded() {
     const data = await chrome.storage.local.get(['typingSpeedMs']);
     if (data && data.typingSpeedMs !== undefined) {
       const raw = Number(data.typingSpeedMs);
-      if (Number.isFinite(raw) && raw < 200) {
-        const migrated = Math.max(200, raw);
-        await chrome.storage.local.set({ typingSpeedMs: migrated });
+      if (!Number.isFinite(raw) || raw !== DEFAULT_TYPING_SPEED_MS) {
+        await chrome.storage.local.set({ typingSpeedMs: DEFAULT_TYPING_SPEED_MS });
       }
     }
   } catch (e) {}
@@ -815,8 +816,9 @@ function escapeTextForHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-function createInlineSvgMarkup(pathsMarkup, size = 14) {
-  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pathsMarkup}</svg>`;
+function createInlineSvgMarkup(pathsMarkup, size = 14, className = '') {
+  const classAttr = className ? ` class="${escapeTextForHtml(className)}"` : '';
+  return `<svg${classAttr} width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pathsMarkup}</svg>`;
 }
 
 function createBrandRobotSvgMarkup(size = 16) {
@@ -830,8 +832,8 @@ const MODAL_SVG = {
   shieldAlert: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   play: '<polygon points="6 3 20 12 6 21 6 3"/>',
-  stop: '<rect width="14" height="14" x="5" y="5" rx="2"/>',
   keyboard: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.001"/><path d="M10 8h.001"/><path d="M14 8h.001"/><path d="M18 8h.001"/><path d="M8 12h.001"/><path d="M12 12h.001"/><path d="M16 12h.001"/><path d="M7 16h10"/>',
+  loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
   clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>'
 };
@@ -916,7 +918,7 @@ async function autoResetSettingsAfterExecution() {
   try {
     await chrome.storage.local.set({
       randomMode: 'off',
-      typingSpeedMs: 400,
+      typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
       rowCount: 1
     });
   } catch (e) {}
@@ -928,6 +930,10 @@ function getModalSharedStyles() {
     @keyframes pmrShimmer {
       0% { background-position: -200% 0; }
       100% { background-position: 200% 0; }
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
     .pmr-modal-backdrop {
       position: fixed;
@@ -1155,6 +1161,10 @@ function getModalSharedStyles() {
     .pmr-progress-live svg {
       color: #38bdf8;
       flex-shrink: 0;
+    }
+    .pmr-progress-spinner {
+      animation: spin 0.9s linear infinite;
+      transform-origin: center;
     }
     .pmr-progress-pct {
       font-size: 13px;
@@ -1479,7 +1489,7 @@ function renderPhase2Progress(session, initialTimeLabel, totalRowsPlanned, onCan
         <div class="pmr-progress-wrap">
           <div class="pmr-progress-top">
             <div class="pmr-progress-live">
-              ${createInlineSvgMarkup(MODAL_SVG.keyboard, 15)}
+              ${createInlineSvgMarkup(MODAL_SVG.loader, 15, 'pmr-progress-spinner')}
               <span id="pmr-progress-status">Menyiapkan pengisian baris jam ${escapeTextForHtml(cleanInit)}...</span>
             </div>
             <span id="pmr-progress-pct" class="pmr-progress-pct">0%</span>
@@ -1492,7 +1502,7 @@ function renderPhase2Progress(session, initialTimeLabel, totalRowsPlanned, onCan
       </div>
       <div class="pmr-modal-actions">
         <button type="button" id="pmr-btn-abort" class="pmr-modal-btn pmr-btn-solid-red">
-          ${createInlineSvgMarkup(MODAL_SVG.stop, 14)}
+          ${createInlineSvgMarkup(MODAL_SVG.x, 14)}
           <span>Batal</span>
         </button>
       </div>
@@ -1526,9 +1536,7 @@ function renderPhase3Summary(session, summary) {
       ? createInlineSvgMarkup(MODAL_SVG.warn, 16)
       : createInlineSvgMarkup(MODAL_SVG.checkCircle, 16);
 
-    const closeBtnSvg = isAbortedOrWarn
-      ? createInlineSvgMarkup(MODAL_SVG.info, 14)
-      : createInlineSvgMarkup(MODAL_SVG.checkCircle, 14);
+    const closeBtnSvg = createInlineSvgMarkup(MODAL_SVG.checkCircle, 14);
 
     let detailMessage = summary.filledRowsCount > 0
       ? `Proses pengisian sebanyak ${summary.filledRowsCount} baris telah selesai.`
@@ -1787,7 +1795,7 @@ async function handleStartMacro(request) {
     return;
   }
 
-  const speedMs = Math.max(200, Number(request.speedMs) || 400);
+  const speedMs = Math.max(200, Number(request.speedMs) || DEFAULT_TYPING_SPEED_MS);
   const runMeta = {
     randomMode: request.randomMode || 'off',
     selectedSet: Array.isArray(request.selectedIndices) ? new Set(request.selectedIndices) : null,

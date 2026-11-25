@@ -39,15 +39,7 @@
       --rand-badge-bg: rgba(16, 185, 129, 0.14);
       --rand-badge-border: rgba(16, 185, 129, 0.55);
       --rand-badge-text: #047857;
-      --speed-satset-bg: rgba(245, 158, 11, 0.14);
-      --speed-satset-border: rgba(245, 158, 11, 0.55);
-      --speed-satset-text: #b45309;
-      --speed-normal-bg: rgba(16, 185, 129, 0.14);
-      --speed-normal-border: rgba(16, 185, 129, 0.55);
-      --speed-normal-text: #047857;
-      --speed-santai-bg: rgba(14, 165, 233, 0.14);
-      --speed-santai-border: rgba(14, 165, 233, 0.55);
-      --speed-santai-text: #0369a1;
+      --text-status-warn: #b45309;
       --btn-disabled-bg: #cbd5e1;
       --btn-disabled-text: #64748b;
       --pill-track-bg: #fef3c7;
@@ -94,15 +86,7 @@
       --rand-badge-bg: rgba(16, 185, 129, 0.16);
       --rand-badge-border: rgba(52, 211, 153, 0.55);
       --rand-badge-text: #34d399;
-      --speed-satset-bg: rgba(245, 158, 11, 0.16);
-      --speed-satset-border: rgba(251, 191, 36, 0.55);
-      --speed-satset-text: #fbbf24;
-      --speed-normal-bg: rgba(16, 185, 129, 0.16);
-      --speed-normal-border: rgba(52, 211, 153, 0.55);
-      --speed-normal-text: #34d399;
-      --speed-santai-bg: rgba(14, 165, 233, 0.16);
-      --speed-santai-border: rgba(56, 189, 248, 0.55);
-      --speed-santai-text: #38bdf8;
+      --text-status-warn: #fbbf24;
       --btn-disabled-bg: #1e293b;
       --btn-disabled-text: #64748b;
       --pill-track-bg: #1e1b4b;
@@ -120,14 +104,15 @@
     }
 
     html {
+      width: 340px;
       height: auto;
       min-height: unset;
     }
 
     body {
       width: 340px;
-      min-width: 320px;
-      max-width: 380px;
+      min-width: 340px;
+      max-width: 340px;
       height: auto;
       min-height: unset;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -141,9 +126,12 @@
     }
 
     @media (max-width: 339px) {
-      body {
+      html, body {
         width: 100%;
         min-width: 0;
+        max-width: 100%;
+      }
+      body {
         padding: 10px 12px;
       }
     }
@@ -172,7 +160,7 @@
     .popup-brand {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
       min-width: 0;
       flex: 1;
     }
@@ -180,16 +168,24 @@
     .popup-header h4 {
       margin: 0;
       font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 14.5px;
+      font-size: 13.5px;
       color: var(--text-title);
       font-weight: 700;
       letter-spacing: -0.02em;
       text-align: left;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      min-width: 0;
+      flex-shrink: 0;
       transition: color 0.25s ease;
+    }
+
+    @media (max-width: 339px) {
+      .popup-header h4 {
+        font-size: 12.5px;
+        flex-shrink: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
     }
 
     .popup-ver-badge {
@@ -301,9 +297,6 @@
     .icon-orange { color: #fb923c; }
     .icon-rose { color: #e11d48; }
     .icon-slate { color: var(--text-muted); }
-    .speed-icon-satset { color: #d97706; }
-    .speed-icon-normal { color: #16a34a; }
-    .speed-icon-santai { color: #0284c7; }
 
     :root[data-theme="dark"] .icon-emerald { color: #34d399; }
     :root[data-theme="dark"] .icon-cyan { color: #22d3ee; }
@@ -311,9 +304,6 @@
     :root[data-theme="dark"] .icon-amber { color: #fbbf24; }
     :root[data-theme="dark"] .icon-orange { color: #fb923c; }
     :root[data-theme="dark"] .icon-rose { color: #fb7185; }
-    :root[data-theme="dark"] .speed-icon-satset { color: #fbbf24; }
-    :root[data-theme="dark"] .speed-icon-normal { color: #34d399; }
-    :root[data-theme="dark"] .speed-icon-santai { color: #38bdf8; }
 
     /* Custom CSS Floating Tooltip System */
     .tooltip-wrap {
@@ -408,17 +398,6 @@
       transform: translateX(0) translateY(0);
     }
 
-    .status-line-time {
-      font-size: 10px;
-      font-weight: 600;
-      color: var(--text-muted);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .status-line-time[hidden] {
-      display: none;
-    }
-
     .custom-file-upload {
       display: flex;
       align-items: center;
@@ -452,6 +431,8 @@
 
     .status-card {
       position: relative;
+      width: 100%;
+      min-width: 0;
       margin: 8px 0 9px 0;
       padding: 7px 28px;
       border-radius: 8px;
@@ -517,11 +498,13 @@
       font-size: 11px;
       font-weight: 600;
       line-height: 1.35;
+      width: 100%;
       max-width: 100%;
       min-width: 0;
     }
 
     .status-line-text {
+      flex: 0 1 auto;
       max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -538,7 +521,7 @@
     }
 
     .status-line-op.is-mismatch {
-      color: var(--speed-satset-text);
+      color: var(--text-status-warn);
     }
 
     .ctrl-card {
@@ -643,24 +626,6 @@
       background: var(--bg-pill-active);
       border-color: var(--border-pill-active);
       color: var(--text-pill-active);
-    }
-
-    .seg-option[data-speed="200"].active {
-      background: var(--speed-satset-bg);
-      border-color: var(--speed-satset-border);
-      color: var(--speed-satset-text);
-    }
-
-    .seg-option[data-speed="400"].active {
-      background: var(--speed-normal-bg);
-      border-color: var(--speed-normal-border);
-      color: var(--speed-normal-text);
-    }
-
-    .seg-option[data-speed="600"].active {
-      background: var(--speed-santai-bg);
-      border-color: var(--speed-santai-border);
-      color: var(--speed-santai-text);
     }
 
     .stepper-row {
@@ -961,7 +926,7 @@
     <div class="popup-brand">
       <span data-icon="robotRed" data-icon-size="22"></span>
       <h4>DILOC Automator</h4>
-      <span class="popup-ver-badge">v2.2.1</span>
+      <span class="popup-ver-badge">v2.2.2</span>
     </div>
     <button
       id="themeToggleBtn"
@@ -991,7 +956,6 @@
     </div>
     <div id="statusLineFile" class="status-line status-line-file"></div>
     <div id="statusLineOp" class="status-line status-line-op"></div>
-    <div id="statusLineTime" class="status-line status-line-time" hidden></div>
   </div>
 
   <div class="ctrl-card">
@@ -1010,29 +974,6 @@
       <button type="button" class="seg-option active" data-rand-mode="off" role="radio" aria-checked="true">Off</button>
       <button type="button" class="seg-option" data-rand-mode="all" role="radio" aria-checked="false">All</button>
       <button type="button" id="selectedModeBtn" class="seg-option" data-rand-mode="selected" role="radio" aria-checked="false">Selected (0)</button>
-    </div>
-  </div>
-
-  <div class="ctrl-card">
-    <div class="ctrl-header">
-      <span class="ctrl-title-left">
-        <span data-icon="gauge" data-icon-class="icon-cyan" data-icon-size="14"></span>
-        <span>Kecepatan</span>
-      </span>
-    </div>
-    <div class="segmented-pill" role="radiogroup" aria-label="Kecepatan Pengisian">
-      <button type="button" class="seg-option" data-speed="600" role="radio" aria-checked="false">
-        <span data-icon="coffee" data-icon-class="speed-icon-santai" data-icon-size="13"></span>
-        <span>Santai</span>
-      </button>
-      <button type="button" class="seg-option active" data-speed="400" role="radio" aria-checked="true">
-        <span data-icon="timer" data-icon-class="speed-icon-normal" data-icon-size="13"></span>
-        <span>Normal</span>
-      </button>
-      <button type="button" class="seg-option" data-speed="200" role="radio" aria-checked="false">
-        <span data-icon="zap" data-icon-class="speed-icon-satset" data-icon-size="13"></span>
-        <span>Satset</span>
-      </button>
     </div>
   </div>
 

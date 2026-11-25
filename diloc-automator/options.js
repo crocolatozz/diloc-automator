@@ -955,7 +955,7 @@ async function buildNativeExportPayload() {
     opLapNum,
     payload: {
       format: 'diloc-automator-preset',
-      version: '2.2.1',
+      version: '2.2.2',
       opLap: opLapNum,
       exportedAt: new Date().toISOString(),
       cells: exportedCells

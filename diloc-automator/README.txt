@@ -1,5 +1,5 @@
 ====================================================
-DILOC AUTOMATOR v2.2.1 — BROWSER EXTENSION
+DILOC AUTOMATOR v2.2.2 — BROWSER EXTENSION
 ====================================================
 
 Cara Install / Update (Load Unpacked):
@@ -10,9 +10,9 @@ Cara Install / Update (Load Unpacked):
 3. Aktifkan toggle "Developer mode" (Mode pengembang) di pojok kanan atas.
 4. Klik tombol "Load unpacked" (Muat yang belum dibuka kemasannya) dan pilih folder hasil ekstrak (atau klik ikon Reload jika menimpa folder lama).
 
-Pembaruan v2.2.1 (Patch Update):
-- Menghapus seluruh baris Sync Master dari tampilan Popup agar ringkas (auto-sync background tetap berjalan otomatis; tombol manual Sync Master tetap tersedia di halaman Options).
-- Merapikan layout modal konfirmasi/progres/hasil di content.js agar area konten dapat di-scroll dan tombol aksi (Batal, Mulai Isi, Timpa & Mulai, Tutup) selalu terlihat serta dapat diklik di layar sempit maupun pendek.
-- Menyeragamkan teks UI bahasa Indonesia di seluruh komponen ekstensi, membersihkan dead code/variabel tak terpakai, menambah guard DOM null-safe, dan menyelaraskan versi metadata export JSON ke 2.2.1.
+Pembaruan v2.2.2 (Patch Update):
+- Memperbarui seluruh tautan eksternal DILOC Editor ke https://crocolatozz.github.io/diloc-editor/.
+- Mengunci lebar Popup utama di 340px dengan truncation ellipsis nama file agar judul "DILOC Automator" dan badge v2.2.2 selalu rapi, menghapus tampilan waktu muat ("Dimuat: ...") di Status Card, serta menyederhanakan Popup tanpa selector kecepatan (kecepatan pengisian standar otomatis Normal 400 ms).
+- Memperbarui ikon modal konfirmasi & eksekusi di content.js: tombol Batal memakai ikon silang (X), status pengisian jam memakai spinner berputar, dan tombol Tutup pada modal pembatalan memakai ikon centang lingkaran yang konsisten.
 
 © 2026 — Developed by FIKRI

@@ -2,6 +2,14 @@
 
 Semua perubahan penting pada proyek **DILOC Automator** (sebelumnya *PMR Web Runner*) dicatat dalam file ini.
 
+## [2.2.2] - 2026-11-25
+
+### Changed
+- **Pembaruan Tautan DILOC Editor (`options.html`):** Mengganti seluruh tautan eksternal lama `https://crocolatozz.github.io/pmr-editor/` menjadi `https://crocolatozz.github.io/diloc-editor/` dengan tetap menjaga atribut keamanan `target="_blank" rel="noopener noreferrer"`.
+- **Penyederhanaan Popup & Penguncian Lebar `340px` (`popup.html`, `popup.js`, `content.js`):** Mengunci lebar Popup pada `340px` (`min-width`/`max-width: 340px`) dengan `overflow: hidden; text-overflow: ellipsis` pada nama file agar judul **DILOC Automator** (`JetBrains Mono`) dan pill versi **`v2.2.2`** tetap tampil utuh, menghapus baris info waktu muat (`Dimuat: DD/MM/YY HH:mm` / `#statusLineTime`) dari Status Card sambil tetap menyimpan `savedMacro.importedAt` di storage, serta menghapus kontrol UI pemilihan kecepatan (`Santai` / `Normal` / `Satset`) dan menetapkan kecepatan pengisian standar secara konsisten pada **`Normal` (`400 ms`)** di `popup.js`, `content.js`, dan Worker.
+- **Pembaruan Ikon Modal Konfirmasi & Eksekusi (`content.js`):** Mengganti ikon tombol `Batal` (`.pmr-btn-solid-red` `#pmr-btn-abort`) pada modal progres Fase 2 dari kotak stop menjadi ikon silang (`X`), mengganti ikon status pengisian baris jam (`.pmr-progress-live`) dengan ikon *spinner* animasi `@keyframes spin` (`#38bdf8`), serta menyamakan ikon tombol `Tutup` pada modal hasil pembatalan (`.pmr-btn-amber`) memakai ikon centang lingkaran yang identik dengan modal sukses.
+- **Sinkronisasi Versi `v2.2.2` (`manifest.json`, `popup.html`, `options.html`, `options.js`, `import.html`, `README.txt`, `README.md`):** Memperbarui nomor versi ekstensi dan metadata `"version": "2.2.2"` pada file JSON hasil export dengan tetap menjaga footer `© 2026 — Developed by FIKRI`.
+
 ## [2.2.1] - 2026-11-25
 
 ### Changed

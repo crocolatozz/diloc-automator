@@ -1,6 +1,5 @@
 let loadedSequence = null;
 let loadedFileName = "";
-let loadedFileImportedAt = "";
 let macrosByPreset = {};
 let operatorStandardCounts = {
   operator1: 0,
@@ -10,7 +9,7 @@ let operatorStandardCounts = {
 let isMacroRunning = false;
 let randomMode = "off";
 let randomRange = 1;
-let typingSpeedMs = 400;
+const DEFAULT_TYPING_SPEED_MS = 400;
 let rowCount = 1;
 let selectedCellIndices = [];
 let selectedCellsByPreset = {};
@@ -28,7 +27,6 @@ const fileLabel = document.getElementById('fileLabel');
 const statusCard = document.getElementById('statusCard');
 const statusLineFile = document.getElementById('statusLineFile');
 const statusLineOp = document.getElementById('statusLineOp');
-const statusLineTime = document.getElementById('statusLineTime');
 const clearFileBtnWrap = document.getElementById('clearFileBtnWrap');
 const clearFileBtn = document.getElementById('clearFileBtn');
 const popupAlert = document.getElementById('popupAlert');
@@ -38,7 +36,6 @@ const openSettingsBtn = document.getElementById('openSettingsBtn');
 const selectedModeBtn = document.getElementById('selectedModeBtn');
 const randModeButtons = document.querySelectorAll('[data-rand-mode]');
 const randRangeButtons = document.querySelectorAll('[data-rand-range]');
-const speedButtons = document.querySelectorAll('[data-speed]');
 const rowDecBtn = document.getElementById('rowDecBtn');
 const rowIncBtn = document.getElementById('rowIncBtn');
 const rowCountInput = document.getElementById('rowCountInput');
@@ -56,16 +53,6 @@ function resolveSelectedForPreset(byPresetObj, legacyArray, presetKey) {
     return legacyArray;
   }
   return [];
-}
-
-function sanitizeSpeedMs(val) {
-  const n = Number(val);
-  if (!Number.isFinite(n) || n <= 0) return 400;
-  const safe = Math.max(200, n);
-  if (safe === 200 || safe === 400 || safe === 600) return safe;
-  if (safe <= 300) return 200;
-  if (safe <= 500) return 400;
-  return 600;
 }
 
 function sanitizeRowCount(val) {
@@ -188,10 +175,6 @@ function renderStatusCard(totalCells, fileOp, webOp) {
     statusLineFile.innerHTML = '';
     statusLineOp.innerHTML = '';
     statusLineOp.classList.remove('is-match', 'is-mismatch');
-    if (statusLineTime) {
-      statusLineTime.textContent = '';
-      statusLineTime.hidden = true;
-    }
     return;
   }
 
@@ -217,19 +200,6 @@ function renderStatusCard(totalCells, fileOp, webOp) {
     : (webOp
       ? `Tab aktif ${PRESET_SHORT_LABELS[webOp]}, file untuk ${PRESET_SHORT_LABELS[fileOp]}`
       : `Buka tab logsheet ${PRESET_SHORT_LABELS[fileOp]} untuk mengaktifkan Play`);
-
-  if (statusLineTime) {
-    const formattedFileTime = typeof formatLocalTimestamp === 'function'
-      ? formatLocalTimestamp(loadedFileImportedAt, '')
-      : '';
-    if (formattedFileTime) {
-      statusLineTime.textContent = `Dimuat: ${formattedFileTime}`;
-      statusLineTime.hidden = false;
-    } else {
-      statusLineTime.textContent = '';
-      statusLineTime.hidden = true;
-    }
-  }
 }
 
 function updateClearFileButtonState(hasLoadedFile) {
@@ -292,14 +262,6 @@ function syncRandomRangePills() {
   });
 }
 
-function syncSpeedPills() {
-  speedButtons.forEach(btn => {
-    const isActive = Number(btn.dataset.speed) === typingSpeedMs;
-    btn.classList.toggle('active', isActive);
-    btn.setAttribute('aria-checked', String(isActive));
-  });
-}
-
 function syncRowCountStepper() {
   if (rowCountInput) {
     rowCountInput.value = String(rowCount);
@@ -314,7 +276,6 @@ function syncRowCountStepper() {
 
 function updateUIState() {
   syncRandomRangePills();
-  syncSpeedPills();
   syncRowCountStepper();
 
   const webOp = getEffectiveWebOperator();
@@ -506,7 +467,6 @@ function handleDroppedFile(file) {
 
       loadedSequence = result.savedMacro.sequence;
       loadedFileName = result.savedMacro.fileName;
-      loadedFileImportedAt = result.savedMacro.importedAt || '';
       macrosByPreset = result.macrosByPreset || {};
       operatorStandardCounts = normalizeStandardCounts(result.operatorStandardCounts, null, macrosByPreset);
       activePreset = result.activePreset;
@@ -582,7 +542,6 @@ async function sanitizeAndClearInvalidStoredMacro(data, stdCounts) {
   if (legacyCustom || (hasAnyCounts && !resolvedOp)) {
     loadedSequence = null;
     loadedFileName = "";
-    loadedFileImportedAt = "";
     activePreset = "";
     headerMeta = [];
     selectedCellIndices = [];
@@ -595,7 +554,6 @@ async function sanitizeAndClearInvalidStoredMacro(data, stdCounts) {
 
   loadedSequence = seq;
   loadedFileName = saved.fileName || "macro.pmr";
-  loadedFileImportedAt = saved.importedAt || "";
   activePreset = (data.activePreset && PRESET_SHORT_LABELS[data.activePreset] && (!hasAnyCounts || Number(stdCounts[data.activePreset]) === cells.length))
     ? data.activePreset
     : (resolvedOp || saved.operatorKey || "");
@@ -652,11 +610,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     randomRange = sanitizeRandomRange(data.randomRange, true);
 
     const migrationPayload = {};
-    if (data.typingSpeedMs !== undefined && Number(data.typingSpeedMs) < 200) {
-      typingSpeedMs = sanitizeSpeedMs(Math.max(200, Number(data.typingSpeedMs) || 200));
-      migrationPayload.typingSpeedMs = typingSpeedMs;
-    } else {
-      typingSpeedMs = sanitizeSpeedMs(data.typingSpeedMs);
+    if (data.typingSpeedMs !== DEFAULT_TYPING_SPEED_MS) {
+      migrationPayload.typingSpeedMs = DEFAULT_TYPING_SPEED_MS;
     }
 
     rowCount = sanitizeRowCount(data.rowCount);
@@ -739,20 +694,17 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
         if (resolved) {
           loadedSequence = val.sequence;
           loadedFileName = val.fileName || "macro.pmr";
-          loadedFileImportedAt = val.importedAt || "";
           if (!changes.activePreset) {
             activePreset = resolved;
           }
         } else {
           loadedSequence = null;
           loadedFileName = "";
-          loadedFileImportedAt = "";
           activePreset = "";
         }
       } else {
         loadedSequence = null;
         loadedFileName = "";
-        loadedFileImportedAt = "";
         if (!changes.activePreset) {
           activePreset = "";
         }
@@ -775,10 +727,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     }
     if (changes.randomRange) {
       randomRange = sanitizeRandomRange(changes.randomRange.newValue, true);
-      dirty = true;
-    }
-    if (changes.typingSpeedMs) {
-      typingSpeedMs = sanitizeSpeedMs(changes.typingSpeedMs.newValue);
       dirty = true;
     }
     if (changes.rowCount) {
@@ -854,7 +802,6 @@ async function performClearLoadedFile() {
   closeClearConfirmModal();
   loadedSequence = null;
   loadedFileName = "";
-  loadedFileImportedAt = "";
   activePreset = "";
   headerMeta = [];
   selectedCellIndices = [];
@@ -964,15 +911,6 @@ randRangeButtons.forEach(btn => {
   });
 });
 
-speedButtons.forEach(btn => {
-  btn.addEventListener('click', async () => {
-    if (isSyncingFromStorage) return;
-    typingSpeedMs = sanitizeSpeedMs(btn.dataset.speed);
-    syncSpeedPills();
-    await chrome.storage.local.set({ typingSpeedMs });
-  });
-});
-
 async function commitRowCount(nextVal) {
   if (isSyncingFromStorage) return;
   rowCount = sanitizeRowCount(nextVal);
@@ -1040,7 +978,6 @@ if (toggleBtn) {
     'headerMeta',
     'randomMode',
     'randomRange',
-    'typingSpeedMs',
     'rowCount'
   ]);
 
@@ -1076,7 +1013,7 @@ if (toggleBtn) {
     ? 0
     : sanitizeRandomRange(latest.randomRange ?? randomRange, false);
   const latestMeta = Array.isArray(latest.headerMeta) ? latest.headerMeta : headerMeta;
-  const activeSpeedMs = Math.max(200, sanitizeSpeedMs(latest.typingSpeedMs ?? typingSpeedMs));
+  const activeSpeedMs = DEFAULT_TYPING_SPEED_MS;
   const activeRowCount = sanitizeRowCount(rowCountInput ? rowCountInput.value : (latest.rowCount ?? rowCount));
 
   const resolvedSelected = resolveSelectedForPreset(
