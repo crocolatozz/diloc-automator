@@ -2,6 +2,17 @@
 
 Semua perubahan penting pada proyek **DILOC Automator** (sebelumnya *PMR Web Runner*) dicatat dalam file ini.
 
+## [2.2.1] - 2026-11-25
+
+### Changed
+- **Penyederhanaan Popup (`popup.html`, `popup.js`):** Menghapus seluruh baris *Sync Master* (`.master-sync-bar`, status sinkronisasi, dan tombol manual `Sync Master`) dari tampilan Popup agar lebih ringkas dengan tetap menjaga *auto-sync* latar belakang saat Popup dibuka; tombol manual `Sync Master` dan indikator waktu `DD/MM/YY HH:mm` tetap tersedia di halaman Options.
+- **Audit Kode & Konsistensi Bahasa UI (`popup.html`, `popup.js`, `options.html`, `options.js`, `randomizer.js`, `content.js`):** Membersihkan variabel, fungsi, dan state mati (`cellRandomRanges`, `getPresetStorageKey`, `currentTargetEl`, `isControlEmpty`, serta parameter `rerender` pada `toggleCellSelection`), menambahkan *null guard* DOM pada seluruh listener/render, memperjelas teks sub-status modal progres Fase 2 (`.pmr-progress-sub` `12px`/`#cbd5e1`), serta menyeragamkan redaksi UI bahasa Indonesia (termasuk label `"Nilai Asli"`, `"Sinkronisasi..."`, dan pesan konfirmasi hapus file).
+- **Pembaruan Versi `v2.2.1` (`manifest.json`, `popup.html`, `options.html`, `options.js`, `import.html`, `README.txt`, `README.md`):** Menyinkronkan nomor versi ekstensi dan metadata `"version": "2.2.1"` pada file JSON hasil export dengan tetap menjaga footer `© 2026 — Developed by FIKRI`.
+
+### Fixed
+- **Responsivitas & Anti-Terpotong Modal Konfirmasi/Progres (`content.js`, `popup.html`, `options.html`):** Mengubah kontainer `.pmr-modal-card` menjadi layout flex vertikal dengan area `.pmr-modal-body` yang dapat di-scroll serta aturan `@media (max-width: 420px)` agar header dan tombol aksi (`Batal`, `Mulai Isi`, `Timpa & Mulai`, `Tutup`) selalu tampil penuh dan dapat diklik meski pada viewport pendek/sempit; turut menambahkan `overflow-y: auto` pada modal konfirmasi hapus file serta perbaikan spasi ganda pada pesan ringkasan Fase 3.
+- **Fokus Pencarian Options Saat Auto-Sync (`options.js`):** Menjaga posisi fokus dan seleksi teks `#searchInput` saat *background auto-sync* Firestore selesai me-render ulang tabel.
+
 ## [2.2.0] - 2026-11-23
 
 ### Added

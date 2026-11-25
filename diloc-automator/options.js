@@ -11,7 +11,6 @@ let lastMasterSyncAt = "";
 let isManualSyncing = false;
 let randomMode = "off";
 let randomRange = 1;
-let cellRandomRanges = {};
 let selectedSet = new Set();
 let selectedCellsByPreset = {};
 let headerMeta = [];
@@ -112,7 +111,7 @@ function renderMasterSyncStatus() {
     syncMasterBtn.classList.toggle('is-syncing', isManualSyncing);
     const labelSpan = syncMasterBtn.querySelector('span:last-child');
     if (labelSpan) {
-      labelSpan.textContent = isManualSyncing ? 'Syncing...' : 'Sync Master';
+      labelSpan.textContent = isManualSyncing ? 'Sinkronisasi...' : 'Sync Master';
     }
   }
 }
@@ -158,7 +157,7 @@ async function syncOperatorStandardCountsToStorage(options = {}) {
         }
       } else if (!background) {
         showOptionsAlert('Gagal sinkronisasi master Cloud Firestore. Menggunakan cache lokal.', 'warn');
-        notifySaved('Gagal sync Firestore — memakai cache lokal', 'warn', 'warn');
+        notifySaved('Gagal sinkronisasi Firestore — memakai cache lokal', 'warn', 'warn');
       }
     } finally {
       if (!background) {
@@ -198,6 +197,7 @@ let toastTimer = null;
 let alertBannerTimer = null;
 
 function notifySaved(msg = "Tersimpan otomatis", iconName = "checkCircle", tone = "success") {
+  if (!saveToast) return;
   saveToast.classList.remove('is-warn', 'is-error');
   if (tone === 'warn') saveToast.classList.add('is-warn');
   if (tone === 'error') saveToast.classList.add('is-error');
@@ -237,6 +237,7 @@ function hideOptionsAlert() {
 }
 
 function setPillContent(iconHtml, text) {
+  if (!activeFilePill) return;
   activeFilePill.innerHTML = '';
   if (iconHtml) {
     activeFilePill.insertAdjacentHTML('beforeend', iconHtml);
@@ -259,7 +260,6 @@ async function saveSettings() {
   await chrome.storage.local.set({
     randomMode,
     randomRange,
-    cellRandomRanges,
     selectedCellsByPreset,
     selectedCellIndices: sortedIndices
   });
@@ -281,9 +281,9 @@ function syncToolbarState() {
   });
 
   const hasData = loadedSequence && loadedSequence.length > 0;
-  selectAllNumBtn.disabled = !hasData;
-  clearAllBtn.disabled = !hasData || selectedSet.size === 0;
-  rerollPreviewBtn.disabled = !hasData || randomMode === 'off';
+  if (selectAllNumBtn) selectAllNumBtn.disabled = !hasData;
+  if (clearAllBtn) clearAllBtn.disabled = !hasData || selectedSet.size === 0;
+  if (rerollPreviewBtn) rerollPreviewBtn.disabled = !hasData || randomMode === 'off';
 
   if (exportJsonBtn) {
     exportJsonBtn.disabled = !hasData;
@@ -315,6 +315,7 @@ function syncToolbarState() {
 }
 
 function renderMismatchBanner(totalCells) {
+  if (!presetMismatchBanner) return;
   if (
     !loadedSequence ||
     loadedSequence.length === 0 ||
@@ -508,13 +509,15 @@ function renderAll() {
     lastPreviewResults = [];
     setPillContent(renderIcon('warn', { className: 'icon-amber-light', size: 15 }), "Belum ada file .pmr / .json dimuat");
     renderMismatchBanner(0);
-    statsBadges.innerHTML = "";
-    tableContainer.innerHTML = `
-      <div class="empty-state">
-        <h3>Belum Ada File .PMR / .JSON Dimuat</h3>
-        <p>Klik tombol <b class="inline-pill">${renderIcon('folder', { className: 'icon-emerald', size: 15 })} Load File .PMR / .JSON</b> di pojok kanan atas atau lewat popup extension untuk memuat file Anda.</p>
-      </div>
-    `;
+    if (statsBadges) statsBadges.innerHTML = "";
+    if (tableContainer) {
+      tableContainer.innerHTML = `
+        <div class="empty-state">
+          <h3>Belum Ada File .PMR / .JSON Dimuat</h3>
+          <p>Klik tombol <b class="inline-pill">${renderIcon('folder', { className: 'icon-emerald', size: 15 })} Load File .PMR / .JSON</b> di pojok kanan atas atau lewat popup ekstensi untuk memuat file Anda.</p>
+        </div>
+      `;
+    }
     return;
   }
 
@@ -569,7 +572,7 @@ function renderAll() {
 
   const trOrig = document.createElement('tr');
   trOrig.className = 'row-orig';
-  trOrig.innerHTML = `<th class="sticky-col" scope="row">Nilai Asli (.pmr)</th>`;
+  trOrig.innerHTML = `<th class="sticky-col" scope="row">Nilai Asli</th>`;
 
   const trCheck = document.createElement('tr');
   trCheck.className = isSelectedMode ? 'row-check' : 'row-check dimmed-check-row';
@@ -599,7 +602,7 @@ function renderAll() {
     if (eligible) {
       th.classList.add('clickable-col');
       th.title = "Klik untuk centang/hapus centang sel ini";
-      th.addEventListener('click', () => toggleCellSelection(idx, true));
+      th.addEventListener('click', () => toggleCellSelection(idx));
     }
     if (highlightSelected) th.classList.add('col-selected');
     trIndex.appendChild(th);
@@ -671,7 +674,7 @@ function renderAll() {
         if (e.target !== cb) {
           cb.checked = !cb.checked;
         }
-        toggleCellSelection(idx, false, cb.checked);
+        toggleCellSelection(idx, cb.checked);
       });
     }
     tdCheck.appendChild(cb);
@@ -719,7 +722,7 @@ function renderAll() {
   wrapper.scrollLeft = prevScrollLeft;
 }
 
-async function toggleCellSelection(idx, rerender, explicitState) {
+async function toggleCellSelection(idx, explicitState) {
   const shouldSelect = typeof explicitState === 'boolean' ? explicitState : !selectedSet.has(idx);
   if (shouldSelect) {
     selectedSet.add(idx);
@@ -733,56 +736,60 @@ async function toggleCellSelection(idx, rerender, explicitState) {
   renderAll();
 }
 
-themeToggleBtn.addEventListener('click', () => {
-  const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  applyTheme(nextTheme, true);
-});
+if (themeToggleBtn) {
+  themeToggleBtn.addEventListener('click', () => {
+    const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    applyTheme(nextTheme, true);
+  });
+}
 
-macroFileOptions.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+if (macroFileOptions) {
+  macroFileOptions.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-  const reader = new FileReader();
-  reader.onload = async (event) => {
-    try {
-      const rawData = JSON.parse(event.target.result);
-      const result = await persistImportedMacroFile(file.name, rawData);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const rawData = JSON.parse(event.target.result);
+        const result = await persistImportedMacroFile(file.name, rawData);
 
-      loadedSequence = result.savedMacro.sequence;
-      loadedFileName = result.savedMacro.fileName;
-      loadedFileImportedAt = result.savedMacro.importedAt || '';
-      macrosByPreset = result.macrosByPreset || {};
-      operatorStandardCounts = normalizeStandardCounts(result.operatorStandardCounts, null, macrosByPreset);
-      activePreset = result.activePreset;
-      headerMeta = result.headerMeta || [];
-      selectedCellsByPreset = result.selectedCellsByPreset || {};
-      selectedSet = new Set(result.selectedCellIndices || []);
-      if (typeof result.randomMode === 'string') {
-        randomMode = result.randomMode;
+        loadedSequence = result.savedMacro.sequence;
+        loadedFileName = result.savedMacro.fileName;
+        loadedFileImportedAt = result.savedMacro.importedAt || '';
+        macrosByPreset = result.macrosByPreset || {};
+        operatorStandardCounts = normalizeStandardCounts(result.operatorStandardCounts, null, macrosByPreset);
+        activePreset = result.activePreset;
+        headerMeta = result.headerMeta || [];
+        selectedCellsByPreset = result.selectedCellsByPreset || {};
+        selectedSet = new Set(result.selectedCellIndices || []);
+        if (typeof result.randomMode === 'string') {
+          randomMode = result.randomMode;
+        }
+        if (result.randomRange !== undefined) {
+          randomRange = sanitizeRandomRange(result.randomRange, true);
+        }
+
+        hideOptionsAlert();
+        renderAll();
+        notifySaved(`${loadedFileName} dimuat (${result.totalCells} data)`);
+      } catch (err) {
+        let msg = err && err.code === 'STRICT_OPERATOR_MISMATCH' && err.message
+          ? err.message
+          : '';
+        if (!msg) {
+          const counts = await getStandardOperatorCountsFromStorage();
+          msg = formatRejectedFileMessage(0, counts);
+        }
+        showOptionsAlert(msg, "error");
+        notifySaved("File ditolak: tidak sesuai standar operator!", "xCircle", "error");
+      } finally {
+        macroFileOptions.value = '';
       }
-      if (result.randomRange !== undefined) {
-        randomRange = sanitizeRandomRange(result.randomRange, true);
-      }
-
-      hideOptionsAlert();
-      renderAll();
-      notifySaved(`${loadedFileName} dimuat (${result.totalCells} data)`);
-    } catch (err) {
-      let msg = err && err.code === 'STRICT_OPERATOR_MISMATCH' && err.message
-        ? err.message
-        : '';
-      if (!msg) {
-        const counts = await getStandardOperatorCountsFromStorage();
-        msg = formatRejectedFileMessage(0, counts);
-      }
-      showOptionsAlert(msg, "error");
-      notifySaved("File ditolak: tidak sesuai standar operator!", "xCircle", "error");
-    } finally {
-      macroFileOptions.value = '';
-    }
-  };
-  reader.readAsText(file);
-});
+    };
+    reader.readAsText(file);
+  });
+}
 
 if (fileLabelTop) {
   fileLabelTop.addEventListener('keydown', (e) => {
@@ -826,32 +833,38 @@ filterButtons.forEach(btn => {
   });
 });
 
-selectAllNumBtn.addEventListener('click', async () => {
-  if (!loadedSequence || loadedSequence.length === 0) return;
-  const cells = groupSequenceIntoCells(loadedSequence);
-  selectedSet = new Set(
-    cells
-      .filter(c => isCellEligibleForRandomize(c, headerMeta[c.index] || null))
-      .map(c => c.index)
-  );
-  randomMode = 'selected';
-  await saveSettings();
-  renderAll();
-});
+if (selectAllNumBtn) {
+  selectAllNumBtn.addEventListener('click', async () => {
+    if (!loadedSequence || loadedSequence.length === 0) return;
+    const cells = groupSequenceIntoCells(loadedSequence);
+    selectedSet = new Set(
+      cells
+        .filter(c => isCellEligibleForRandomize(c, headerMeta[c.index] || null))
+        .map(c => c.index)
+    );
+    randomMode = 'selected';
+    await saveSettings();
+    renderAll();
+  });
+}
 
-clearAllBtn.addEventListener('click', async () => {
-  selectedSet.clear();
-  randomMode = 'off';
-  await saveSettings();
-  renderAll();
-  notifySaved("Pilihan di-reset & mode kembali ke Off", "reset");
-});
+if (clearAllBtn) {
+  clearAllBtn.addEventListener('click', async () => {
+    selectedSet.clear();
+    randomMode = 'off';
+    await saveSettings();
+    renderAll();
+    notifySaved("Pilihan di-reset & mode kembali ke Off", "reset");
+  });
+}
 
-rerollPreviewBtn.addEventListener('click', () => {
-  if (randomMode === 'off') return;
-  renderAll();
-  notifySaved("Simulasi preview diperbarui", "dice");
-});
+if (rerollPreviewBtn) {
+  rerollPreviewBtn.addEventListener('click', () => {
+    if (randomMode === 'off') return;
+    renderAll();
+    notifySaved("Simulasi preview diperbarui", "dice");
+  });
+}
 
 async function buildNativeExportPayload() {
   let storageData = {};
@@ -942,7 +955,7 @@ async function buildNativeExportPayload() {
     opLapNum,
     payload: {
       format: 'diloc-automator-preset',
-      version: '2.2.0',
+      version: '2.2.1',
       opLap: opLapNum,
       exportedAt: new Date().toISOString(),
       cells: exportedCells
@@ -953,7 +966,7 @@ async function buildNativeExportPayload() {
 async function exportNativeJsonPreset() {
   const result = await buildNativeExportPayload();
   if (!result) {
-    notifySaved('Belum ada file aktif untuk di-export', 'warn', 'warn');
+    notifySaved('Belum ada file aktif untuk Export JSON', 'warn', 'warn');
     return;
   }
   const { opLapNum, payload } = result;
@@ -1116,9 +1129,28 @@ function applySearchHighlight(shouldScroll = true) {
   }
 }
 
-searchInput.addEventListener('input', () => {
-  applySearchHighlight(true);
-});
+if (searchInput) {
+  searchInput.addEventListener('input', () => {
+    applySearchHighlight(true);
+  });
+}
+
+function renderAllPreservingSearchFocus() {
+  const isSearchFocused = Boolean(searchInput && document.activeElement === searchInput);
+  const selStart = isSearchFocused ? searchInput.selectionStart : null;
+  const selEnd = isSearchFocused ? searchInput.selectionEnd : null;
+
+  renderAll();
+
+  if (isSearchFocused && searchInput) {
+    searchInput.focus();
+    if (selStart !== null && selEnd !== null) {
+      try {
+        searchInput.setSelectionRange(selStart, selEnd);
+      } catch (e) {}
+    }
+  }
+}
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local') return;
@@ -1193,11 +1225,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       randomRange = sanitizeRandomRange(changes.randomRange.newValue, true);
       tableDirty = true;
     }
-    if (changes.cellRandomRanges) {
-      const val = changes.cellRandomRanges.newValue;
-      cellRandomRanges = (val && typeof val === 'object') ? { ...val } : {};
-      tableDirty = true;
-    }
     if (changes.activePreset) {
       activePreset = changes.activePreset.newValue || '';
       tableDirty = true;
@@ -1223,20 +1250,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     }
 
     if (tableDirty) {
-      const isSearchFocused = Boolean(searchInput && document.activeElement === searchInput);
-      const selStart = isSearchFocused ? searchInput.selectionStart : null;
-      const selEnd = isSearchFocused ? searchInput.selectionEnd : null;
-
-      renderAll();
-
-      if (isSearchFocused && searchInput) {
-        searchInput.focus();
-        if (selStart !== null && selEnd !== null) {
-          try {
-            searchInput.setSelectionRange(selStart, selEnd);
-          } catch (e) {}
-        }
-      }
+      renderAllPreservingSearchFocus();
     }
   } finally {
     isSyncingFromStorage = false;
@@ -1307,9 +1321,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   randomMode = data.randomMode || 'off';
   randomRange = sanitizeRandomRange(data.randomRange, true);
-  cellRandomRanges = (data.cellRandomRanges && typeof data.cellRandomRanges === 'object')
-    ? { ...data.cellRandomRanges }
-    : {};
   headerMeta = hasValidMacro && Array.isArray(data.headerMeta) ? data.headerMeta : [];
   if (!hasValidMacro && !activePreset) {
     activePreset = data.activePreset && PRESET_SHORT_LABELS[data.activePreset] ? data.activePreset : '';
@@ -1340,6 +1351,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Background auto-sync ringan saat halaman Options dibuka
   syncOperatorStandardCountsToStorage({ background: true, forcePull: true }).then(() => {
-    renderAll();
+    renderAllPreservingSearchFocus();
   });
 });

@@ -1,6 +1,5 @@
 let isRunning = false;
 let isModalOpen = false;
-let currentTargetEl = null;
 let lastFocusedParamCell = null;
 let lastLockedClickCell = null;
 let lastFilledInput = null;
@@ -484,10 +483,6 @@ function getControlDisplayValue(el) {
   return String(el.value ?? '').trim();
 }
 
-function isControlEmpty(el) {
-  return isCellEmpty(el);
-}
-
 function findFirstOpenEmptyRow(rows) {
   for (const tr of rows) {
     if (isRowOutsideShift(tr) || isRowNonNormalStatus(tr)) continue;
@@ -944,11 +939,17 @@ function getModalSharedStyles() {
       align-items: center;
       justify-content: center;
       padding: 16px;
+      overflow-y: auto;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     .pmr-modal-card {
+      margin: auto;
       width: 100%;
       max-width: 452px;
+      max-height: calc(100dvh - 24px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
       background: #0f172a;
       color: #f1f5f9;
       border: 1px solid rgba(148, 163, 184, 0.28);
@@ -975,8 +976,9 @@ function getModalSharedStyles() {
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 0.02em;
-      color: #94a3b8;
+      color: #cbd5e1;
       margin-bottom: 8px;
+      flex-shrink: 0;
     }
     .pmr-modal-header {
       display: flex;
@@ -984,6 +986,13 @@ function getModalSharedStyles() {
       justify-content: space-between;
       gap: 10px;
       margin-bottom: 13px;
+      flex-shrink: 0;
+    }
+    .pmr-modal-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      padding-right: 2px;
     }
     .pmr-modal-title-wrap {
       display: flex;
@@ -1173,10 +1182,12 @@ function getModalSharedStyles() {
     }
     .pmr-progress-sub {
       margin-top: 8px;
-      font-size: 11px;
-      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.4;
+      color: #cbd5e1;
       text-align: center;
-      min-height: 16px;
+      min-height: 18px;
     }
     .pmr-modal-actions {
       display: flex;
@@ -1184,7 +1195,8 @@ function getModalSharedStyles() {
       justify-content: center;
       gap: 10px;
       flex-wrap: wrap;
-      margin-top: 14px;
+      margin-top: 12px;
+      flex-shrink: 0;
     }
     .pmr-modal-btn {
       font-family: inherit;
@@ -1241,6 +1253,33 @@ function getModalSharedStyles() {
     }
     .pmr-btn-amber:hover {
       background: #d97706;
+    }
+    @media (max-width: 420px) {
+      .pmr-modal-backdrop {
+        padding: 10px;
+      }
+      .pmr-modal-card {
+        padding: 14px 14px;
+        max-height: calc(100dvh - 20px);
+      }
+      .pmr-modal-header {
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .pmr-modal-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+      }
+      .pmr-modal-value {
+        text-align: left;
+      }
+      .pmr-modal-btn {
+        flex: 1 1 110px;
+        min-width: 0;
+        padding: 8px 12px;
+      }
     }
   `;
 }
@@ -1300,9 +1339,11 @@ function openPhase3WarningModal(title, message, iconName = 'warn') {
           <h3 id="pmr-modal-title" class="pmr-modal-title">${escapeTextForHtml(title || 'Peringatan')}</h3>
         </div>
       </div>
-      <div class="pmr-modal-status ${isShield ? 'is-error' : 'is-warn'}">
-        ${createInlineSvgMarkup(safeIcon, 16)}
-        <span>${escapeTextForHtml(message)}</span>
+      <div class="pmr-modal-body">
+        <div class="pmr-modal-status ${isShield ? 'is-error' : 'is-warn'}">
+          ${createInlineSvgMarkup(safeIcon, 16)}
+          <span>${escapeTextForHtml(message)}</span>
+        </div>
       </div>
       <div class="pmr-modal-actions">
         <button type="button" id="pmr-btn-close" class="pmr-modal-btn pmr-btn-amber">
@@ -1369,29 +1410,31 @@ function renderPhase1Confirm(session, plan, sourceDisplayLabel, randSummary) {
           </div>
           <span class="pmr-modal-badge ${isCursorMode ? '' : 'is-auto'}">${escapeTextForHtml(modeLabel)}</span>
         </div>
-        <div class="pmr-modal-summary">
-          <div class="pmr-modal-row">
-            <span class="pmr-modal-label">Titik Mulai</span>
-            <span class="pmr-modal-value">${escapeTextForHtml(startPointText)}</span>
+        <div class="pmr-modal-body">
+          <div class="pmr-modal-summary">
+            <div class="pmr-modal-row">
+              <span class="pmr-modal-label">Titik Mulai</span>
+              <span class="pmr-modal-value">${escapeTextForHtml(startPointText)}</span>
+            </div>
+            <div class="pmr-modal-row">
+              <span class="pmr-modal-label">Jangkauan</span>
+              <span class="pmr-modal-value">${escapeTextForHtml(rangeText)}</span>
+            </div>
+            <div class="pmr-modal-row">
+              <span class="pmr-modal-label">Sumber Data</span>
+              <span class="pmr-modal-value">${escapeTextForHtml(sourceDisplayLabel)}</span>
+            </div>
+            <div class="pmr-modal-row">
+              <span class="pmr-modal-label">Randomizer</span>
+              <span class="pmr-modal-value" title="${escapeTextForHtml(randSummary.title)}">${escapeTextForHtml(randSummary.text)}</span>
+            </div>
           </div>
-          <div class="pmr-modal-row">
-            <span class="pmr-modal-label">Jangkauan</span>
-            <span class="pmr-modal-value">${escapeTextForHtml(rangeText)}</span>
+          <div class="pmr-modal-status ${isOverwrite ? 'is-overwrite' : 'is-ok'}">
+            ${statusSvg}
+            <span>${statusMessageHtml}</span>
           </div>
-          <div class="pmr-modal-row">
-            <span class="pmr-modal-label">Sumber Data</span>
-            <span class="pmr-modal-value">${escapeTextForHtml(sourceDisplayLabel)}</span>
-          </div>
-          <div class="pmr-modal-row">
-            <span class="pmr-modal-label">Randomizer</span>
-            <span class="pmr-modal-value" title="${escapeTextForHtml(randSummary.title)}">${escapeTextForHtml(randSummary.text)}</span>
-          </div>
+          ${specialNoteHtml}
         </div>
-        <div class="pmr-modal-status ${isOverwrite ? 'is-overwrite' : 'is-ok'}">
-          ${statusSvg}
-          <span>${statusMessageHtml}</span>
-        </div>
-        ${specialNoteHtml}
         <div class="pmr-modal-actions">
           <button type="button" id="pmr-btn-cancel" class="pmr-modal-btn pmr-btn-soft-red">
             ${createInlineSvgMarkup(MODAL_SVG.x, 14)}
@@ -1432,18 +1475,20 @@ function renderPhase2Progress(session, initialTimeLabel, totalRowsPlanned, onCan
         </div>
         <span class="pmr-modal-badge">${totalRowsPlanned > 1 ? `${totalRowsPlanned} Baris` : '1 Baris'}</span>
       </div>
-      <div class="pmr-progress-wrap">
-        <div class="pmr-progress-top">
-          <div class="pmr-progress-live">
-            ${createInlineSvgMarkup(MODAL_SVG.keyboard, 15)}
-            <span id="pmr-progress-status">Menyiapkan pengisian baris jam ${escapeTextForHtml(cleanInit)}...</span>
+      <div class="pmr-modal-body">
+        <div class="pmr-progress-wrap">
+          <div class="pmr-progress-top">
+            <div class="pmr-progress-live">
+              ${createInlineSvgMarkup(MODAL_SVG.keyboard, 15)}
+              <span id="pmr-progress-status">Menyiapkan pengisian baris jam ${escapeTextForHtml(cleanInit)}...</span>
+            </div>
+            <span id="pmr-progress-pct" class="pmr-progress-pct">0%</span>
           </div>
-          <span id="pmr-progress-pct" class="pmr-progress-pct">0%</span>
+          <div class="pmr-progress-track">
+            <div id="pmr-progress-fill" class="pmr-progress-fill"></div>
+          </div>
+          <div id="pmr-progress-sub" class="pmr-progress-sub">Klik tombol Batal untuk menghentikan proses</div>
         </div>
-        <div class="pmr-progress-track">
-          <div id="pmr-progress-fill" class="pmr-progress-fill"></div>
-        </div>
-        <div id="pmr-progress-sub" class="pmr-progress-sub">Klik tombol Batal untuk menghentikan proses</div>
       </div>
       <div class="pmr-modal-actions">
         <button type="button" id="pmr-btn-abort" class="pmr-modal-btn pmr-btn-solid-red">
@@ -1485,7 +1530,9 @@ function renderPhase3Summary(session, summary) {
       ? createInlineSvgMarkup(MODAL_SVG.info, 14)
       : createInlineSvgMarkup(MODAL_SVG.checkCircle, 14);
 
-    let detailMessage = `Proses pengisian ${summary.filledRowsCount > 0 ? `sebanyak ${summary.filledRowsCount} baris` : ''} telah selesai.`;
+    let detailMessage = summary.filledRowsCount > 0
+      ? `Proses pengisian sebanyak ${summary.filledRowsCount} baris telah selesai.`
+      : 'Proses pengisian telah selesai.';
     if (summary.aborted) {
       detailMessage = summary.abortReason || 'Proses pengisian dihentikan sebelum seluruh target selesai.';
     } else if (summary.stoppedByBrake) {
@@ -1506,19 +1553,21 @@ function renderPhase3Summary(session, summary) {
             <h3 id="pmr-modal-title" class="pmr-modal-title">${escapeTextForHtml(titleText)}</h3>
           </div>
         </div>
-        <div class="pmr-modal-summary">
-          <div class="pmr-modal-row">
-            <span class="pmr-modal-label">Berhasil Diisi</span>
-            <span class="pmr-modal-value">${summary.filledCellsCount} sel (${summary.filledRowsCount} baris)</span>
+        <div class="pmr-modal-body">
+          <div class="pmr-modal-summary">
+            <div class="pmr-modal-row">
+              <span class="pmr-modal-label">Berhasil Diisi</span>
+              <span class="pmr-modal-value">${summary.filledCellsCount} sel (${summary.filledRowsCount} baris)</span>
+            </div>
+            <div class="pmr-modal-row">
+              <span class="pmr-modal-label">Dilewati</span>
+              <span class="pmr-modal-value">${summary.skippedCellsCount} sel (status khusus / terkunci)</span>
+            </div>
           </div>
-          <div class="pmr-modal-row">
-            <span class="pmr-modal-label">Dilewati</span>
-            <span class="pmr-modal-value">${summary.skippedCellsCount} sel (status khusus / terkunci)</span>
+          <div class="pmr-modal-status ${isAbortedOrWarn ? 'is-warn' : 'is-ok'}">
+            ${statusIcon}
+            <span>${escapeTextForHtml(detailMessage)}</span>
           </div>
-        </div>
-        <div class="pmr-modal-status ${isAbortedOrWarn ? 'is-warn' : 'is-ok'}">
-          ${statusIcon}
-          <span>${escapeTextForHtml(detailMessage)}</span>
         </div>
         <div class="pmr-modal-actions">
           <button type="button" id="pmr-btn-close" class="pmr-modal-btn ${isAbortedOrWarn ? 'pmr-btn-amber' : 'pmr-btn-green'}">
@@ -1980,7 +2029,6 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}, se
 
         injectCellValueVueReactive(targetInput, cellValue);
         lastFilledInput = targetInput;
-        currentTargetEl = targetInput;
         lastFocusedParamCell = targetInput;
         rowTouchedAnyCell = true;
         filledCellsCount += 1;
@@ -2027,7 +2075,6 @@ async function runMultiRowMacro(rowsPayload, startLoc, speedMs, runMeta = {}, se
 
     if (lastFilledInput && document.body && document.body.contains(lastFilledInput) && !inspectCellLock(lastFilledInput).locked) {
       lastFocusedParamCell = lastFilledInput;
-      currentTargetEl = lastFilledInput;
     }
 
     if (isRunning && !abortedByUser && lastRowNeedsAutosaveSync) {

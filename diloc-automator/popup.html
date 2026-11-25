@@ -140,6 +140,14 @@
       transition: background-color 0.25s ease, color 0.25s ease;
     }
 
+    @media (max-width: 339px) {
+      body {
+        width: 100%;
+        min-width: 0;
+        padding: 10px 12px;
+      }
+    }
+
     button:focus-visible,
     a:focus-visible,
     input:focus-visible,
@@ -398,68 +406,6 @@
     .tooltip-wrap[data-tooltip-align="right"]:hover > .custom-tooltip,
     .tooltip-wrap[data-tooltip-align="right"]:focus-within > .custom-tooltip {
       transform: translateX(0) translateY(0);
-    }
-
-    .master-sync-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 5px 9px;
-      margin-bottom: 8px;
-      border-radius: 7px;
-      background: var(--bg-card);
-      border: 1px solid var(--border-soft);
-      font-size: 10.5px;
-      color: var(--text-muted);
-      transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
-    }
-
-    .master-sync-info {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      min-width: 0;
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .master-sync-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 3px 8px;
-      border-radius: 5px;
-      border: 1px solid var(--border-opt-inactive);
-      background: var(--bg-opt-inactive);
-      color: var(--text-secondary);
-      font-size: 10px;
-      font-weight: 700;
-      cursor: pointer;
-      flex-shrink: 0;
-      transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
-    }
-
-    .master-sync-btn:hover:not(:disabled) {
-      background: var(--bg-hover);
-      border-color: var(--border-upload);
-      color: var(--text-title);
-    }
-
-    .master-sync-btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .master-sync-btn.is-syncing .svg-icon {
-      animation: spinSync 0.85s linear infinite;
-    }
-
-    @keyframes spinSync {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
     }
 
     .status-line-time {
@@ -909,6 +855,7 @@
       align-items: center;
       justify-content: center;
       padding: 14px;
+      overflow-y: auto;
       z-index: 120;
     }
 
@@ -917,8 +864,11 @@
     }
 
     .confirm-modal-card {
+      margin: auto;
       width: 100%;
       max-width: 300px;
+      max-height: calc(100vh - 28px);
+      overflow-y: auto;
       background: #0f172a;
       color: #f1f5f9;
       border: 1px solid rgba(245, 158, 11, 0.48);
@@ -1011,7 +961,7 @@
     <div class="popup-brand">
       <span data-icon="robotRed" data-icon-size="22"></span>
       <h4>DILOC Automator</h4>
-      <span class="popup-ver-badge">v2.2.0</span>
+      <span class="popup-ver-badge">v2.2.1</span>
     </div>
     <button
       id="themeToggleBtn"
@@ -1027,17 +977,6 @@
       <span data-icon="moon" data-icon-class="theme-pill-icon theme-pill-moon" data-icon-size="13"></span>
     </button>
   </header>
-
-  <div class="master-sync-bar">
-    <span class="master-sync-info">
-      <span data-icon="clock" data-icon-class="icon-sky" data-icon-size="12"></span>
-      <span id="masterSyncTime">Master: Belum sinkron</span>
-    </span>
-    <button id="syncMasterBtn" type="button" class="master-sync-btn" aria-label="Sinkronisasi master parameter dari Cloud Firestore">
-      <span data-icon="refreshCw" data-icon-class="icon-sky" data-icon-size="12"></span>
-      <span>Sync Master</span>
-    </button>
-  </div>
 
   <div id="fileLabel" class="custom-file-upload" role="button" tabindex="0" aria-label="Load File .PMR atau .JSON (Klik atau Drag &amp; Drop)">
     <span data-icon="folder" data-icon-class="icon-emerald" data-icon-size="16"></span>
@@ -1132,7 +1071,7 @@
       </div>
       <h5 id="clearConfirmTitle" class="confirm-modal-title">Hapus File Termuat?</h5>
       <p class="confirm-modal-desc">
-        File aktif berikut akan dilepas dari runner, namun preset centang Op. Lap tetap aman:
+        File aktif berikut akan dilepas, namun preset centang Op. Lap tetap aman:
         <span id="clearConfirmFileName" class="confirm-modal-file"></span>
       </p>
       <div class="confirm-modal-actions">

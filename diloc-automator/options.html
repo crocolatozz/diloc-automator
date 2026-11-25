@@ -1236,6 +1236,7 @@
       align-items: center;
       justify-content: center;
       padding: 18px;
+      overflow-y: auto;
       z-index: 200;
     }
 
@@ -1244,8 +1245,11 @@
     }
 
     .confirm-modal-card {
+      margin: auto;
       width: 100%;
       max-width: 390px;
+      max-height: calc(100vh - 36px);
+      overflow-y: auto;
       background: #0f172a;
       color: #f1f5f9;
       border: 1px solid rgba(245, 158, 11, 0.5);
@@ -1474,7 +1478,7 @@
     <div id="tableContainer"></div>
 
     <footer class="page-footer">
-      <span>DILOC Automator v2.2.0</span>
+      <span>DILOC Automator v2.2.1</span>
       <span>© 2026 — Developed by FIKRI</span>
     </footer>
   </div>
@@ -1491,7 +1495,7 @@
       </div>
       <h3 id="clearConfirmTitle" class="confirm-modal-title">Hapus File Termuat?</h3>
       <p class="confirm-modal-desc">
-        File aktif berikut akan dilepas dari runner, namun preset centang Op. Lap yang tersimpan tetap aman:
+        File aktif berikut akan dilepas, namun preset centang Op. Lap yang tersimpan tetap aman:
         <span id="clearConfirmFileName" class="confirm-modal-file"></span>
       </p>
       <div class="confirm-modal-actions">

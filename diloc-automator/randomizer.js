@@ -257,7 +257,6 @@ const UNIFIED_STORAGE_KEYS = [
   'selectedCellIndices',
   'randomMode',
   'randomRange',
-  'cellRandomRanges',
   'typingSpeedMs',
   'rowCount',
   'macroRunning',

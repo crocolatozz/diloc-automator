@@ -7,12 +7,9 @@ let operatorStandardCounts = {
   operator2: 0,
   operator3: 0
 };
-let lastMasterSyncAt = "";
-let isManualSyncing = false;
 let isMacroRunning = false;
 let randomMode = "off";
 let randomRange = 1;
-let cellRandomRanges = {};
 let typingSpeedMs = 400;
 let rowCount = 1;
 let selectedCellIndices = [];
@@ -27,8 +24,6 @@ let refreshSeq = 0;
 let isSyncingFromStorage = false;
 let storedMacroRunning = false;
 
-const masterSyncTime = document.getElementById('masterSyncTime');
-const syncMasterBtn = document.getElementById('syncMasterBtn');
 const fileLabel = document.getElementById('fileLabel');
 const statusCard = document.getElementById('statusCard');
 const statusLineFile = document.getElementById('statusLineFile');
@@ -52,10 +47,6 @@ const clearConfirmModal = document.getElementById('clearConfirmModal');
 const clearConfirmFileName = document.getElementById('clearConfirmFileName');
 const confirmClearCancelBtn = document.getElementById('confirmClearCancelBtn');
 const confirmClearOkBtn = document.getElementById('confirmClearOkBtn');
-
-function getPresetStorageKey(presetKey) {
-  return presetKey && PRESET_SHORT_LABELS[presetKey] ? presetKey : 'operator1';
-}
 
 function resolveSelectedForPreset(byPresetObj, legacyArray, presetKey) {
   if (presetKey && byPresetObj && typeof byPresetObj === 'object' && Array.isArray(byPresetObj[presetKey])) {
@@ -101,23 +92,6 @@ function normalizeStandardCounts(rawCounts, cacheObj = null, macrosObj = null) {
     }
   }
   return next;
-}
-
-function renderMasterSyncBar() {
-  if (masterSyncTime) {
-    const formatted = typeof formatLocalTimestamp === 'function'
-      ? formatLocalTimestamp(lastMasterSyncAt, 'Belum sinkron')
-      : 'Belum sinkron';
-    masterSyncTime.textContent = `Master: ${formatted}`;
-  }
-  if (syncMasterBtn) {
-    syncMasterBtn.disabled = isManualSyncing;
-    syncMasterBtn.classList.toggle('is-syncing', isManualSyncing);
-    const labelSpan = syncMasterBtn.querySelector('span:last-child');
-    if (labelSpan) {
-      labelSpan.textContent = isManualSyncing ? 'Syncing...' : 'Sync Master';
-    }
-  }
 }
 
 function isRestrictedBrowserUrl(url) {
@@ -339,7 +313,6 @@ function syncRowCountStepper() {
 }
 
 function updateUIState() {
-  renderMasterSyncBar();
   syncRandomRangePills();
   syncSpeedPills();
   syncRowCountStepper();
@@ -351,16 +324,19 @@ function updateUIState() {
     renderStatusCard(0, '', webOp);
     updateClearFileButtonState(false);
     updatePlayButtonTooltip(false, '', webOp);
-    if (isMacroRunning) {
-      toggleBtn.disabled = false;
-      toggleBtn.classList.add('running');
-      toggleBtn.innerHTML = `${renderIcon('stop', { size: 15 })}<span>Stop</span>`;
-      fileLabel.classList.add('disabled');
-    } else {
-      toggleBtn.disabled = true;
-      toggleBtn.classList.remove('running');
-      toggleBtn.innerHTML = `${renderIcon('play', { size: 15 })}<span>Play</span>`;
-      fileLabel.classList.remove('disabled');
+    if (toggleBtn) {
+      if (isMacroRunning) {
+        toggleBtn.disabled = false;
+        toggleBtn.classList.add('running');
+        toggleBtn.innerHTML = `${renderIcon('stop', { size: 15 })}<span>Stop</span>`;
+      } else {
+        toggleBtn.disabled = true;
+        toggleBtn.classList.remove('running');
+        toggleBtn.innerHTML = `${renderIcon('play', { size: 15 })}<span>Play</span>`;
+      }
+    }
+    if (fileLabel) {
+      fileLabel.classList.toggle('disabled', isMacroRunning);
     }
     return;
   }
@@ -374,16 +350,19 @@ function updateUIState() {
   updateClearFileButtonState(Boolean(fileOp && PRESET_SHORT_LABELS[fileOp]));
   updatePlayButtonTooltip(true, fileOp, webOp);
 
-  if (isMacroRunning) {
-    toggleBtn.disabled = false;
-    toggleBtn.classList.add('running');
-    toggleBtn.innerHTML = `${renderIcon('stop', { size: 15 })}<span>Stop</span>`;
-    fileLabel.classList.add('disabled');
-  } else {
-    toggleBtn.disabled = !isOperatorMatch;
-    toggleBtn.classList.remove('running');
-    toggleBtn.innerHTML = `${renderIcon('play', { size: 15 })}<span>Play</span>`;
-    fileLabel.classList.remove('disabled');
+  if (toggleBtn) {
+    if (isMacroRunning) {
+      toggleBtn.disabled = false;
+      toggleBtn.classList.add('running');
+      toggleBtn.innerHTML = `${renderIcon('stop', { size: 15 })}<span>Stop</span>`;
+    } else {
+      toggleBtn.disabled = !isOperatorMatch;
+      toggleBtn.classList.remove('running');
+      toggleBtn.innerHTML = `${renderIcon('play', { size: 15 })}<span>Play</span>`;
+    }
+  }
+  if (fileLabel) {
+    fileLabel.classList.toggle('disabled', isMacroRunning);
   }
 }
 
@@ -623,34 +602,20 @@ async function sanitizeAndClearInvalidStoredMacro(data, stdCounts) {
   return true;
 }
 
-async function triggerMasterSync(options = {}) {
-  const { background = false } = options;
+async function triggerBackgroundMasterSync() {
   if (typeof syncMasterParametersFromFirestore !== 'function') return null;
-  if (!background) {
-    isManualSyncing = true;
-    renderMasterSyncBar();
-  }
   try {
     const res = await syncMasterParametersFromFirestore();
     if (res && res.ok) {
       operatorStandardCounts = normalizeStandardCounts(res.counts, res.cache, macrosByPreset);
-      lastMasterSyncAt = res.lastMasterSyncAt || lastMasterSyncAt;
       if (activePreset && res.cache && Array.isArray(res.cache[activePreset])) {
         headerMeta = res.cache[activePreset];
       }
-      if (!background) {
-        hidePopupInlineAlert();
-      }
-    } else if (!background) {
-      showPopupInlineAlert('Gagal sinkronisasi master Firestore. Menggunakan cache lokal.', 'warn');
+      updateUIState();
     }
-    updateUIState();
     return res;
-  } finally {
-    if (!background) {
-      isManualSyncing = false;
-      renderMasterSyncBar();
-    }
+  } catch (e) {
+    return null;
   }
 }
 
@@ -668,7 +633,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       data.masterParametersCache || null,
       macrosByPreset
     );
-    lastMasterSyncAt = typeof data.lastMasterSyncAt === 'string' ? data.lastMasterSyncAt : '';
 
     let initialTheme = data.optionsTheme;
     if (initialTheme !== 'dark' && initialTheme !== 'light') {
@@ -686,9 +650,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     isMacroRunning = storedMacroRunning;
     randomMode = data.randomMode || "off";
     randomRange = sanitizeRandomRange(data.randomRange, true);
-    cellRandomRanges = (data.cellRandomRanges && typeof data.cellRandomRanges === 'object')
-      ? { ...data.cellRandomRanges }
-      : {};
 
     const migrationPayload = {};
     if (data.typingSpeedMs !== undefined && Number(data.typingSpeedMs) < 200) {
@@ -717,9 +678,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       ? resolveSelectedForPreset(selectedCellsByPreset, data.selectedCellIndices, activePreset)
       : [];
 
-    renderMasterSyncBar();
     await refreshActiveTabContext(true);
-    triggerMasterSync({ background: true });
+    triggerBackgroundMasterSync();
   } catch (err) {
     console.error("Gagal membaca storage:", err);
   }
@@ -770,12 +730,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       operatorStandardCounts = normalizeStandardCounts(operatorStandardCounts, cacheVal, macrosByPreset);
       dirty = true;
     }
-    if (changes.lastMasterSyncAt) {
-      lastMasterSyncAt = typeof changes.lastMasterSyncAt.newValue === 'string'
-        ? changes.lastMasterSyncAt.newValue
-        : '';
-      dirty = true;
-    }
     if (changes.savedMacro) {
       const val = changes.savedMacro.newValue;
       if (val && Array.isArray(val.sequence) && val.sequence.length > 0) {
@@ -821,11 +775,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     }
     if (changes.randomRange) {
       randomRange = sanitizeRandomRange(changes.randomRange.newValue, true);
-      dirty = true;
-    }
-    if (changes.cellRandomRanges) {
-      const val = changes.cellRandomRanges.newValue;
-      cellRandomRanges = (val && typeof val === 'object') ? { ...val } : {};
       dirty = true;
     }
     if (changes.typingSpeedMs) {
@@ -875,12 +824,6 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     isSyncingFromStorage = false;
   }
 });
-
-if (syncMasterBtn) {
-  syncMasterBtn.addEventListener('click', () => {
-    triggerMasterSync({ background: false });
-  });
-}
 
 if (themeToggleBtn) {
   themeToggleBtn.addEventListener('click', () => {
@@ -1058,12 +1001,15 @@ if (rowCountInput) {
   });
 }
 
-openSettingsBtn.addEventListener('click', () => {
-  chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
-  window.close();
-});
+if (openSettingsBtn) {
+  openSettingsBtn.addEventListener('click', () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
+    window.close();
+  });
+}
 
-toggleBtn.addEventListener('click', async () => {
+if (toggleBtn) {
+  toggleBtn.addEventListener('click', async () => {
   if (!isMacroRunning && (!loadedSequence || loadedSequence.length === 0)) return;
 
   if (rowCountInput) {
@@ -1175,4 +1121,5 @@ toggleBtn.addEventListener('click', async () => {
   }
 
   setTimeout(() => window.close(), 70);
-});
+  });
+}
