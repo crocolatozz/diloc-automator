@@ -6,8 +6,6 @@ let lastFilledInput = null;
 let activeAbortCallback = null;
 let activeSleepController = null;
 
-const DEFAULT_TYPING_SPEED_MS = 400;
-
 const PRESET_SHORT_LABELS = {
   operator1: 'Op. Lap 1',
   operator2: 'Op. Lap 2',
@@ -28,11 +26,8 @@ function parseDropdownArrowToken(value) {
 async function migrateSpeedStorageIfNeeded() {
   try {
     const data = await chrome.storage.local.get(['typingSpeedMs']);
-    if (data && data.typingSpeedMs !== undefined) {
-      const raw = Number(data.typingSpeedMs);
-      if (!Number.isFinite(raw) || raw !== DEFAULT_TYPING_SPEED_MS) {
-        await chrome.storage.local.set({ typingSpeedMs: DEFAULT_TYPING_SPEED_MS });
-      }
+    if (data && data.typingSpeedMs !== 400) {
+      await chrome.storage.local.set({ typingSpeedMs: 400 });
     }
   } catch (e) {}
 }
@@ -817,8 +812,8 @@ function escapeTextForHtml(str) {
 }
 
 function createInlineSvgMarkup(pathsMarkup, size = 14, className = '') {
-  const classAttr = className ? ` class="${escapeTextForHtml(className)}"` : '';
-  return `<svg${classAttr} width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pathsMarkup}</svg>`;
+  const clsAttr = className ? ` class="${className}"` : '';
+  return `<svg${clsAttr} width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${pathsMarkup}</svg>`;
 }
 
 function createBrandRobotSvgMarkup(size = 16) {
@@ -832,8 +827,9 @@ const MODAL_SVG = {
   shieldAlert: '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/>',
   x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
   play: '<polygon points="6 3 20 12 6 21 6 3"/>',
-  keyboard: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.001"/><path d="M10 8h.001"/><path d="M14 8h.001"/><path d="M18 8h.001"/><path d="M8 12h.001"/><path d="M12 12h.001"/><path d="M16 12h.001"/><path d="M7 16h10"/>',
+  stop: '<rect width="14" height="14" x="5" y="5" rx="2"/>',
   loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+  keyboard: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.001"/><path d="M10 8h.001"/><path d="M14 8h.001"/><path d="M18 8h.001"/><path d="M8 12h.001"/><path d="M12 12h.001"/><path d="M16 12h.001"/><path d="M7 16h10"/>',
   clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
   info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>'
 };
@@ -918,7 +914,7 @@ async function autoResetSettingsAfterExecution() {
   try {
     await chrome.storage.local.set({
       randomMode: 'off',
-      typingSpeedMs: DEFAULT_TYPING_SPEED_MS,
+      typingSpeedMs: 400,
       rowCount: 1
     });
   } catch (e) {}
@@ -931,7 +927,7 @@ function getModalSharedStyles() {
       0% { background-position: -200% 0; }
       100% { background-position: 200% 0; }
     }
-    @keyframes spin {
+    @keyframes pmrSpin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
@@ -982,7 +978,7 @@ function getModalSharedStyles() {
       font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 11px;
       font-weight: 700;
-      letter-spacing: 0.01em;
+      letter-spacing: -0.01em;
       color: #cbd5e1;
       margin-bottom: 8px;
       flex-shrink: 0;
@@ -1165,11 +1161,11 @@ function getModalSharedStyles() {
       color: #38bdf8;
       flex-shrink: 0;
     }
-    .pmr-progress-spinner {
-      animation: spin 0.9s linear infinite;
-      transform-origin: center;
+    .pmr-progress-live svg.pmr-spinner-icon {
+      animation: pmrSpin 0.85s linear infinite;
     }
     .pmr-progress-pct {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 13px;
       font-weight: 700;
       font-variant-numeric: tabular-nums;
@@ -1360,7 +1356,7 @@ function openPhase3WarningModal(title, message, iconName = 'warn') {
       </div>
       <div class="pmr-modal-actions">
         <button type="button" id="pmr-btn-close" class="pmr-modal-btn pmr-btn-amber">
-          ${createInlineSvgMarkup(MODAL_SVG.info, 14)}
+          ${createInlineSvgMarkup(MODAL_SVG.checkCircle, 14)}
           <span>Tutup</span>
         </button>
       </div>
@@ -1492,7 +1488,7 @@ function renderPhase2Progress(session, initialTimeLabel, totalRowsPlanned, onCan
         <div class="pmr-progress-wrap">
           <div class="pmr-progress-top">
             <div class="pmr-progress-live">
-              ${createInlineSvgMarkup(MODAL_SVG.loader, 15, 'pmr-progress-spinner')}
+              ${createInlineSvgMarkup(MODAL_SVG.loader, 15, 'pmr-spinner-icon')}
               <span id="pmr-progress-status">Menyiapkan pengisian baris jam ${escapeTextForHtml(cleanInit)}...</span>
             </div>
             <span id="pmr-progress-pct" class="pmr-progress-pct">0%</span>
@@ -1798,7 +1794,7 @@ async function handleStartMacro(request) {
     return;
   }
 
-  const speedMs = Math.max(200, Number(request.speedMs) || DEFAULT_TYPING_SPEED_MS);
+  const speedMs = 400;
   const runMeta = {
     randomMode: request.randomMode || 'off',
     selectedSet: Array.isArray(request.selectedIndices) ? new Set(request.selectedIndices) : null,

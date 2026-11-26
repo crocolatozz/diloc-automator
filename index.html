@@ -317,13 +317,16 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+      align-items: safe center;
       padding: 16px;
       overflow-y: auto;
+      overflow-x: auto;
       min-width: 0;
     }
 
     .stage-header {
-      width: 100%;
+      width: 340px;
+      min-width: 340px;
       max-width: 340px;
       display: flex;
       align-items: center;
@@ -333,9 +336,9 @@
 
     .stage-title {
       font-family: var(--font-mono);
+      letter-spacing: -0.02em;
       font-size: 13px;
       font-weight: 600;
-      letter-spacing: -0.01em;
       color: var(--text-primary);
     }
 
@@ -347,9 +350,11 @@
     }
 
     .chrome-popup-window {
-      width: 100%;
+      width: 340px;
+      min-width: 340px;
       max-width: 340px;
-      min-height: 440px;
+      height: auto;
+      min-height: 0;
       border-radius: 12px;
       border: 1px solid var(--border-strong);
       background-color: #ffffff;
@@ -391,16 +396,19 @@
     }
 
     .popup-iframe {
-      width: 100%;
-      min-height: 440px;
-      height: 470px;
+      width: 340px;
+      min-width: 340px;
+      max-width: 340px;
+      min-height: 0;
+      height: 390px;
       border: 0;
       display: block;
       background-color: #ffffff;
     }
 
     .stage-caption {
-      width: 100%;
+      width: 340px;
+      min-width: 340px;
       max-width: 340px;
       margin-top: 12px;
       font-size: 11.5px;
@@ -458,9 +466,9 @@
     .section-heading {
       margin: 0;
       font-family: var(--font-mono);
+      letter-spacing: -0.02em;
       font-size: 14.5px;
       font-weight: 600;
-      letter-spacing: -0.01em;
       color: var(--text-primary);
     }
 
@@ -531,6 +539,8 @@
       background: transparent;
       border: none;
       padding: 4px 0;
+      font-family: var(--font-mono);
+      letter-spacing: -0.02em;
       font-size: 13.5px;
       font-weight: 600;
       color: var(--text-muted);
@@ -774,6 +784,8 @@
     }
 
     .frame-error-title {
+      font-family: var(--font-mono);
+      letter-spacing: -0.02em;
       font-size: 14px;
       font-weight: 600;
       color: #fca5a5;
@@ -831,6 +843,8 @@
     }
 
     .mini-window-title {
+      font-family: var(--font-mono);
+      letter-spacing: -0.02em;
       font-size: 12px;
       font-weight: 600;
       color: #f8fafc;
@@ -1704,7 +1718,7 @@
                 return state.manifest ? cloneVal(state.manifest) : {
                   manifest_version: 3,
                   name: 'DILOC Automator',
-                  version: '2.2.4',
+                  version: '2.2.2',
                   host_permissions: ['https://firestore.googleapis.com/*']
                 };
               },
@@ -2436,16 +2450,23 @@
         try {
           const doc = elPopupFrame.contentDocument;
           if (!doc || !doc.body) return;
+          const shell = doc.querySelector('.popup-shell') || doc.body;
           const syncPopupFrameHeight = function () {
             try {
-              const h = Math.max(440, Math.ceil(doc.documentElement.scrollHeight || doc.body.scrollHeight || 470));
-              elPopupFrame.style.height = h + 'px';
+              const rectH = shell && typeof shell.getBoundingClientRect === 'function'
+                ? Math.ceil(shell.getBoundingClientRect().height)
+                : 0;
+              const offsetH = shell ? Math.ceil(shell.offsetHeight || 0) : 0;
+              const h = Math.max(rectH, offsetH, 320);
+              if (h > 0) {
+                elPopupFrame.style.height = h + 'px';
+              }
             } catch (err) {}
           };
           syncPopupFrameHeight();
           if (typeof ResizeObserver === 'function') {
             const ro = new ResizeObserver(syncPopupFrameHeight);
-            ro.observe(doc.body);
+            ro.observe(shell);
           }
         } catch (err) {}
       });

@@ -1,3 +1,5 @@
+const FIXED_TYPING_SPEED_MS = 400;
+
 let loadedSequence = null;
 let loadedFileName = "";
 let macrosByPreset = {};
@@ -9,7 +11,7 @@ let operatorStandardCounts = {
 let isMacroRunning = false;
 let randomMode = "off";
 let randomRange = 1;
-const DEFAULT_TYPING_SPEED_MS = 400;
+let typingSpeedMs = FIXED_TYPING_SPEED_MS;
 let rowCount = 1;
 let selectedCellIndices = [];
 let selectedCellsByPreset = {};
@@ -180,7 +182,7 @@ function renderStatusCard(totalCells, fileOp, webOp) {
 
   statusCard.hidden = false;
 
-  statusLineFile.innerHTML = `${renderIcon('file', { className: 'icon-sky', size: 14 })}<span class="status-line-text"></span>`;
+  statusLineFile.innerHTML = `${renderIcon('file', { className: 'icon-sky', size: 15 })}<span class="status-line-text"></span>`;
   const fileTextEl = statusLineFile.querySelector('.status-line-text');
   fileTextEl.textContent = loadedFileName || 'macro.pmr';
   statusLineFile.title = loadedFileName || 'macro.pmr';
@@ -188,8 +190,8 @@ function renderStatusCard(totalCells, fileOp, webOp) {
   const isMatch = Boolean(webOp && fileOp && webOp === fileOp);
   const opLabelText = `${PRESET_SHORT_LABELS[fileOp]} (${totalCells} data)`;
   const opIcon = isMatch
-    ? renderIcon('checkCircle', { className: 'icon-emerald', size: 14 })
-    : renderIcon('warn', { className: 'icon-amber', size: 14 });
+    ? renderIcon('checkCircle', { className: 'icon-emerald', size: 15 })
+    : renderIcon('warn', { className: 'icon-amber', size: 15 });
 
   statusLineOp.classList.toggle('is-match', isMatch);
   statusLineOp.classList.toggle('is-mismatch', !isMatch);
@@ -240,7 +242,7 @@ function updateSelectedCountLabel(totalCells) {
       : selectedCellIndices)
     : [];
   if (selectedModeBtn) {
-    selectedModeBtn.textContent = `Selected (${validList.length})`;
+    selectedModeBtn.textContent = `Cell (${validList.length})`;
   }
 }
 
@@ -610,8 +612,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     randomRange = sanitizeRandomRange(data.randomRange, true);
 
     const migrationPayload = {};
-    if (data.typingSpeedMs !== DEFAULT_TYPING_SPEED_MS) {
-      migrationPayload.typingSpeedMs = DEFAULT_TYPING_SPEED_MS;
+    typingSpeedMs = FIXED_TYPING_SPEED_MS;
+    if (data.typingSpeedMs !== FIXED_TYPING_SPEED_MS) {
+      migrationPayload.typingSpeedMs = FIXED_TYPING_SPEED_MS;
     }
 
     rowCount = sanitizeRowCount(data.rowCount);
@@ -728,6 +731,9 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     if (changes.randomRange) {
       randomRange = sanitizeRandomRange(changes.randomRange.newValue, true);
       dirty = true;
+    }
+    if (changes.typingSpeedMs) {
+      typingSpeedMs = FIXED_TYPING_SPEED_MS;
     }
     if (changes.rowCount) {
       rowCount = sanitizeRowCount(changes.rowCount.newValue);
@@ -978,6 +984,7 @@ if (toggleBtn) {
     'headerMeta',
     'randomMode',
     'randomRange',
+    'typingSpeedMs',
     'rowCount'
   ]);
 
@@ -1013,7 +1020,7 @@ if (toggleBtn) {
     ? 0
     : sanitizeRandomRange(latest.randomRange ?? randomRange, false);
   const latestMeta = Array.isArray(latest.headerMeta) ? latest.headerMeta : headerMeta;
-  const activeSpeedMs = DEFAULT_TYPING_SPEED_MS;
+  const activeSpeedMs = FIXED_TYPING_SPEED_MS;
   const activeRowCount = sanitizeRowCount(rowCountInput ? rowCountInput.value : (latest.rowCount ?? rowCount));
 
   const resolvedSelected = resolveSelectedForPreset(

@@ -29,7 +29,6 @@ const PRESET_NAMES = {
 };
 
 const activeFilePill = document.getElementById('activeFilePill');
-const optionsVersionBadge = document.getElementById('optionsVersionBadge');
 const clearFileBtnWrap = document.getElementById('clearFileBtnWrap');
 const clearFileBtn = document.getElementById('clearFileBtn');
 const macroFileOptions = document.getElementById('macroFileOptions');
@@ -51,24 +50,27 @@ const masterSyncStatus = document.getElementById('masterSyncStatus');
 const syncMasterBtn = document.getElementById('syncMasterBtn');
 const searchInput = document.getElementById('searchInput');
 const saveToast = document.getElementById('saveToast');
+const optionsVersionBadge = document.getElementById('optionsVersionBadge');
 const clearConfirmModal = document.getElementById('clearConfirmModal');
 const clearConfirmFileName = document.getElementById('clearConfirmFileName');
 const confirmClearCancelBtn = document.getElementById('confirmClearCancelBtn');
 const confirmClearOkBtn = document.getElementById('confirmClearOkBtn');
 
-function resolveExtensionVersion() {
+function getExtensionVersion() {
   try {
-    if (typeof chrome !== 'undefined' && chrome.runtime && typeof chrome.runtime.getManifest === 'function') {
+    if (chrome && chrome.runtime && typeof chrome.runtime.getManifest === 'function') {
       const manifest = chrome.runtime.getManifest();
-      if (manifest && manifest.version) return String(manifest.version);
+      if (manifest && manifest.version) {
+        return String(manifest.version);
+      }
     }
   } catch (e) {}
-  return '2.2.4';
+  return '2.2.2';
 }
 
 function syncOptionsVersionBadge() {
   if (optionsVersionBadge) {
-    optionsVersionBadge.textContent = `v${resolveExtensionVersion()}`;
+    optionsVersionBadge.textContent = `v${getExtensionVersion()}`;
   }
 }
 
@@ -972,7 +974,7 @@ async function buildNativeExportPayload() {
     opLapNum,
     payload: {
       format: 'diloc-automator-preset',
-      version: resolveExtensionVersion(),
+      version: getExtensionVersion(),
       opLap: opLapNum,
       exportedAt: new Date().toISOString(),
       cells: exportedCells
@@ -1275,8 +1277,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 document.addEventListener('DOMContentLoaded', async () => {
-  hydrateDataIcons();
   syncOptionsVersionBadge();
+  hydrateDataIcons();
   initCustomTooltips();
 
   const data = await chrome.storage.local.get([...UNIFIED_STORAGE_KEYS, 'fileSourceType']);

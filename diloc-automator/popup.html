@@ -39,7 +39,7 @@
       --rand-badge-bg: rgba(16, 185, 129, 0.14);
       --rand-badge-border: rgba(16, 185, 129, 0.55);
       --rand-badge-text: #047857;
-      --text-status-warn: #b45309;
+      --status-mismatch-text: #b45309;
       --btn-disabled-bg: #cbd5e1;
       --btn-disabled-text: #64748b;
       --pill-track-bg: #fef3c7;
@@ -86,7 +86,7 @@
       --rand-badge-bg: rgba(16, 185, 129, 0.16);
       --rand-badge-border: rgba(52, 211, 153, 0.55);
       --rand-badge-text: #34d399;
-      --text-status-warn: #fbbf24;
+      --status-mismatch-text: #fbbf24;
       --btn-disabled-bg: #1e293b;
       --btn-disabled-text: #64748b;
       --pill-track-bg: #1e1b4b;
@@ -109,6 +109,9 @@
       max-width: 340px;
       height: auto;
       min-height: unset;
+      max-height: none;
+      margin: 0;
+      padding: 0;
       box-sizing: border-box;
       overflow-x: hidden;
     }
@@ -117,13 +120,14 @@
       width: 340px;
       min-width: 340px;
       max-width: 340px;
-      box-sizing: border-box;
       height: auto;
       min-height: unset;
+      max-height: none;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      padding: 13px 15px;
+      padding: 0;
       text-align: center;
-      margin: 0 auto;
+      margin: 0;
+      box-sizing: border-box;
       background: var(--bg-body);
       color: var(--text-body);
       overflow-x: hidden;
@@ -131,22 +135,18 @@
     }
 
     .popup-shell {
-      width: 100%;
-      min-width: 0;
-      max-width: 100%;
+      width: 340px;
+      min-width: 340px;
+      max-width: 340px;
+      height: auto;
+      min-height: unset;
+      max-height: none;
+      padding: 12px 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
       box-sizing: border-box;
       overflow-x: hidden;
-    }
-
-    @media (max-width: 339px) {
-      html, body {
-        width: 100%;
-        min-width: 0;
-        max-width: 100%;
-      }
-      body {
-        padding: 10px 12px;
-      }
     }
 
     button:focus-visible,
@@ -159,14 +159,16 @@
     }
 
     .popup-header {
-      width: 100%;
-      min-width: 0;
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-wrap: nowrap;
       gap: 8px;
-      margin-bottom: 10px;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+      margin: 0;
       padding-bottom: 8px;
       border-bottom: 1px solid var(--border-soft);
       transition: border-color 0.25s ease;
@@ -175,9 +177,12 @@
     .popup-brand {
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: flex-start;
+      gap: 6px;
       min-width: 0;
+      max-width: 100%;
       flex: 1 1 auto;
+      box-sizing: border-box;
     }
 
     .popup-header h4 {
@@ -187,28 +192,37 @@
       line-height: 1.2;
       color: var(--text-title);
       font-weight: 700;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.03em;
       text-align: left;
-      flex: 1 1 auto;
-      min-width: 0;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      min-width: 0;
+      flex: 0 1 auto;
       transition: color 0.25s ease;
     }
 
-    @media (max-width: 339px) {
-      .popup-header h4 {
-        font-size: 15px;
-      }
+    .popup-ver-badge {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.2;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.14);
+      border: 1px solid rgba(16, 185, 129, 0.45);
+      color: var(--text-pill-active);
+      flex-shrink: 0;
+      white-space: nowrap;
+      letter-spacing: 0.01em;
     }
 
     /* Interactive Sliding Pill Toggle */
     .theme-pill-switch {
       position: relative;
-      width: 52px;
+      width: 48px;
       height: 26px;
-      padding: 0 5px;
+      padding: 0 4px;
       border-radius: 999px;
       border: 1px solid var(--pill-track-border);
       background: var(--pill-track-bg);
@@ -246,11 +260,11 @@
     }
 
     :root[data-theme="dark"] .theme-pill-thumb {
-      transform: translateX(26px);
+      transform: translateX(22px);
     }
 
     :root[data-theme="dark"] .theme-pill-switch:active .theme-pill-thumb {
-      transform: translateX(24px);
+      transform: translateX(20px);
     }
 
     .theme-pill-icon {
@@ -319,6 +333,8 @@
     .tooltip-wrap.tooltip-block {
       display: block;
       width: 100%;
+      min-width: 0;
+      max-width: 100%;
     }
 
     .custom-tooltip {
@@ -402,17 +418,20 @@
     }
 
     .custom-file-upload {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 7px;
-      padding: 8px 12px;
+      padding: 10px 12px;
       cursor: pointer;
       background: var(--bg-card);
       border: 1.5px dashed var(--border-upload);
       border-radius: 8px;
       font-weight: 600;
-      font-size: 12px;
+      font-size: 14px;
       color: var(--text-secondary);
       transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
     }
@@ -437,9 +456,9 @@
       width: 100%;
       min-width: 0;
       max-width: 100%;
-      overflow: hidden;
-      margin: 8px 0 9px 0;
-      padding: 7px 28px;
+      box-sizing: border-box;
+      margin: 0;
+      padding: 8px 28px;
       border-radius: 8px;
       border: 1px solid var(--border-soft);
       background: var(--bg-card);
@@ -452,17 +471,18 @@
     }
 
     .status-card[hidden] {
-      display: none;
+      display: none !important;
     }
 
     .clear-file-wrap {
       position: absolute;
       top: 5px;
       right: 5px;
+      flex-shrink: 0;
     }
 
     .clear-file-wrap[hidden] {
-      display: none;
+      display: none !important;
     }
 
     .clear-file-btn {
@@ -476,6 +496,7 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      flex-shrink: 0;
       cursor: pointer;
       transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.1s ease;
     }
@@ -500,25 +521,24 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
-      font-size: 11px;
+      font-size: 13px;
       font-weight: 600;
       line-height: 1.35;
-      width: 100%;
       max-width: 100%;
       min-width: 0;
-      overflow: hidden;
+      box-sizing: border-box;
     }
 
     .status-line-text {
-      flex: 0 1 auto;
+      min-width: 0;
       max-width: 100%;
+      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
-      min-width: 0;
     }
 
     .status-line-file {
+      font-size: 13.5px;
       color: var(--text-title);
     }
 
@@ -527,27 +547,35 @@
     }
 
     .status-line-op.is-mismatch {
-      color: var(--text-status-warn);
+      color: var(--status-mismatch-text);
     }
 
     .ctrl-card {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
       background: var(--bg-card);
       border: 1px solid var(--border-soft);
       border-radius: 8px;
-      padding: 8px 10px;
-      margin-bottom: 8px;
+      padding: 9px 10px;
+      margin: 0;
       text-align: left;
       transition: background-color 0.25s ease, border-color 0.25s ease;
     }
 
     .ctrl-header {
-      font-size: 11px;
+      font-size: 13.5px;
       font-weight: 700;
       color: var(--text-secondary);
-      margin-bottom: 6px;
+      margin-bottom: 7px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 6px;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
       transition: color 0.25s ease;
     }
 
@@ -555,6 +583,7 @@
       display: inline-flex;
       align-items: center;
       gap: 5px;
+      min-width: 0;
     }
 
     .range-pill-group {
@@ -565,19 +594,21 @@
       border-radius: 99px;
       background: var(--bg-pill-track);
       border: 1px solid var(--border-soft);
+      flex-shrink: 0;
       transition: background-color 0.25s ease, border-color 0.25s ease;
     }
 
     .range-option {
       border: 1px solid transparent;
       border-radius: 99px;
-      padding: 1px 6px;
+      padding: 2px 7px;
       background: transparent;
       color: var(--text-muted);
-      font-size: 10px;
+      font-size: 12px;
       font-weight: 700;
       line-height: 1.35;
       cursor: pointer;
+      flex-shrink: 0;
       transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     }
 
@@ -595,27 +626,34 @@
     .segmented-pill {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 4px;
+      gap: 6px;
+      width: 100%;
       padding: 3px;
       border-radius: 7px;
       background: var(--bg-pill-track);
       border: 1px solid var(--border-soft);
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
       transition: background-color 0.25s ease, border-color 0.25s ease;
     }
 
     .seg-option {
+      width: 100%;
+      box-sizing: border-box;
       border: 1px solid var(--border-opt-inactive);
       border-radius: 5px;
-      padding: 5px 3px;
+      padding: 6px 4px;
       background: var(--bg-opt-inactive);
       color: var(--text-secondary);
-      font-size: 10px;
+      font-size: 12.5px;
       font-weight: 600;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 4px;
+      min-width: 0;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -638,22 +676,27 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
+      gap: 8px;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
       background: var(--bg-card);
       border: 1px solid var(--border-soft);
       border-radius: 8px;
-      padding: 7px 10px;
-      margin-bottom: 9px;
+      padding: 8px 10px;
+      margin: 0;
       transition: background-color 0.25s ease, border-color 0.25s ease;
     }
 
     .stepper-label {
-      font-size: 11px;
+      font-size: 13.5px;
       font-weight: 700;
       color: var(--text-secondary);
       display: inline-flex;
       align-items: center;
       gap: 5px;
+      min-width: 0;
       transition: color 0.25s ease;
     }
 
@@ -661,23 +704,25 @@
       display: inline-flex;
       align-items: center;
       gap: 4px;
+      flex-shrink: 0;
     }
 
     .stepper-btn {
-      width: 26px;
-      height: 24px;
+      width: 28px;
+      height: 28px;
       padding: 0;
       border: 1px solid var(--border-opt-inactive);
       border-radius: 6px;
       background: var(--bg-opt-inactive);
       color: var(--text-title);
-      font-size: 14px;
+      font-size: 16px;
       font-weight: 700;
       line-height: 1;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      flex-shrink: 0;
       transition: background-color 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
     }
 
@@ -692,14 +737,14 @@
     }
 
     .stepper-input {
-      width: 34px;
-      height: 24px;
+      width: 38px;
+      height: 28px;
       padding: 0;
       border: 1px solid var(--border-color);
       border-radius: 6px;
       background: var(--bg-body);
       color: var(--text-title);
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 700;
       text-align: center;
       font-variant-numeric: tabular-nums;
@@ -715,14 +760,18 @@
     }
 
     .inline-alert {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
       display: flex;
       align-items: flex-start;
       gap: 7px;
       text-align: left;
       padding: 8px 10px;
-      margin-bottom: 9px;
+      margin: 0;
       border-radius: 8px;
-      font-size: 11px;
+      font-size: 12.5px;
       font-weight: 600;
       line-height: 1.4;
       background: var(--alert-warn-bg);
@@ -738,28 +787,36 @@
     }
 
     .inline-alert[hidden] {
-      display: none;
+      display: none !important;
     }
 
     .inline-alert .svg-icon {
-      margin-top: 1px;
+      margin-top: 2px;
     }
 
     #toggleBtn {
       width: 100%;
-      padding: 10px 12px;
-      border: none;
+      min-width: 0;
+      max-width: 100%;
+      min-height: 40px;
+      box-sizing: border-box;
+      padding: 9px 12px;
+      border: 1px solid transparent;
       border-radius: 8px;
       font-weight: 700;
-      font-size: 13px;
+      font-size: 14px;
+      line-height: 1.25;
       cursor: pointer;
       color: #ffffff;
       background: #16a34a;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
-      transition: background-color 0.2s ease, color 0.2s ease;
+      gap: 7px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
     }
 
     #toggleBtn:disabled {
@@ -770,6 +827,7 @@
 
     #toggleBtn.running {
       background: #dc2626;
+      border-color: #dc2626;
       animation: pulseRun 1.2s infinite;
     }
 
@@ -784,19 +842,27 @@
 
     .btn-setting {
       width: 100%;
-      margin-top: 7px;
-      padding: 8px 10px;
+      min-width: 0;
+      max-width: 100%;
+      min-height: 40px;
+      box-sizing: border-box;
+      margin: 0;
+      padding: 9px 12px;
       background: var(--bg-opt-inactive);
       border: 1px solid var(--border-opt-inactive);
       border-radius: 8px;
-      font-size: 11.5px;
+      font-size: 14px;
+      line-height: 1.25;
       font-weight: 600;
       color: var(--text-title);
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 7px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
       transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
     }
 
@@ -806,10 +872,18 @@
     }
 
     .footer-credit {
-      margin-top: 9px;
-      padding-top: 7px;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+      margin: 0;
+      padding-top: 8px;
       border-top: 1px solid var(--border-soft);
-      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-size: 11.5px;
       color: var(--text-footer);
       letter-spacing: 0.2px;
       transition: border-color 0.25s ease, color 0.25s ease;
@@ -865,7 +939,7 @@
     .confirm-modal-title {
       margin: 0 0 6px;
       font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 13.5px;
+      font-size: 15px;
       font-weight: 700;
       letter-spacing: -0.02em;
       color: #f8fafc;
@@ -873,7 +947,7 @@
 
     .confirm-modal-desc {
       margin: 0;
-      font-size: 11px;
+      font-size: 13px;
       line-height: 1.45;
       color: #cbd5e1;
       word-break: break-word;
@@ -892,13 +966,14 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
+      min-width: 0;
     }
 
     .confirm-modal-btn {
       flex: 1;
-      padding: 7px 10px;
+      padding: 8px 10px;
       border-radius: 7px;
-      font-size: 11.5px;
+      font-size: 13px;
       font-weight: 700;
       cursor: pointer;
       display: inline-flex;
@@ -931,87 +1006,88 @@
 </head>
 <body>
   <main class="popup-shell">
-  <header class="popup-header">
-    <div class="popup-brand">
-      <span data-icon="robotRed" data-icon-size="22"></span>
-      <h4>DILOC Automator</h4>
-    </div>
-    <button
-      id="themeToggleBtn"
-      type="button"
-      class="theme-pill-switch"
-      role="switch"
-      aria-checked="false"
-      aria-label="Light Mode aktif — Klik untuk Dark Mode"
-      title="Light Mode aktif — Klik untuk Dark Mode"
-    >
-      <span class="theme-pill-thumb" aria-hidden="true"></span>
-      <span data-icon="sun" data-icon-class="theme-pill-icon theme-pill-sun" data-icon-size="13"></span>
-      <span data-icon="moon" data-icon-class="theme-pill-icon theme-pill-moon" data-icon-size="13"></span>
-    </button>
-  </header>
-
-  <div id="fileLabel" class="custom-file-upload" role="button" tabindex="0" aria-label="Load File .PMR atau .JSON (Klik atau Drag &amp; Drop)">
-    <span data-icon="folder" data-icon-class="icon-emerald" data-icon-size="16"></span>
-    <span>Load File .PMR / .JSON</span>
-  </div>
-
-  <div id="statusCard" class="status-card" hidden>
-    <div id="clearFileBtnWrap" class="tooltip-wrap clear-file-wrap" data-tooltip="Hapus file termuat" data-tooltip-pos="bottom" data-tooltip-align="right" hidden>
-      <button id="clearFileBtn" type="button" class="clear-file-btn" aria-label="Hapus file termuat">
-        <span data-icon="x" data-icon-size="13"></span>
+    <header class="popup-header">
+      <div class="popup-brand">
+        <span data-icon="robotRed" data-icon-size="20"></span>
+        <h4>DILOC Automator</h4>
+        <span class="popup-ver-badge">v2.2.2</span>
+      </div>
+      <button
+        id="themeToggleBtn"
+        type="button"
+        class="theme-pill-switch"
+        role="switch"
+        aria-checked="false"
+        aria-label="Light Mode aktif — Klik untuk Dark Mode"
+        title="Light Mode aktif — Klik untuk Dark Mode"
+      >
+        <span class="theme-pill-thumb" aria-hidden="true"></span>
+        <span data-icon="sun" data-icon-class="theme-pill-icon theme-pill-sun" data-icon-size="13"></span>
+        <span data-icon="moon" data-icon-class="theme-pill-icon theme-pill-moon" data-icon-size="13"></span>
       </button>
-    </div>
-    <div id="statusLineFile" class="status-line status-line-file"></div>
-    <div id="statusLineOp" class="status-line status-line-op"></div>
-  </div>
+    </header>
 
-  <div class="ctrl-card">
-    <div class="ctrl-header">
-      <span class="ctrl-title-left">
-        <span data-icon="dice" data-icon-class="icon-orange" data-icon-size="14"></span>
-        <span>Randomize</span>
-      </span>
-      <div class="range-pill-group" role="radiogroup" aria-label="Range Randomize">
-        <button type="button" class="range-option active" data-rand-range="1" role="radio" aria-checked="true">±1</button>
-        <button type="button" class="range-option" data-rand-range="2" role="radio" aria-checked="false">±2</button>
-        <button type="button" class="range-option" data-rand-range="3" role="radio" aria-checked="false">±3</button>
+    <div id="fileLabel" class="custom-file-upload" role="button" tabindex="0" aria-label="Load File .PMR atau .JSON (Klik atau Drag &amp; Drop)">
+      <span data-icon="folder" data-icon-class="icon-emerald" data-icon-size="17"></span>
+      <span>Load File .PMR / .JSON</span>
+    </div>
+
+    <div id="statusCard" class="status-card" hidden>
+      <div id="clearFileBtnWrap" class="tooltip-wrap clear-file-wrap" data-tooltip="Hapus file termuat" data-tooltip-pos="bottom" data-tooltip-align="right" hidden>
+        <button id="clearFileBtn" type="button" class="clear-file-btn" aria-label="Hapus file termuat">
+          <span data-icon="x" data-icon-size="13"></span>
+        </button>
+      </div>
+      <div id="statusLineFile" class="status-line status-line-file"></div>
+      <div id="statusLineOp" class="status-line status-line-op"></div>
+    </div>
+
+    <div class="ctrl-card">
+      <div class="ctrl-header">
+        <span class="ctrl-title-left">
+          <span data-icon="dice" data-icon-class="icon-orange" data-icon-size="15"></span>
+          <span>Randomize</span>
+        </span>
+        <div class="range-pill-group" role="radiogroup" aria-label="Range Randomize">
+          <button type="button" class="range-option active" data-rand-range="1" role="radio" aria-checked="true">±1</button>
+          <button type="button" class="range-option" data-rand-range="2" role="radio" aria-checked="false">±2</button>
+          <button type="button" class="range-option" data-rand-range="3" role="radio" aria-checked="false">±3</button>
+        </div>
+      </div>
+      <div class="segmented-pill" role="radiogroup" aria-label="Mode Randomize">
+        <button type="button" class="seg-option active" data-rand-mode="off" role="radio" aria-checked="true">Off</button>
+        <button type="button" class="seg-option" data-rand-mode="all" role="radio" aria-checked="false">All</button>
+        <button type="button" id="selectedModeBtn" class="seg-option" data-rand-mode="selected" role="radio" aria-checked="false">Cell (0)</button>
       </div>
     </div>
-    <div class="segmented-pill" role="radiogroup" aria-label="Mode Randomize">
-      <button type="button" class="seg-option active" data-rand-mode="off" role="radio" aria-checked="true">Off</button>
-      <button type="button" class="seg-option" data-rand-mode="all" role="radio" aria-checked="false">All</button>
-      <button type="button" id="selectedModeBtn" class="seg-option" data-rand-mode="selected" role="radio" aria-checked="false">Selected (0)</button>
+
+    <div class="stepper-row">
+      <label for="rowCountInput" class="stepper-label">
+        <span data-icon="layers" data-icon-class="icon-indigo" data-icon-size="15"></span>
+        <span>Jumlah Baris</span>
+      </label>
+      <div class="stepper-control">
+        <button type="button" id="rowDecBtn" class="stepper-btn" aria-label="Kurangi jumlah baris">-</button>
+        <input type="number" id="rowCountInput" class="stepper-input" min="1" max="4" value="1" aria-label="Jumlah Baris">
+        <button type="button" id="rowIncBtn" class="stepper-btn" aria-label="Tambah jumlah baris">+</button>
+      </div>
     </div>
-  </div>
 
-  <div class="stepper-row">
-    <label for="rowCountInput" class="stepper-label">
-      <span data-icon="layers" data-icon-class="icon-indigo" data-icon-size="14"></span>
-      <span>Jumlah Baris</span>
-    </label>
-    <div class="stepper-control">
-      <button type="button" id="rowDecBtn" class="stepper-btn" aria-label="Kurangi jumlah baris">-</button>
-      <input type="number" id="rowCountInput" class="stepper-input" min="1" max="4" value="1" aria-label="Jumlah Baris">
-      <button type="button" id="rowIncBtn" class="stepper-btn" aria-label="Tambah jumlah baris">+</button>
+    <div id="popupAlert" class="inline-alert" role="alert" hidden></div>
+
+    <div id="playBtnWrap" class="tooltip-wrap tooltip-block" data-tooltip="Muat file .pmr / .json terlebih dahulu" data-tooltip-pos="top" data-tooltip-align="center">
+      <button id="toggleBtn" disabled>
+        <span data-icon="play" data-icon-size="15"></span>
+        <span>Play</span>
+      </button>
     </div>
-  </div>
 
-  <div id="popupAlert" class="inline-alert" role="alert" hidden></div>
-
-  <div id="playBtnWrap" class="tooltip-wrap tooltip-block" data-tooltip="Muat file .pmr / .json terlebih dahulu" data-tooltip-pos="top" data-tooltip-align="center">
-    <button id="toggleBtn" disabled>
-      <span data-icon="play" data-icon-size="15"></span>
-      <span>Play</span>
+    <button id="openSettingsBtn" class="btn-setting">
+      <span data-icon="settings" data-icon-class="icon-sky" data-icon-size="15"></span>
+      <span>Setting Sel &amp; Preset Operator</span>
     </button>
-  </div>
 
-  <button id="openSettingsBtn" class="btn-setting">
-    <span data-icon="settings" data-icon-class="icon-sky" data-icon-size="14"></span>
-    <span>Setting Sel &amp; Preset Operator</span>
-  </button>
-
-  <div class="footer-credit">© 2026 — Developed by FIKRI</div>
+    <div class="footer-credit">© 2026 — Developed by FIKRI</div>
   </main>
 
   <div id="clearConfirmModal" class="confirm-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="clearConfirmTitle" hidden>
