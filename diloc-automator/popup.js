@@ -110,7 +110,7 @@ function showPopupInlineAlert(message, tone = 'warn') {
   clearTimeout(popupAlertTimer);
   popupAlert.classList.toggle('is-error', tone === 'error');
   const iconName = tone === 'error' ? 'xCircle' : 'warn';
-  popupAlert.innerHTML = `${renderIcon(iconName, { size: 14 })}<span></span>`;
+  popupAlert.innerHTML = `${renderIcon(iconName, { size: 13 })}<span></span>`;
   popupAlert.querySelector('span').textContent = message;
   popupAlert.hidden = false;
 
@@ -182,7 +182,7 @@ function renderStatusCard(totalCells, fileOp, webOp) {
 
   statusCard.hidden = false;
 
-  statusLineFile.innerHTML = `${renderIcon('file', { className: 'icon-sky', size: 15 })}<span class="status-line-text"></span>`;
+  statusLineFile.innerHTML = `${renderIcon('file', { className: 'icon-sky', size: 13 })}<span class="status-line-text"></span>`;
   const fileTextEl = statusLineFile.querySelector('.status-line-text');
   fileTextEl.textContent = loadedFileName || 'macro.pmr';
   statusLineFile.title = loadedFileName || 'macro.pmr';
@@ -190,8 +190,8 @@ function renderStatusCard(totalCells, fileOp, webOp) {
   const isMatch = Boolean(webOp && fileOp && webOp === fileOp);
   const opLabelText = `${PRESET_SHORT_LABELS[fileOp]} (${totalCells} data)`;
   const opIcon = isMatch
-    ? renderIcon('checkCircle', { className: 'icon-emerald', size: 15 })
-    : renderIcon('warn', { className: 'icon-amber', size: 15 });
+    ? renderIcon('checkCircle', { className: 'icon-emerald', size: 13 })
+    : renderIcon('warn', { className: 'icon-amber', size: 13 });
 
   statusLineOp.classList.toggle('is-match', isMatch);
   statusLineOp.classList.toggle('is-mismatch', !isMatch);
@@ -291,11 +291,11 @@ function updateUIState() {
       if (isMacroRunning) {
         toggleBtn.disabled = false;
         toggleBtn.classList.add('running');
-        toggleBtn.innerHTML = `${renderIcon('stop', { size: 15 })}<span>Stop</span>`;
+        toggleBtn.innerHTML = `${renderIcon('stop', { size: 13 })}<span>Stop</span>`;
       } else {
         toggleBtn.disabled = true;
         toggleBtn.classList.remove('running');
-        toggleBtn.innerHTML = `${renderIcon('play', { size: 15 })}<span>Play</span>`;
+        toggleBtn.innerHTML = `${renderIcon('play', { size: 13 })}<span>Play</span>`;
       }
     }
     if (fileLabel) {
@@ -317,11 +317,11 @@ function updateUIState() {
     if (isMacroRunning) {
       toggleBtn.disabled = false;
       toggleBtn.classList.add('running');
-      toggleBtn.innerHTML = `${renderIcon('stop', { size: 15 })}<span>Stop</span>`;
+      toggleBtn.innerHTML = `${renderIcon('stop', { size: 13 })}<span>Stop</span>`;
     } else {
       toggleBtn.disabled = !isOperatorMatch;
       toggleBtn.classList.remove('running');
-      toggleBtn.innerHTML = `${renderIcon('play', { size: 15 })}<span>Play</span>`;
+      toggleBtn.innerHTML = `${renderIcon('play', { size: 13 })}<span>Play</span>`;
     }
   }
   if (fileLabel) {

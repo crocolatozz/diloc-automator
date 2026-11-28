@@ -304,7 +304,7 @@
     /* Mode 1: Popup + Target Web */
     .split-layout {
       display: grid;
-      grid-template-columns: 388px minmax(0, 1fr);
+      grid-template-columns: 348px minmax(0, 1fr);
       width: 100%;
       height: 100%;
       min-height: 0;
@@ -325,9 +325,9 @@
     }
 
     .stage-header {
-      width: 340px;
-      min-width: 340px;
-      max-width: 340px;
+      width: 300px;
+      min-width: 300px;
+      max-width: 300px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -350,9 +350,9 @@
     }
 
     .chrome-popup-window {
-      width: 340px;
-      min-width: 340px;
-      max-width: 340px;
+      width: 300px;
+      min-width: 300px;
+      max-width: 300px;
       height: auto;
       min-height: 0;
       border-radius: 12px;
@@ -396,20 +396,20 @@
     }
 
     .popup-iframe {
-      width: 340px;
-      min-width: 340px;
-      max-width: 340px;
+      width: 300px;
+      min-width: 300px;
+      max-width: 300px;
       min-height: 0;
-      height: 390px;
+      height: 350px;
       border: 0;
       display: block;
       background-color: #ffffff;
     }
 
     .stage-caption {
-      width: 340px;
-      min-width: 340px;
-      max-width: 340px;
+      width: 300px;
+      min-width: 300px;
+      max-width: 300px;
       margin-top: 12px;
       font-size: 11.5px;
       color: var(--text-muted);
@@ -1023,7 +1023,7 @@
           <aside class="popup-stage">
             <div class="stage-header">
               <span class="stage-title">Popup Ekstensi</span>
-              <span class="stage-dimensions">340 × 460+ px</span>
+              <span id="stage-dimensions" class="stage-dimensions">300 × auto px</span>
             </div>
 
             <div class="chrome-popup-window">
@@ -2451,15 +2451,19 @@
           const doc = elPopupFrame.contentDocument;
           if (!doc || !doc.body) return;
           const shell = doc.querySelector('.popup-shell') || doc.body;
+          const stageDimEl = document.getElementById('stage-dimensions');
           const syncPopupFrameHeight = function () {
             try {
               const rectH = shell && typeof shell.getBoundingClientRect === 'function'
                 ? Math.ceil(shell.getBoundingClientRect().height)
                 : 0;
               const offsetH = shell ? Math.ceil(shell.offsetHeight || 0) : 0;
-              const h = Math.max(rectH, offsetH, 320);
+              const h = Math.max(rectH, offsetH, 280);
               if (h > 0) {
                 elPopupFrame.style.height = h + 'px';
+                if (stageDimEl) {
+                  stageDimEl.textContent = '300 × ' + h + ' px';
+                }
               }
             } catch (err) {}
           };
